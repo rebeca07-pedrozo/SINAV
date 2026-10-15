@@ -154,6 +154,7 @@ function resolverAdjuntos() {
     if (o.nombre_adjunto_esperado === '') o.nombre_adjunto_esperado = nombreAdjuntoEsperado(o);
     const mios = r.porObligacion[o.id] || [];
     if (o.adjunto_salida_id === '' && mios.length === 1) { o.adjunto_salida_id = mios[0].id; asignados++; }
+    o.adjunto_salida_enlace = o.adjunto_salida_id === '' ? '' : 'https://drive.google.com/file/d/' + o.adjunto_salida_id + '/view';
     if (o.adjunto_salida_id !== '') { conAdjunto[o.id] = true; return; }
 
     if (mios.length > 1) {
@@ -167,7 +168,7 @@ function resolverAdjuntos() {
     }
   });
 
-  ['nombre_adjunto_esperado', 'adjunto_salida_id'].forEach(function (col) {
+  ['nombre_adjunto_esperado', 'adjunto_salida_id', 'adjunto_salida_enlace'].forEach(function (col) {
     escribirColumna(HOJAS.OBLIGACIONES, col, obligaciones.map(function (o) { return o[col]; }));
   });
   r.ambiguos.forEach(function (x) {
