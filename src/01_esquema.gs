@@ -36,7 +36,8 @@ const ENCABEZADOS = {
     'profesional', 'jefe',
     'consecutivo_egreso', 'sticker', 'valor', 'estado', 'estado_desde', 'devuelta_desde',
     'motivo_devolucion', 'reprocesos', 'adjunto_salida_id', 'thread_id', 'fecha_envio',
-    'evidencia_id', 'evidencia_hash'
+    'evidencia_id', 'evidencia_hash',
+    'fecha_presentacion'   // se agrega al final: instalar() la añade sin tocar las filas existentes
   ],
 
   // TODO(USUARIO): el brief no define las columnas de ENVIOS más allá de "intento_n".

@@ -55,6 +55,11 @@ function asegurarHoja(libro, nombre) {
   if (enc.length && hoja.getLastRow() === 0) {
     hoja.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight('bold');
     hoja.setFrozenRows(1);
+  } else if (enc.length) {
+    // Migración: si el encabezado actual es un prefijo del esquema, solo se agregan las columnas nuevas al final.
+    const real = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const esPrefijo = real.length < enc.length && real.every(function (c, i) { return c === enc[i]; });
+    if (esPrefijo) hoja.getRange(1, real.length + 1, 1, enc.length - real.length).setValues([enc.slice(real.length)]).setFontWeight('bold');
   }
   return hoja;
 }
