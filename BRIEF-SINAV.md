@@ -105,17 +105,24 @@ obligaciones.** Si escribe algo, escribe en `EVENTOS`.
 ### Esquema de `OBLIGACIONES`
 
 ```
-id                  texto, llave: cod_oficina|tipo_obligacion|periodo
+id                  texto, llave: cod_dane|tipo_obligacion|regimen|periodo
+                    (actualizado 2026-10-14: la oficina es consecuencia, no identidad; sin secuencias)
 cod_oficina         texto, con ceros a la izquierda ("0851", no 851)
 cod_dane            texto
 municipio           texto
 empresa             texto
-nit                 texto
+nit_municipio       texto, NIT del municipio (no de la empresa; la empresa es siempre la misma)
 tipo_obligacion     enum: RETEICA | AUTORRETEICA | ICA | EXOGENA | PREDIAL | ALUMBRADO | RIT
-periodo             texto normalizado: "2026-09" | "2026-B4" | "2026-T3" | "2026-A"
+regimen             Comentario del calendario normalizado (mayúsculas, sin tildes), "GENERAL" si viene vacío
+regimen_texto       Comentario original, útil para el correo a la oficina
+periodo             texto normalizado: "2026-09" | "2026-B4" | "2026-T3" | "2026-C1" | "2026-A"
+periodo_por_confirmar  "SI" cuando la regla que derivó el periodo está pendiente de validar
 periodicidad        enum: MENSUAL | BIMESTRAL | TRIMESTRAL | CUATRIMESTRAL | SEMESTRAL | ANUAL
 vencimiento         fecha, congelada al crear
-canal_presentacion  enum: PAGINA_WEB | ALCALDIA | OFICINA | TRANSFERENCIA
+presentacion_texto  texto crudo de la columna "Presentacion" de la fuente (60+ valores, sin enum)
+correo_municipio    correo extraído de presentacion_texto cuando la celda trae uno
+forma_pago          enum: OFICINA | OFICINA_RECIBO | MIXTA | PSE | TRANSFERENCIA | OTRO (de la columna "Pago")
+requiere_envio_oficina  enum: SI | NO | REVISAR — editable por el equipo; decide si se manda correo
 profesional         texto
 jefe                texto
 consecutivo_egreso  texto
@@ -379,9 +386,12 @@ el envío.
 
 ## 8. Motor de envío
 
-- Lee las obligaciones del periodo cuyo `canal_presentacion` sea `OFICINA` o `ALCALDIA`.
-  **Las de `PAGINA_WEB` y `TRANSFERENCIA` no se envían a nadie** — no hay oficina
-  involucrada; esas solo generan alerta al profesional.
+- Lee las obligaciones del periodo con `requiere_envio_oficina = SI`.
+  **Las de `NO` no se envían a nadie** — no hay oficina involucrada; esas solo generan alerta
+  al profesional. Las de `REVISAR` van a `EXCEPCIONES` y no se envía nada hasta que el equipo
+  las defina. Siembra: Pago = OFICINA u OFICINA - RECIBO → SI; PSE o TRANSFERENCIA → NO;
+  MIXTA, vacío u otro → REVISAR. (Actualizado 2026-10-14: el enum `canal_presentacion` no
+  correspondía a los datos reales.)
 - Busca el adjunto en Drive (§5). Sin adjunto no hay envío.
 - Arma el cuerpo desde `PLANTILLAS` reemplazando marcadores.
 - Envía con `GmailApp.sendEmail` usando `from` y `replyTo` con el alias de `CONFIG`

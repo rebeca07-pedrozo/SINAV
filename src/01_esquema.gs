@@ -28,9 +28,12 @@ const ENCABEZADOS = {
   ],
 
   // Esquema tomado literal de BRIEF §3.
+  // id = cod_dane|tipo_obligacion|regimen|periodo  (la oficina es consecuencia, no identidad)
   OBLIGACIONES: [
-    'id', 'cod_oficina', 'cod_dane', 'municipio', 'empresa', 'nit', 'tipo_obligacion',
-    'periodo', 'periodicidad', 'vencimiento', 'canal_presentacion', 'profesional', 'jefe',
+    'id', 'cod_oficina', 'cod_dane', 'municipio', 'empresa', 'nit_municipio', 'tipo_obligacion',
+    'regimen', 'regimen_texto', 'periodo', 'periodo_por_confirmar', 'periodicidad', 'vencimiento',
+    'presentacion_texto', 'correo_municipio', 'forma_pago', 'requiere_envio_oficina',
+    'profesional', 'jefe',
     'consecutivo_egreso', 'sticker', 'valor', 'estado', 'estado_desde', 'devuelta_desde',
     'motivo_devolucion', 'reprocesos', 'adjunto_salida_id', 'thread_id', 'fecha_envio',
     'evidencia_id', 'evidencia_hash'
@@ -66,6 +69,19 @@ const ENCABEZADOS = {
     'tiene_adjunto', 'tipos_adjunto', 'cuerpo_texto'
   ]
 };
+
+// Columnas que deben guardarse como TEXTO: Sheets convierte "2026-09" en fecha y borra el cero de "0851".
+const COLUMNAS_TEXTO = {
+  CALENDARIO: ['nit', 'cod_dane', 'periodo'],
+  OBLIGACIONES: ['id', 'cod_oficina', 'cod_dane', 'nit_municipio', 'regimen', 'regimen_texto', 'periodo']
+};
+
+/** Pone formato texto a esas columnas en el rango de filas que se va a escribir. */
+function marcarTexto(hoja, nombreHoja, filaInicial, nFilas) {
+  (COLUMNAS_TEXTO[nombreHoja] || []).forEach(function (col) {
+    hoja.getRange(filaInicial, ENCABEZADOS[nombreHoja].indexOf(col) + 1, nFilas, 1).setNumberFormat('@');
+  });
+}
 
 /** Abre el libro de OPERACIÓN guardado por instalar(). */
 function abrirLibro() {
@@ -103,7 +119,9 @@ function agregarFilas(nombreHoja, objetos) {
   });
   conLock(function () {
     const hoja = hojaDe(nombreHoja);
-    hoja.getRange(hoja.getLastRow() + 1, 1, filas.length, enc.length).setValues(filas);
+    const inicio = hoja.getLastRow() + 1;
+    marcarTexto(hoja, nombreHoja, inicio, filas.length);
+    hoja.getRange(inicio, 1, filas.length, enc.length).setValues(filas);
   });
 }
 

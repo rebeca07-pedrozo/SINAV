@@ -181,6 +181,7 @@ function importarCalendario() {
     hoja.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight('bold');
     hoja.setFrozenRows(1);
     if (salida.length) {
+      marcarTexto(hoja, HOJAS.CALENDARIO, 2, salida.length);
       const valores = salida.map(function (o) { return enc.map(function (c) { return o[c]; }); });
       hoja.getRange(2, 1, valores.length, enc.length).setValues(valores);
     }

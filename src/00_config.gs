@@ -19,6 +19,8 @@ const CONFIG_DEFECTO = [
   ['carpeta_evidencia_id', ''],
   ['calendario_libro_id', ''],
   ['calendario_hoja', ''],
+  ['hoja_reteica', 'Retención ICA'],      // hoja del libro del calendario con CC, Pago, Presentacion y responsable
+  ['hoja_responsable', 'Responsable'],    // hoja que traduce la inicial del responsable a su nombre
   ['etiqueta_gmail', ''],
   ['dias_alerta', '10,4,2,0'],
   ['tipos_activos', 'RETEICA'],
