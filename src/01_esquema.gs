@@ -41,10 +41,9 @@ const ENCABEZADOS = {
     'nombre_adjunto_esperado'
   ],
 
-  // TODO(USUARIO): el brief no define las columnas de ENVIOS más allá de "intento_n".
-  // Propuesta mía; confírmala o cámbiala antes de la Fase 2.
+  // Confirmadas por la usuaria 2026-10-15. enviado_por: el hilo vive en el buzón de quien envió.
   ENVIOS: [
-    'id_envio', 'id_obligacion', 'intento_n', 'fecha_envio', 'thread_id', 'message_id',
+    'id_envio', 'id_obligacion', 'intento_n', 'fecha_envio', 'enviado_por', 'thread_id', 'message_id',
     'destinatarios', 'asunto', 'adjunto_id', 'modo', 'resultado'
   ],
 

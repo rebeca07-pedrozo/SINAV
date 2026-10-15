@@ -26,6 +26,16 @@
   `requiere_envio_oficina` (SI/NO/REVISAR, editable). Los datos reales no cuadraban con el enum.
 - **Texto forzado** en `periodo`, `cod_dane`, `cod_oficina`, `nit`: Sheets convertía "2026-09" en fecha.
 
+## 2026-10-15 — Fase 2: remitente híbrido mientras no haya alias
+
+- **Contexto:** Tecnología no ha habilitado `impuestosdavivienda@` y puede que no lo haga. La usuaria propuso `noReply: true` (patrón de Marcaciones y Reintegros).
+- **Decisión (usuaria):** híbrido por tipo de correo. `noReply: true` solo para avisos que no esperan respuesta (alertas internas, confirmaciones). Los correos a oficinas **no** usan noReply: necesitan que la respuesta vuelva por el mismo hilo (`threadId`), que es la base de la ingesta y la evidencia (brief §1, §6, §8).
+- **Decisión (usuaria):** los correos a oficinas salen de la cuenta de **quien hace clic** en el botón (p. ej. Jesús), con `name: "Impuestos Davivienda"` y `replyTo` a esa misma cuenta. Queda en su bandeja de Enviados y las respuestas le llegan a él. Esto relaja la regla del brief §4.3 ("no enviar con la cuenta personal"): el equipo que opera es distinto de quien desarrolla, y mientras no haya alias es la única vía que conserva la ingesta por hilo.
+- **Consecuencias:** (1) la ingesta debe correr en la cuenta de cada persona que envía (el script solo lee el buzón de quien lo ejecuta); (2) el script debe vincularse al libro OPERACIÓN para tener menú/botón, y cada operador necesita permiso de edición y autorizar una vez; (3) el cupo diario es por persona; (4) `ENVIOS` gana la columna `enviado_por`. Columnas de `ENVIOS` confirmadas.
+- **Script vinculado al libro (opción A):** el código se pega en un proyecto nuevo creado desde Extensiones → Apps Script del libro OPERACIÓN, para que `onOpen` muestre el menú. Como las propiedades del script empiezan vacías, `instalar()` ahora adopta el libro vinculado (en vez de crear uno) y deduce la carpeta raíz del padre de `carpeta_salida_id` en CONFIG. Sin esto habría creado libro y carpeta duplicados. El observador del proyecto viejo debe desactivarse para no duplicar filas en MUESTRAS.
+- **Si luego hay alias:** se cambia el modo de remitente en CONFIG, sin tocar código.
+- **Nota técnica:** `noReply` solo funciona en cuentas Workspace.
+
 ## 2026-10-14 — Adjunto de salida: nombre sugerido y buscador tolerante
 
 - **Decisión (usuaria):** el equipo nombra los PDF como quiera; el sistema no puede exigir un formato. Se define uno **sugerido** y el sistema lo publica en `OBLIGACIONES.nombre_adjunto_esperado`: `{cod_dane 5 dígitos}_{TIPO}_{REGIMEN}_{PERIODO}_{MUNICIPIO}.pdf`. Reemplaza para esta etapa la convención `{cod_oficina}-{MUNICIPIO} {PERIODO}.pdf` del brief §5 (la identidad es cod_dane, no cod_oficina).

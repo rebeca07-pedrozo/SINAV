@@ -44,6 +44,12 @@ function obtenerOCrearLibro(props) {
         '. Si lo borraste, elimina la propiedad ' + PROP.LIBRO_ID + ' y corre instalar() de nuevo.');
     }
   }
+  // Script vinculado al libro (Extensiones → Apps Script): se adopta ese libro, no se crea otro.
+  const vinculado = SpreadsheetApp.getActiveSpreadsheet();
+  if (vinculado) {
+    props.setProperty(PROP.LIBRO_ID, vinculado.getId());
+    return vinculado;
+  }
   const libro = SpreadsheetApp.create(NOMBRE_LIBRO);
   props.setProperty(PROP.LIBRO_ID, libro.getId());
   return libro;
@@ -83,6 +89,18 @@ function obtenerOCrearCarpetaRaiz(props) {
   const id = props.getProperty(PROP.CARPETA_RAIZ_ID);
   if (id) {
     try { return DriveApp.getFolderById(id); } catch (e) { /* cae a crear */ }
+  }
+  // Proyecto nuevo sin propiedades: la raíz es la carpeta padre de la que ya está en CONFIG.
+  const idSalida = configOpcional('carpeta_salida_id');
+  if (idSalida) {
+    try {
+      const padres = DriveApp.getFolderById(idSalida).getParents();
+      if (padres.hasNext()) {
+        const existente = padres.next();
+        props.setProperty(PROP.CARPETA_RAIZ_ID, existente.getId());
+        return existente;
+      }
+    } catch (e) { /* cae a crear */ }
   }
   const raiz = DriveApp.createFolder(NOMBRE_CARPETA_RAIZ);
   props.setProperty(PROP.CARPETA_RAIZ_ID, raiz.getId());
