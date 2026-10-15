@@ -152,8 +152,13 @@ function verificarInstalacion() {
     if (!(p[0] in cargarConfig())) problemas.push('Falta el parámetro ' + p[0] + ' en CONFIG');
   });
 
-  ['alias_envio', 'correo_administrador', 'nombre_remitente', 'carpeta_salida_id', 'carpeta_evidencia_id']
+  ['correo_administrador', 'nombre_remitente', 'carpeta_salida_id', 'carpeta_evidencia_id']
     .forEach(function (k) { if (!configOpcional(k)) problemas.push('CONFIG: "' + k + '" está vacío'); });
+
+  const modoRem = configOpcional('modo_remitente');
+  if (MODOS_REMITENTE.indexOf(modoRem) === -1) {
+    problemas.push('CONFIG: modo_remitente debe ser ' + MODOS_REMITENTE.join(' | '));
+  }
 
   if (MODOS_VALIDOS.indexOf(configOpcional('modo')) === -1) {
     problemas.push('CONFIG: modo debe ser ' + MODOS_VALIDOS.join(' | '));
@@ -165,10 +170,13 @@ function verificarInstalacion() {
     try { DriveApp.getFolderById(id); } catch (e) { problemas.push('CONFIG: ' + k + ' no apunta a una carpeta accesible'); }
   });
 
-  // El alias es obligatorio: sin él NO se envía (nunca se cae a la cuenta personal).
-  const alias = configOpcional('alias_envio');
-  if (alias && GmailApp.getAliases().indexOf(alias) === -1) {
-    problemas.push('El alias ' + alias + ' no está en "Enviar como" de esta cuenta (GmailApp.getAliases()). No se puede enviar.');
+  // El alias solo es obligatorio en modo ALIAS. Si falta, NO se envía (nunca se cae a otro remitente).
+  if (modoRem === 'ALIAS') {
+    const alias = configOpcional('alias_envio');
+    if (!alias) problemas.push('CONFIG: "alias_envio" está vacío y modo_remitente es ALIAS');
+    else if (GmailApp.getAliases().indexOf(alias) === -1) {
+      problemas.push('El alias ' + alias + ' no está en "Enviar como" de esta cuenta (GmailApp.getAliases()). No se puede enviar.');
+    }
   }
 
   return reportarVerificacion(problemas);

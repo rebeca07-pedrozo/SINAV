@@ -12,7 +12,8 @@ const PROP = {
 const CONFIG_DEFECTO = [
   // TODO(USUARIO): confirma estos valores en la hoja CONFIG después de instalar().
   ['alias_envio', 'impuestosdavivienda@davivienda.com'],
-  ['nombre_remitente', ''],
+  ['modo_remitente', 'CUENTA_QUE_ENVIA'], // CUENTA_QUE_ENVIA | ALIAS (ver docs/decisiones.md, 2026-10-15)
+  ['nombre_remitente', ''],               // lo que ven las oficinas, p. ej. Impuestos Davivienda
   ['correo_administrador', ''],
   ['etiqueta_respuestas', ''],
   ['carpeta_salida_id', ''],
