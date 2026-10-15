@@ -41,10 +41,12 @@ const ENCABEZADOS = {
     'nombre_adjunto_esperado'
   ],
 
-  // Confirmadas por la usuaria 2026-10-15. enviado_por: el hilo vive en el buzón de quien envió.
+  // Confirmadas por la usuaria 2026-10-15. enviado_por va al final para que la migración de
+  // asegurarHoja() (solo agrega al final) la pueda añadir a una hoja ya creada.
+  // enviado_por: el hilo vive en el buzón de quien envió.
   ENVIOS: [
-    'id_envio', 'id_obligacion', 'intento_n', 'fecha_envio', 'enviado_por', 'thread_id', 'message_id',
-    'destinatarios', 'asunto', 'adjunto_id', 'modo', 'resultado'
+    'id_envio', 'id_obligacion', 'intento_n', 'fecha_envio', 'thread_id', 'message_id',
+    'destinatarios', 'asunto', 'adjunto_id', 'modo', 'resultado', 'enviado_por'
   ],
 
   EVENTOS: [
