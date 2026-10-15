@@ -51,13 +51,20 @@ function normalizarPeriodicidad(texto) {
   return '';
 }
 
+/** Bimestre según el mes de vencimiento: mar=B1 may=B2 jul=B3 sep=B4 nov=B5, ene=B6 del año anterior. '' si no aplica. */
+function bimestreDeMes(anio, mes) {
+  if (mes === 1) return (anio - 1) + '-B6';
+  const b = { 3: 1, 5: 2, 7: 3, 9: 4, 11: 5 }[mes];
+  return b ? anio + '-B' + b : '';
+}
+
 /**
  * Periodo a partir de la fecha de vencimiento. Devuelve { periodo, porConfirmar }.
  * periodo = '' si no hay regla confirmada (la fila va a EXCEPCIONES).
  *  - MENSUAL: mes del vencimiento menos 1.
- *  - BIMESTRAL: se resta 7 días a la fecha y se mapea el mes resultante
- *    (mar=B1 may=B2 jul=B3 sep=B4 nov=B5, ene=B6 del año anterior). Así se absorben las
- *    fechas de fin de mes que se corrieron al mes siguiente (confirmado por la usuaria).
+ *  - BIMESTRAL: se mapea el mes de la fecha; si es un mes par (sin regla) se resta 7 días y
+ *    se mapea de nuevo. Restar siempre rompía las fechas legítimas de los primeros días de
+ *    un mes impar (Jericó 04/03 caía en febrero). Verificado contra el Excel real.
  *  - TRIMESTRAL: ene=T4 del año anterior, abr=T1, jul=T2, oct=T3.
  *  - CUATRIMESTRAL: ene=C3 del año anterior, may=C1, sep=C2.
  */
@@ -72,14 +79,16 @@ function derivarPeriodo(periodicidad, fecha) {
     return { periodo: a + '-' + (m < 10 ? '0' + m : m), porConfirmar: false };
   }
   if (periodicidad === 'BIMESTRAL') {
+    // 1) Mes impar: se mapea la fecha tal cual (aunque caiga en los primeros días del mes).
+    const directo = bimestreDeMes(anio, mes);
+    if (directo) return { periodo: directo, porConfirmar: false };
+    // 2) Mes par: es una fecha de fin de mes corrida al mes siguiente; se resta 7 días.
     const aj = new Date(anio, mes - 1, fecha.getDate() - 7);
-    const am = aj.getMonth() + 1;
-    const aa = aj.getFullYear();
-    if (am === 1) return { periodo: (aa - 1) + '-B6', porConfirmar: false };
+    const ajustado = bimestreDeMes(aj.getFullYear(), aj.getMonth() + 1);
+    if (ajustado) return { periodo: ajustado, porConfirmar: false };
     // TODO(USUARIO): febrero → B6 es PROPUESTA tuya (Yopal, Villavicencio): validarla con el equipo.
-    if (am === 2) return { periodo: (aa - 1) + '-B6', porConfirmar: true };
-    const b = { 3: 1, 5: 2, 7: 3, 9: 4, 11: 5 }[am];
-    return b ? { periodo: aa + '-B' + b, porConfirmar: false } : nada;
+    if (aj.getMonth() + 1 === 2) return { periodo: (aj.getFullYear() - 1) + '-B6', porConfirmar: true };
+    return nada;
   }
   if (periodicidad === 'TRIMESTRAL') {
     if (mes === 1) return { periodo: (anio - 1) + '-T4', porConfirmar: false };

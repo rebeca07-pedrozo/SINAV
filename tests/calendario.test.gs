@@ -29,6 +29,11 @@ function pruebasCalendario() {
   igual(periodoDe('BIMESTRAL', 2026, 8, 1).periodo, '2026-B3', 'sabaneta');
   igual(periodoDe('BIMESTRAL', 2026, 2, 2).periodo, '2025-B6', 'la calera 02/02');
   igual(periodoDe('BIMESTRAL', 2026, 4, 6).periodo, '2026-B1', 'la calera 06/04');
+  // Mes impar con fecha en los primeros días: NO se resta (casos reales del Excel)
+  igual(periodoDe('BIMESTRAL', 2026, 3, 4).periodo, '2026-B1', 'jerico 04/03');
+  igual(periodoDe('BIMESTRAL', 2026, 3, 6).periodo, '2026-B1', 'salento 06/03');
+  igual(periodoDe('BIMESTRAL', 2026, 1, 5).periodo, '2025-B6', 'timbio 05/01');
+  igual(periodoDe('BIMESTRAL', 2027, 1, 5).periodo, '2026-B6', 'viani 05/01/2027');
   igual(periodoDe('BIMESTRAL', 2026, 12, 14).periodo, '', 'diciembre sin regla');
   igual(periodoDe('BIMESTRAL', 2026, 4, 17).periodo, '', 'simiti 17/04 sin regla');
   const feb = periodoDe('BIMESTRAL', 2026, 2, 13);
