@@ -52,24 +52,47 @@ function normalizarPeriodicidad(texto) {
 }
 
 /**
- * Periodo a partir del vencimiento (el encabezado de la fuente es el mes del vencimiento).
- * MENSUAL: mes anterior. BIMESTRAL: mar=B1 may=B2 jul=B3 sep=B4 nov=B5, ene=B6 del año anterior.
- * Devuelve '' si no hay regla confirmada.
+ * Periodo a partir de la fecha de vencimiento. Devuelve { periodo, porConfirmar }.
+ * periodo = '' si no hay regla confirmada (la fila va a EXCEPCIONES).
+ *  - MENSUAL: mes del vencimiento menos 1.
+ *  - BIMESTRAL: se resta 7 días a la fecha y se mapea el mes resultante
+ *    (mar=B1 may=B2 jul=B3 sep=B4 nov=B5, ene=B6 del año anterior). Así se absorben las
+ *    fechas de fin de mes que se corrieron al mes siguiente (confirmado por la usuaria).
+ *  - TRIMESTRAL: ene=T4 del año anterior, abr=T1, jul=T2, oct=T3.
+ *  - CUATRIMESTRAL: ene=C3 del año anterior, may=C1, sep=C2.
  */
-function derivarPeriodo(periodicidad, anio, mes) {
+function derivarPeriodo(periodicidad, fecha) {
+  const anio = fecha.getFullYear();
+  const mes = fecha.getMonth() + 1;
+  const nada = { periodo: '', porConfirmar: false };
+
   if (periodicidad === 'MENSUAL') {
     const a = mes === 1 ? anio - 1 : anio;
     const m = mes === 1 ? 12 : mes - 1;
-    return a + '-' + (m < 10 ? '0' + m : m);
+    return { periodo: a + '-' + (m < 10 ? '0' + m : m), porConfirmar: false };
   }
   if (periodicidad === 'BIMESTRAL') {
-    if (mes === 1) return (anio - 1) + '-B6';
-    const b = { 3: 1, 5: 2, 7: 3, 9: 4, 11: 5 }[mes];
-    return b ? anio + '-B' + b : '';
+    const aj = new Date(anio, mes - 1, fecha.getDate() - 7);
+    const am = aj.getMonth() + 1;
+    const aa = aj.getFullYear();
+    if (am === 1) return { periodo: (aa - 1) + '-B6', porConfirmar: false };
+    // TODO(USUARIO): febrero → B6 es PROPUESTA tuya (Yopal, Villavicencio): validarla con el equipo.
+    if (am === 2) return { periodo: (aa - 1) + '-B6', porConfirmar: true };
+    const b = { 3: 1, 5: 2, 7: 3, 9: 4, 11: 5 }[am];
+    return b ? { periodo: aa + '-B' + b, porConfirmar: false } : nada;
   }
-  // TODO(USUARIO): faltan las reglas de TRIMESTRAL, CUATRIMESTRAL, SEMESTRAL y ANUAL
-  // (cómo se deriva el periodo y el formato "2026-T3" / "2026-A"). No las invento.
-  return '';
+  if (periodicidad === 'TRIMESTRAL') {
+    if (mes === 1) return { periodo: (anio - 1) + '-T4', porConfirmar: false };
+    const t = { 4: 1, 7: 2, 10: 3 }[mes];
+    return t ? { periodo: anio + '-T' + t, porConfirmar: false } : nada;
+  }
+  if (periodicidad === 'CUATRIMESTRAL') {
+    if (mes === 1) return { periodo: (anio - 1) + '-C3', porConfirmar: false };
+    const c = { 5: 1, 9: 2 }[mes];
+    return c ? { periodo: anio + '-C' + c, porConfirmar: false } : nada;
+  }
+  // TODO(USUARIO): faltan las reglas de SEMESTRAL y ANUAL (y el formato "2026-A"). No las invento.
+  return nada;
 }
 
 /** Date, o texto yyyy-mm-dd → Date. Cualquier otra cosa → null (va a EXCEPCIONES). */
@@ -108,14 +131,15 @@ function aplanarFila(fila, noFila) {
     if (!base.tipo_obligacion) excepciones.push(['IMPUESTO_NO_MAPEADO', donde]);
     if (!base.periodicidad) excepciones.push(['PERIODICIDAD_DESCONOCIDA', donde + ': "' + base.periodicidad_original + '"']);
 
-    const periodo = base.periodicidad ? derivarPeriodo(base.periodicidad, c.anio, c.mes) : '';
-    if (base.periodicidad && !periodo) excepciones.push(['PERIODO_NO_DERIVADO', donde + ': ' + base.periodicidad]);
+    const d = base.periodicidad ? derivarPeriodo(base.periodicidad, f) : { periodo: '', porConfirmar: false };
+    if (base.periodicidad && !d.periodo) excepciones.push(['PERIODO_NO_DERIVADO', donde + ': ' + base.periodicidad]);
 
     const o = {};
     Object.keys(base).forEach(function (k) { o[k] = base[k]; });
     o.columna_fuente = c.col;
     o.vencimiento = f;
-    o.periodo = periodo;
+    o.periodo = d.periodo;
+    o.periodo_por_confirmar = d.porConfirmar ? 'SI' : '';
     filas.push(o);
   });
   return { filas: filas, excepciones: excepciones };

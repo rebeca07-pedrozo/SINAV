@@ -23,7 +23,8 @@ const ENCABEZADOS = {
   CALENDARIO: [
     'nit', 'cod_dane', 'departamento', 'municipio', 'impuesto', 'tipo_obligacion',
     'descuento_pronto_pago', 'estado_fuente', 'comentario', 'periodicidad',
-    'periodicidad_original', 'resolucion', 'empresa', 'columna_fuente', 'vencimiento', 'periodo'
+    'periodicidad_original', 'resolucion', 'empresa', 'columna_fuente', 'vencimiento', 'periodo',
+    'periodo_por_confirmar'
   ],
 
   // Esquema tomado literal de BRIEF §3.
