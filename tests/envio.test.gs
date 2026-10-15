@@ -30,6 +30,33 @@ function pruebasEnvio() {
   Logger.log('pruebasEnvio: OK');
 }
 
+function pruebasDestino() {
+  const falla = function (f, texto, etiqueta) {
+    let msg = '';
+    try { f(); } catch (e) { msg = e.message; }
+    igual(msg.indexOf(texto) !== -1, true, etiqueta + ' (mensaje: "' + msg + '")');
+  };
+
+  igual(decidirDestino('OBSERVACION', '').accion, 'SIMULAR', 'observación no envía');
+  igual(decidirDestino('PRUEBA', 'Admin@x.com').para.join(','), 'admin@x.com', 'prueba va al administrador');
+  falla(function () { decidirDestino('PRUEBA', ''); }, 'correo_administrador', 'prueba sin administrador');
+  falla(function () { decidirDestino('PRUEBA', 'no es un correo'); }, 'correo_administrador', 'administrador inválido');
+  falla(function () { decidirDestino('PRODUCCION', 'a@x.com'); }, 'todavía no está habilitado', 'producción bloqueada');
+  falla(function () { decidirDestino('', 'a@x.com'); }, 'modo debe ser', 'modo vacío');
+
+  const p = marcarComoPrueba({ asunto: 'Asunto', html: '<p>Hola</p>', texto: 'Hola' }, ['oficina@m.gov.co', 'b@m.gov.co']);
+  igual(p.asunto, '[PRUEBA] Asunto', 'prueba: asunto');
+  igual(p.texto.indexOf('habría ido a oficina@m.gov.co, b@m.gov.co') !== -1, true, 'prueba: dice a quién iba');
+  igual(p.html.indexOf('<p>Hola</p>') !== -1, true, 'prueba: conserva el cuerpo');
+
+  igual(cabeEnTope(0, 1, 1500, 100), true, 'tope: cabe');
+  igual(cabeEnTope(1500, 1, 1500, 100), false, 'tope: lleno');
+  igual(cabeEnTope(1499, 2, 1500, 100), false, 'tope: se pasa por uno');
+  igual(cabeEnTope(0, 5, 1500, 4), false, 'cuota real de Gmail agotada');
+
+  Logger.log('pruebasDestino: OK');
+}
+
 function pruebasCola() {
   const dir = directorioContactos([
     { cod_oficina: '0851', correos: 'A@x.com; b@x.com', activo: 'SI' },

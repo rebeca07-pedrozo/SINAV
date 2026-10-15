@@ -53,6 +53,16 @@
 - **Saludo** "Buenos días" antes de las 12:00 hora de Bogotá, "Buenas tardes" después. El correo real tenía uno fijo.
 - **Abierto (regla 7):** `sticker` y `consecutivo_egreso` no los llena ninguna parte del sistema; `valor` solo sale del histórico de lo ya presentado. Hay que definir de dónde salen para las obligaciones por enviar.
 
+## 2026-10-15 — Fase 2, paso 6: envío en OBSERVACION y PRUEBA
+
+- **Se sigue sin sticker / consecutivo:** la usuaria no tiene aún la respuesta de su compañero. Para probar se escriben a mano en una obligación de prueba. Cuando haya fuente, solo cambia de dónde salen; el armado ya los exige.
+- **Modos:** `OBSERVACION` solo simula y escribe nada. `PRUEBA` envía todo a `correo_administrador` con `[PRUEBA]` en el asunto y un aviso arriba de a quién habría ido. `PRODUCCION` lanza error a propósito hasta que se pruebe el camino real (cambia estado, `fecha_envio`, evento NOTIFICADA).
+- **PRUEBA no cambia la obligación:** solo escribe en `ENVIOS` (con `thread_id`). Si la marcara NOTIFICADA falsearía `fecha_envio`, que es el hito del proceso, y la sacaría de la cola.
+- **`threadId`:** se usa `GmailApp.createDraft(...).send()` porque `sendEmail()` no devuelve el mensaje y sin el hilo no hay emparejamiento (BRIEF §8). Se guarda en `ENVIOS` en el mismo paso.
+- **Tope diario:** contador por cuenta en `UserProperties` (la cuota de Gmail es por cuenta que envía, no del script) más `MailApp.getRemainingDailyQuota()`. Frena antes de pasarse.
+- **Ante un error de Gmail** se detiene la corrida (no se sigue contra un problema desconocido) y queda `ERROR_ENVIO` en EXCEPCIONES.
+- **Por defecto 1 correo por corrida** (`enviarCola()`); se sube con un número.
+
 ## 2026-10-14 — Adjunto de salida: nombre sugerido y buscador tolerante
 
 - **Decisión (usuaria):** el equipo nombra los PDF como quiera; el sistema no puede exigir un formato. Se define uno **sugerido** y el sistema lo publica en `OBLIGACIONES.nombre_adjunto_esperado`: `{cod_dane 5 dígitos}_{TIPO}_{REGIMEN}_{PERIODO}_{MUNICIPIO}.pdf`. Reemplaza para esta etapa la convención `{cod_oficina}-{MUNICIPIO} {PERIODO}.pdf` del brief §5 (la identidad es cod_dane, no cod_oficina).
