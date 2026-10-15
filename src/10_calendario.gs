@@ -159,6 +159,21 @@ function importarCalendario() {
     excepciones.length + ' excepciones.');
 }
 
+/** Lista los valores distintos de la columna Impuesto de la fuente, con cuántas filas tiene cada uno. */
+function listarImpuestos() {
+  const datos = SpreadsheetApp.openById(config('calendario_libro_id'))
+    .getSheetByName(config('calendario_hoja')).getDataRange().getValues();
+  const cuenta = {};
+  for (let i = 1; i < datos.length; i++) {
+    const crudo = String(datos[i][letraAIndice(COLUMNAS_FUENTE.impuesto)]);
+    if (crudo.trim() === '') continue;
+    cuenta[crudo] = (cuenta[crudo] || 0) + 1;
+  }
+  Object.keys(cuenta).forEach(function (k) {
+    Logger.log('"' + k + '": ' + cuenta[k] + ' filas → ' + (MAPA_IMPUESTO[normalizarTexto(k)] || 'SIN MAPEAR'));
+  });
+}
+
 /** Resumen de EXCEPCIONES sin resolver: cuántas por motivo y un ejemplo de cada una. */
 function resumirExcepciones() {
   const por = {};
