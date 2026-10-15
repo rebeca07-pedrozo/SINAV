@@ -152,7 +152,7 @@ function verificarInstalacion() {
     if (!(p[0] in cargarConfig())) problemas.push('Falta el parámetro ' + p[0] + ' en CONFIG');
   });
 
-  ['correo_administrador', 'nombre_remitente', 'carpeta_salida_id', 'carpeta_evidencia_id']
+  ['correo_administrador', 'nombre_remitente', 'responsable_soporte', 'codigo_dependencia', 'carpeta_salida_id', 'carpeta_evidencia_id']
     .forEach(function (k) { if (!configOpcional(k)) problemas.push('CONFIG: "' + k + '" está vacío'); });
 
   const modoRem = configOpcional('modo_remitente');

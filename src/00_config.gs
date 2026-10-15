@@ -14,6 +14,8 @@ const CONFIG_DEFECTO = [
   ['alias_envio', 'impuestosdavivienda@davivienda.com'],
   ['modo_remitente', 'CUENTA_QUE_ENVIA'], // CUENTA_QUE_ENVIA | ALIAS (ver docs/decisiones.md, 2026-10-15)
   ['nombre_remitente', ''],               // lo que ven las oficinas, p. ej. Impuestos Davivienda
+  ['responsable_soporte', ''],            // nombre al que la oficina envía el soporte sellado (va en el cuerpo del correo)
+  ['codigo_dependencia', '9413'],         // código del Dpto. de impuestos que va en el cuerpo del correo
   ['correo_administrador', ''],
   ['etiqueta_respuestas', ''],
   ['carpeta_salida_id', ''],

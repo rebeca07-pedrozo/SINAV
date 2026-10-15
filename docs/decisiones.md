@@ -43,6 +43,16 @@
 - **Cola (`colaEnvio`, `resumirCola`):** solo lectura. Entran obligaciones `PENDIENTE` de `tipos_activos` con `requiere_envio_oficina = SI`, con adjunto y con destinatario. Motivos de salida: `YA_ENVIADA` (tiene `thread_id` o `fecha_envio`; un reenvío es otro envío, no otra obligación), `NO_REQUIERE_ENVIO`, `ENVIO_POR_DEFINIR` (REVISAR o vacío), `SIN_ADJUNTO`, `SIN_DESTINATARIO`.
 - **Pendiente:** los correos con fuente `CORREO_MUNICIPIO` no deberían ir a producción sin revisión humana; cómo se aprueban se define en el paso del botón de envío.
 
+## 2026-10-15 — Fase 2, paso 5: plantilla del correo a la oficina
+
+- **Fuente del texto:** el correo real que el equipo manda hoy (ejemplo FONSECA, Jesús Jaimes). Una sola plantilla por ahora, `NOTIFICACION_INICIAL`, en la hoja `PLANTILLAS`. `sembrarPlantillas()` la crea una vez y nunca pisa una editada; después se edita en la hoja.
+- **Marcadores** `{minúscula}`: cod_oficina, impuesto, municipio, periodicidad, anio, valor, nit_municipio, sticker, consecutivo, vencimiento, saludo, remitente, responsable_soporte, codigo_dependencia. Los dos últimos y `remitente` salen de CONFIG (el nombre de la persona y el código 9413 estaban quemados en el texto original).
+- **Sin datos no hay correo:** `armarCorreoCon` devuelve `{ok:false, faltan}` si falta sticker, consecutivo, valor, vencimiento, adjunto, o si queda un `{marcador}` sin reemplazar. Nunca se manda con un dato en blanco.
+- **Año del texto** sale del `periodo` de la obligación, no de una fecha fija: el ejemplo real decía "BIMESTRAL de 2025" para un vencimiento de 2026 (texto desactualizado). Febrero cae en B6 del año anterior y el año sale bien.
+- **Agregado mío (confirmar):** una línea que pide responder sobre este mismo correo, exigida por BRIEF §8. El texto original solo decía "enviar por este medio".
+- **Saludo** "Buenos días" antes de las 12:00 hora de Bogotá, "Buenas tardes" después. El correo real tenía uno fijo.
+- **Abierto (regla 7):** `sticker` y `consecutivo_egreso` no los llena ninguna parte del sistema; `valor` solo sale del histórico de lo ya presentado. Hay que definir de dónde salen para las obligaciones por enviar.
+
 ## 2026-10-14 — Adjunto de salida: nombre sugerido y buscador tolerante
 
 - **Decisión (usuaria):** el equipo nombra los PDF como quiera; el sistema no puede exigir un formato. Se define uno **sugerido** y el sistema lo publica en `OBLIGACIONES.nombre_adjunto_esperado`: `{cod_dane 5 dígitos}_{TIPO}_{REGIMEN}_{PERIODO}_{MUNICIPIO}.pdf`. Reemplaza para esta etapa la convención `{cod_oficina}-{MUNICIPIO} {PERIODO}.pdf` del brief §5 (la identidad es cod_dane, no cod_oficina).
