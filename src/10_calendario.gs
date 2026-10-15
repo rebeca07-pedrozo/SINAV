@@ -29,9 +29,8 @@ const COLUMNAS_MES = [
 ];
 
 // Impuesto de la fuente (normalizado) → tipo_obligacion del maestro.
-// TODO(USUARIO): confirma "MEDIOS MAGNETICOS" → EXOGENA. Es el único que deduje por descarte
-// (los 7 impuestos del brief contra los 7 valores del enum). Revisa también que los nombres
-// coincidan con los de tu hoja; los que no estén aquí caen en EXCEPCIONES.
+// "MEDIOS MAGNETICOS" → EXOGENA confirmado por la usuaria. Los nombres que no estén aquí
+// caen en EXCEPCIONES.
 const MAPA_IMPUESTO = {
   'RETENCION ICA': 'RETEICA',
   'AUTORRETEICA': 'AUTORRETEICA',
@@ -180,7 +179,10 @@ function resumirExcepciones() {
   let deReteica = 0;
   leerFilas(HOJAS.EXCEPCIONES).forEach(function (e) {
     if (e.resuelta === true) return;
-    if (normalizarTexto(e.detalle).indexOf('RETENCION ICA') !== -1) deReteica++;
+    if (normalizarTexto(e.detalle).indexOf('RETENCION ICA') !== -1) {
+      deReteica++;
+      Logger.log('[ReteICA] ' + e.motivo + ' · ' + e.detalle);
+    }
     por[e.motivo] = por[e.motivo] || { n: 0, ejemplos: [] };
     por[e.motivo].n++;
     if (por[e.motivo].ejemplos.length < 3) por[e.motivo].ejemplos.push(e.detalle);
