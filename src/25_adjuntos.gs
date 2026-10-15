@@ -48,6 +48,16 @@ function coincidePeriodo(tokens, periodo) {
   return false;
 }
 
+/** adjunto_salida_id guarda el LINK del PDF (legible para el equipo); el código saca el id de ahí. */
+function enlaceDrive(id) { return id === '' ? '' : 'https://drive.google.com/file/d/' + id + '/view'; }
+
+/** Acepta un link de Drive o un id suelto y devuelve el id. */
+function idDriveDe(valor) {
+  const t = String(valor === null || valor === undefined ? '' : valor).trim();
+  const m = t.match(/\/d\/([\w-]+)/) || t.match(/[?&]id=([\w-]+)/);
+  return m ? m[1] : t;
+}
+
 /** Nombre sugerido para que el equipo guarde el PDF. */
 function nombreAdjuntoEsperado(o) {
   const limpio = function (t) { return String(t === null || t === undefined ? '' : t).replace(/[\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim(); };
@@ -153,8 +163,8 @@ function resolverAdjuntos() {
   obligaciones.forEach(function (o) {
     if (o.nombre_adjunto_esperado === '') o.nombre_adjunto_esperado = nombreAdjuntoEsperado(o);
     const mios = r.porObligacion[o.id] || [];
-    if (o.adjunto_salida_id === '' && mios.length === 1) { o.adjunto_salida_id = mios[0].id; asignados++; }
-    o.adjunto_salida_enlace = o.adjunto_salida_id === '' ? '' : 'https://drive.google.com/file/d/' + o.adjunto_salida_id + '/view';
+    if (o.adjunto_salida_id === '' && mios.length === 1) { o.adjunto_salida_id = enlaceDrive(mios[0].id); asignados++; }
+    else if (o.adjunto_salida_id !== '') o.adjunto_salida_id = enlaceDrive(idDriveDe(o.adjunto_salida_id));   // convierte un id suelto en link
     if (o.adjunto_salida_id !== '') { conAdjunto[o.id] = true; return; }
 
     if (mios.length > 1) {
@@ -168,7 +178,7 @@ function resolverAdjuntos() {
     }
   });
 
-  ['nombre_adjunto_esperado', 'adjunto_salida_id', 'adjunto_salida_enlace'].forEach(function (col) {
+  ['nombre_adjunto_esperado', 'adjunto_salida_id'].forEach(function (col) {
     escribirColumna(HOJAS.OBLIGACIONES, col, obligaciones.map(function (o) { return o[col]; }));
   });
   r.ambiguos.forEach(function (x) {

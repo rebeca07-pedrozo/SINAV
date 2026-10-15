@@ -43,6 +43,12 @@ function pruebasAdjuntos() {
   igual(id('08001_RETEICA_2026-09.pdf'), dosRegimenes[0].id, 'sin régimen = GENERAL');
   igual(id('08001_RETEICA_GENERAL_2026-09.pdf'), dosRegimenes[0].id, 'GENERAL escrito');
 
+  // El link y el id son intercambiables
+  igual(enlaceDrive('abc_123-X'), 'https://drive.google.com/file/d/abc_123-X/view', 'enlace');
+  igual(idDriveDe('https://drive.google.com/file/d/abc_123-X/view'), 'abc_123-X', 'id desde enlace');
+  igual(idDriveDe('https://drive.google.com/open?id=abc_123-X'), 'abc_123-X', 'id desde enlace antiguo');
+  igual(idDriveDe('abc_123-X'), 'abc_123-X', 'id suelto');
+
   // Cruce completo: una obligación con dos PDF queda con dos
   const r = buscarAdjuntos([medellin, bimestral], [
     { id: 'a', nombre: '05001_RETEICA_2026-09.pdf' }, { id: 'b', nombre: '5001 reteica 2026-09 corregida.pdf' },

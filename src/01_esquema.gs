@@ -38,8 +38,7 @@ const ENCABEZADOS = {
     'motivo_devolucion', 'reprocesos', 'adjunto_salida_id', 'thread_id', 'fecha_envio',
     'evidencia_id', 'evidencia_hash',
     'fecha_presentacion',  // se agregan al final: instalar() las añade sin tocar las filas existentes
-    'nombre_adjunto_esperado',
-    'adjunto_salida_enlace'   // link clicable al PDF; se calcula desde adjunto_salida_id (el código usa el id)
+    'nombre_adjunto_esperado'
   ],
 
   // TODO(USUARIO): el brief no define las columnas de ENVIOS más allá de "intento_n".
