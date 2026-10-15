@@ -106,6 +106,15 @@ function agregarFilas(nombreHoja, objetos) {
   });
 }
 
+/** Reescribe una sola columna completa (en bloque, bajo lock). `valores` = un valor por fila de datos. */
+function escribirColumna(nombreHoja, columna, valores) {
+  if (!valores.length) return;
+  const col = ENCABEZADOS[nombreHoja].indexOf(columna) + 1;
+  conLock(function () {
+    hojaDe(nombreHoja).getRange(2, col, valores.length, 1).setValues(valores.map(function (v) { return [v]; }));
+  });
+}
+
 /** Valida que los encabezados reales coincidan con el esquema. Devuelve lista de problemas. */
 function revisarEncabezados(hoja, nombre) {
   const esperado = ENCABEZADOS[nombre];

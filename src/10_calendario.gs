@@ -177,8 +177,10 @@ function listarImpuestos() {
 /** Resumen de EXCEPCIONES sin resolver: cuántas por motivo y un ejemplo de cada una. */
 function resumirExcepciones() {
   const por = {};
+  let deReteica = 0;
   leerFilas(HOJAS.EXCEPCIONES).forEach(function (e) {
     if (e.resuelta === true) return;
+    if (normalizarTexto(e.detalle).indexOf('RETENCION ICA') !== -1) deReteica++;
     por[e.motivo] = por[e.motivo] || { n: 0, ejemplos: [] };
     por[e.motivo].n++;
     if (por[e.motivo].ejemplos.length < 3) por[e.motivo].ejemplos.push(e.detalle);
@@ -186,6 +188,7 @@ function resumirExcepciones() {
   Object.keys(por).forEach(function (m) {
     Logger.log(m + ': ' + por[m].n + '\n   ' + por[m].ejemplos.join('\n   '));
   });
+  Logger.log('Excepciones abiertas que afectan a Retención ICA: ' + deReteica);
 }
 
 function validarEncabezadosFuente(encabezados) {
@@ -199,10 +202,23 @@ function validarEncabezadosFuente(encabezados) {
 
 /** Escribe en EXCEPCIONES sin repetir las que ya están sin resolver. */
 function registrarExcepcionesCalendario(excepciones) {
+  const vigentes = {};
+  excepciones.forEach(function (e) { vigentes[e[0] + '|' + e[1]] = true; });
+  const motivosCalendario = ['FECHA_ILEGIBLE', 'MES_NO_CUADRA', 'IMPUESTO_NO_MAPEADO',
+    'PERIODICIDAD_DESCONOCIDA', 'PERIODO_NO_DERIVADO'];
+
+  // Las excepciones del calendario que ya no se repiten se marcan resueltas (no se borran).
+  const existentes = leerFilas(HOJAS.EXCEPCIONES);
   const yaHay = {};
-  leerFilas(HOJAS.EXCEPCIONES).forEach(function (e) {
-    if (e.resuelta === '' || e.resuelta === false) yaHay[e.motivo + '|' + e.detalle] = true;
+  const resuelta = existentes.map(function (e) {
+    const llave = e.motivo + '|' + e.detalle;
+    const abierta = e.resuelta === '' || e.resuelta === false;
+    if (abierta && motivosCalendario.indexOf(e.motivo) !== -1 && !vigentes[llave]) return true;
+    if (abierta) yaHay[llave] = true;
+    return e.resuelta;
   });
+  escribirColumna(HOJAS.EXCEPCIONES, 'resuelta', resuelta);
+
   const nuevas = excepciones
     .filter(function (e) { return !yaHay[e[0] + '|' + e[1]]; })
     .map(function (e) { return { timestamp: new Date(), id_obligacion: '', motivo: e[0], detalle: e[1], resuelta: false }; });
