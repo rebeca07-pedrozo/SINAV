@@ -36,6 +36,13 @@
 - **Si luego hay alias:** se cambia el modo de remitente en CONFIG, sin tocar código.
 - **Nota técnica:** `noReply` solo funciona en cuentas Workspace.
 
+## 2026-10-15 — Fase 2, paso 4: cola de envío y destinatarios
+
+- **Decisión (usuaria):** el destinatario sale de `CONTACTOS` primero; si la oficina no está, se usa `correo_municipio` (el que vino en "Presentacion") y la obligación queda marcada `fuente = CORREO_MUNICIPIO` para revisión.
+- **`CONTACTOS.activo`:** solo cuenta `SI` o casilla marcada. Vacío no se asume activo (regla 6: no inventar); esa fila se ignora y se cae al respaldo.
+- **Cola (`colaEnvio`, `resumirCola`):** solo lectura. Entran obligaciones `PENDIENTE` de `tipos_activos` con `requiere_envio_oficina = SI`, con adjunto y con destinatario. Motivos de salida: `YA_ENVIADA` (tiene `thread_id` o `fecha_envio`; un reenvío es otro envío, no otra obligación), `NO_REQUIERE_ENVIO`, `ENVIO_POR_DEFINIR` (REVISAR o vacío), `SIN_ADJUNTO`, `SIN_DESTINATARIO`.
+- **Pendiente:** los correos con fuente `CORREO_MUNICIPIO` no deberían ir a producción sin revisión humana; cómo se aprueban se define en el paso del botón de envío.
+
 ## 2026-10-14 — Adjunto de salida: nombre sugerido y buscador tolerante
 
 - **Decisión (usuaria):** el equipo nombra los PDF como quiera; el sistema no puede exigir un formato. Se define uno **sugerido** y el sistema lo publica en `OBLIGACIONES.nombre_adjunto_esperado`: `{cod_dane 5 dígitos}_{TIPO}_{REGIMEN}_{PERIODO}_{MUNICIPIO}.pdf`. Reemplaza para esta etapa la convención `{cod_oficina}-{MUNICIPIO} {PERIODO}.pdf` del brief §5 (la identidad es cod_dane, no cod_oficina).
