@@ -19,9 +19,12 @@ const HOJAS = {
 const ENCABEZADOS = {
   CONFIG: ['parámetro', 'valor'],
 
-  // TODO(USUARIO): las columnas de CALENDARIO dependen del libro externo del calendario
-  // tributario, que no tengo. Se queda sin encabezados hasta la Fase 1 (importación).
-  CALENDARIO: [],
+  // Formato largo: una fila por obligación y vencimiento. Ver 10_calendario.gs.
+  CALENDARIO: [
+    'nit', 'cod_dane', 'departamento', 'municipio', 'impuesto', 'tipo_obligacion',
+    'descuento_pronto_pago', 'estado_fuente', 'comentario', 'periodicidad',
+    'periodicidad_original', 'resolucion', 'empresa', 'columna_fuente', 'vencimiento', 'periodo'
+  ],
 
   // Esquema tomado literal de BRIEF §3.
   OBLIGACIONES: [
