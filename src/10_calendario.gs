@@ -159,6 +159,20 @@ function importarCalendario() {
     excepciones.length + ' excepciones.');
 }
 
+/** Resumen de EXCEPCIONES sin resolver: cuántas por motivo y un ejemplo de cada una. */
+function resumirExcepciones() {
+  const por = {};
+  leerFilas(HOJAS.EXCEPCIONES).forEach(function (e) {
+    if (e.resuelta === true) return;
+    por[e.motivo] = por[e.motivo] || { n: 0, ejemplos: [] };
+    por[e.motivo].n++;
+    if (por[e.motivo].ejemplos.length < 3) por[e.motivo].ejemplos.push(e.detalle);
+  });
+  Object.keys(por).forEach(function (m) {
+    Logger.log(m + ': ' + por[m].n + '\n   ' + por[m].ejemplos.join('\n   '));
+  });
+}
+
 function validarEncabezadosFuente(encabezados) {
   ENCABEZADOS_FUENTE.forEach(function (esperado, i) {
     if (normalizarTexto(encabezados[i]) !== esperado) {
