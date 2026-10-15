@@ -1,3 +1,10 @@
 .clasp.json
 node_modules/
 datos/
+
+# Archivos con datos reales: nunca al repositorio
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.pdf

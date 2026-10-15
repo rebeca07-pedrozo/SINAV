@@ -1,0 +1,40 @@
+LICENCIA PROPIETARIA — TODOS LOS DERECHOS RESERVADOS
+
+Copyright (c) 2026 Rebeca Pedrozo Cueto. Todos los derechos reservados.
+
+Este repositorio (el "Software") incluye el código fuente, las pruebas, la documentación, las
+especificaciones y cualquier otro archivo que lo acompañe. NO es software libre ni de código abierto.
+Aunque el repositorio pueda ser visible, esa visibilidad no concede ningún derecho.
+
+1. SIN LICENCIA DE USO. No se concede ningún permiso, expreso ni implícito, sobre el Software. Sin
+   autorización previa, expresa, escrita y firmada por el titular, queda prohibido:
+   a) usar, ejecutar o desplegar el Software, total o parcialmente, con cualquier fin, comercial o no;
+   b) copiar, reproducir o duplicar el Software o cualquiera de sus partes, incluidos fragmentos de
+      código, nombres de funciones, esquemas de hojas, reglas de negocio y documentación;
+   c) modificar, adaptar, traducir o crear obras derivadas;
+   d) distribuir, publicar, sublicenciar, vender, alquilar, prestar o poner a disposición de terceros;
+   e) hacer fork, espejo o clon con fines distintos a la lectura personal y transitoria;
+   f) descompilar, aplicar ingeniería inversa o extraer su lógica para replicarla;
+   g) usarlo o cargarlo como material de entrenamiento, ajuste o evaluación de modelos de inteligencia
+      artificial o aprendizaje automático, ni someterlo a rastreo o extracción masiva de datos;
+   h) quitar o alterar este aviso o cualquier indicación de autoría.
+
+2. DATOS DE TERCEROS. Este repositorio no contiene ni licencia datos de municipios, entidades o personas.
+   Cualquier dato que aparezca es información de sus titulares y está sujeto a sus propias condiciones y
+   a la ley aplicable de protección de datos y reserva de la información. Esta licencia no autoriza su uso.
+
+3. SIN GARANTÍA. El Software se entrega "tal cual", sin garantía de ningún tipo, expresa o implícita,
+   incluidas las de comerciante, idoneidad para un fin particular y no infracción. El titular no responde
+   por daños, pérdidas ni sanciones derivados de su lectura o uso, incluso si fue advertido de ellos.
+
+4. INFRACCIÓN. Todo uso no autorizado es una infracción de derechos de autor y de esta licencia. El titular
+   se reserva todas las acciones civiles, penales y administrativas, incluida la solicitud de retiro de
+   contenido a las plataformas que lo alojen.
+
+5. NINGUNA RENUNCIA. La falta de ejercicio de un derecho no es renuncia a él. Si alguna cláusula resulta
+   inválida, las demás siguen vigentes.
+
+6. LEY APLICABLE. Esta licencia se rige por las leyes de la República de Colombia.
+   TODO(USUARIO): confirma con el área jurídica la titularidad y la ley aplicable (ver conclusiones.md).
+
+Para solicitar autorización escrita, escribe al titular antes de cualquier uso.
