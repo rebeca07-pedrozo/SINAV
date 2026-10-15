@@ -23,6 +23,7 @@ const CONFIG_DEFECTO = [
   ['hoja_responsable', 'Responsable'],    // hoja que traduce la inicial del responsable a su nombre
   ['etiqueta_gmail', ''],
   ['dias_alerta', '10,4,2,0'],
+  ['dias_aviso_sin_adjunto', 10],         // una obligación por enviar sin PDF se avisa en EXCEPCIONES cuando vence en ≤ estos días
   ['tipos_activos', 'RETEICA'],
   ['modo', 'OBSERVACION'],   // no lo cambies desde código: solo tú, en la hoja
   ['tope_correos_dia', 1500]

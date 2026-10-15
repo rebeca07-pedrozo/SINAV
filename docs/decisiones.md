@@ -25,3 +25,10 @@
 - **Canal de presentación:** se reemplaza el enum por `presentacion_texto`, `forma_pago` y
   `requiere_envio_oficina` (SI/NO/REVISAR, editable). Los datos reales no cuadraban con el enum.
 - **Texto forzado** en `periodo`, `cod_dane`, `cod_oficina`, `nit`: Sheets convertía "2026-09" en fecha.
+
+## 2026-10-14 — Adjunto de salida: nombre sugerido y buscador tolerante
+
+- **Decisión (usuaria):** el equipo nombra los PDF como quiera; el sistema no puede exigir un formato. Se define uno **sugerido** y el sistema lo publica en `OBLIGACIONES.nombre_adjunto_esperado`: `{cod_dane 5 dígitos}_{TIPO}_{REGIMEN}_{PERIODO}_{MUNICIPIO}.pdf`. Reemplaza para esta etapa la convención `{cod_oficina}-{MUNICIPIO} {PERIODO}.pdf` del brief §5 (la identidad es cod_dane, no cod_oficina).
+- **Buscador (`src/25_adjuntos.gs`):** lee el nombre como bolsa de palabras (sin tildes, mayúsculas, ceros, orden ni separadores). Exige DANE + periodo; el tipo si hay más de un tipo activo o el nombre nombra otro tipo (EXÓGENA, AUTORRETEICA); el régimen solo desempata. Busca también en subcarpetas.
+- **Por qué:** ante la duda no adivina. Archivo que cuadra con dos obligaciones, u obligación con dos archivos → EXCEPCIONES `ADJUNTO_AMBIGUO`. Mandar la declaración equivocada a un municipio es peor que no mandar.
+- **SIN_ADJUNTO:** solo para `requiere_envio_oficina = SI`, estado PENDIENTE, que vencen en ≤ `dias_aviso_sin_adjunto` (CONFIG, por defecto 10) y sin PDF. Evita inundar EXCEPCIONES con obligaciones lejanas. Se cierran solas cuando aparece el PDF. Sin bandera para saltárselo (brief §5).
