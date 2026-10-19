@@ -12,7 +12,7 @@ function doGet() {
 
 /**
  * Apps Script no sirve archivos sueltos como assets/logo-davivienda.png.
- * El logo oficial se sube a Drive y su id va en CONFIG (logo_id). Si falta, la página
+ * El logo oficial se sube a Drive y su id va en CONFIG (propiedad del script logo_id). Si falta, la página
  * muestra el espacio reservado "logo".
  */
 function logoComoDatos() {

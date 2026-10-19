@@ -36,7 +36,7 @@ function listarEnviar() {
  */
 function subirSoporte(idFila, archivo) {
   const cfg = leerConfig();
-  if (!cfg.carpeta_soportes) throw new Error('Falta carpeta_soportes en CONFIG.');
+  if (!cfg.carpeta_soportes) throw new Error('Falta la propiedad del script carpeta_soportes (Configuración del proyecto).');
   if (!archivo || !archivo.base64) throw new Error('No llegó el archivo.');
   const bytes = Utilities.base64Decode(archivo.base64);
   if (bytes.length < 5 || String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== '%PDF') {

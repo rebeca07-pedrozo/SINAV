@@ -13,18 +13,19 @@ const COLUMNAS_EVENTOS = ['fecha', 'obligacion', 'que_paso', 'detalle'];
 const LIMITE_CORREOS = 1500;
 const TIEMPO_MAX_MS = 4.5 * 60 * 1000; // margen bajo los 6 min de Apps Script
 
+// Los ids de Drive no van en el código ni en la hoja: viven en Propiedades del script
+// (Configuración del proyecto → Propiedades del script): carpeta_soportes, carpeta_sellados, logo_id.
+const PROPIEDADES_DRIVE = ['carpeta_soportes', 'carpeta_sellados', 'logo_id'];
+
 const CONFIG_INICIAL = [
   ['correo_remitente', 'impuestosdavivienda@davivienda.com'],
   ['nombre_remitente', 'Departamento de Impuestos'],
-  ['carpeta_soportes', ''],
-  ['carpeta_sellados', ''],
   ['dias_aviso', '10,4,2,0'],
   ['modo', 'PRUEBA'],
   // Agregados en esta fase (ver LEEME):
   ['copia_oculta', ''],        // correos que reciben copia sin que nadie los vea (BCC)
   ['responder_a', ''],         // si está vacío se usa correo_remitente
-  ['usar_alias', 'NO'],        // SI solo cuando "Enviar como" ya esté autorizado en Gmail
-  ['logo_id', '']              // id de Drive del logo oficial
+  ['usar_alias', 'NO']         // SI solo cuando "Enviar como" ya esté autorizado en Gmail
 ];
 
 // ---------- Libro y hojas ----------
@@ -53,6 +54,8 @@ function leerConfig() {
     });
   }
   CONFIG_INICIAL.forEach(function (p) { if (cfg[p[0]] === undefined) cfg[p[0]] = p[1]; });
+  const props = PropertiesService.getScriptProperties();
+  PROPIEDADES_DRIVE.forEach(function (k) { cfg[k] = (props.getProperty(k) || '').trim(); });
   // Seguro por defecto: cualquier cosa distinta de PRODUCCION es PRUEBA.
   cfg.esPrueba = String(cfg.modo).toUpperCase() !== 'PRODUCCION';
   cfg.responder_a = cfg.responder_a || cfg.correo_remitente;
