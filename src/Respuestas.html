@@ -1,0 +1,107 @@
+<section id="panel-respuestas" role="tabpanel" aria-labelledby="tab-respuestas" hidden>
+  <div class="rejilla-datos" id="r-resumen"></div>
+  <div class="tarjeta">
+    <div class="filtros">
+      <input type="search" id="r-buscar" class="grow" placeholder="Buscar municipio, oficina, consecutivo o correo…" aria-label="Buscar en respuestas">
+      <label>Estado
+        <select id="r-estado" aria-label="Filtrar por estado">
+          <option value="">Todos</option><option value="ATRASADA">Atrasadas</option><option value="EN_ESPERA">En espera</option>
+          <option value="SIN_SELLADO">Respondió sin sellado</option><option value="REBOTO">Rebotaron</option><option value="RECIBIDO">Sellado recibido</option>
+        </select>
+      </label>
+      <button class="btn" id="r-revisar" type="button">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        Revisar ahora
+      </button>
+    </div>
+    <div class="tabla-caja">
+      <table>
+        <thead><tr>
+          <th>Oficina</th><th>Enviado</th><th>Documento enviado</th><th>Respuesta esperada</th><th>Estado</th><th>Respuesta</th>
+        </tr></thead>
+        <tbody id="r-cuerpo"></tbody>
+      </table>
+      <div class="vacio-msg" id="r-vacio" hidden><b>Nada por aquí todavía</b><span id="r-vacio-txt">Cuando envíes declaraciones aparecerán en esta lista.</span></div>
+    </div>
+    <div class="nota-pie" id="r-pie"></div>
+  </div>
+
+  <script>
+  (function () {
+    var info = null;
+
+    var ETIQUETAS = {
+      RECIBIDO: ['al-dia', 'Sellado recibido'], EN_ESPERA: ['neutro', 'En espera'], SIN_SELLADO: ['por-vencer', 'Respondió sin sellado'],
+      ATRASADA: ['vencido', 'Atrasada'], REBOTO: ['vencido', 'Rebotó']
+    };
+
+    function cargar(conAviso) {
+      return api('listarRespuestas').then(function (r) { info = r; pintar(); })
+        .catch(function (e) { toast(mensajeError(e), true); });
+    }
+
+    function pintar() {
+      pintarCabecera(info.modo);
+      var c = { ATRASADA: 0, EN_ESPERA: 0, SIN_SELLADO: 0, RECIBIDO: 0, REBOTO: 0 };
+      info.filas.forEach(function (f) { c[f.estadoResp]++; });
+      insignia('n-respuestas', c.ATRASADA + c.REBOTO + c.SIN_SELLADO);
+      var r = $('r-resumen'); r.innerHTML = '';
+      [['En espera', c.EN_ESPERA, '', 'dentro del plazo estimado'], ['Atrasadas', c.ATRASADA, c.ATRASADA ? 'rojo' : '', 'pasó la fecha esperada'],
+       ['Sin sellado', c.SIN_SELLADO + c.REBOTO, (c.SIN_SELLADO + c.REBOTO) ? 'ambar' : '', 'respondieron sin adjunto o rebotaron'], ['Sellado recibido', c.RECIBIDO, 'verde', 'listas']]
+        .forEach(function (d) { r.appendChild(el('div', { clase: 'dato ' + d[2] }, [el('small', { texto: d[0] }), el('b', { texto: String(d[1]) }), el('span', { texto: d[3] })])); });
+      $('r-pie').textContent = 'Se espera respuesta en ' + info.diasEspera + ' días hábiles. Última lectura del buzón: ' + haceCuanto(info.ultimaRevision) + ' · se revisa sola cada 10 minutos.';
+      filtrar();
+    }
+
+    function filtrar() {
+      var q = $('r-buscar').value.trim().toLowerCase(), est = $('r-estado').value;
+      var lista = info.filas.filter(function (f) {
+        if (est && f.estadoResp !== est) return false;
+        if (!q) return true;
+        return [f.municipio, f.cod_oficina, f.consecutivo, f.correo_oficina, f.impuesto, f.periodo, f.enviado_por].join(' ').toLowerCase().indexOf(q) !== -1;
+      });
+      var cuerpo = $('r-cuerpo'); cuerpo.innerHTML = '';
+      lista.forEach(function (f) {
+        var tr = el('tr');
+        tr.appendChild(el('td', {}, [el('b', { texto: f.municipio }), el('span', { clase: 'sub', texto: 'Oficina ' + f.cod_oficina + ' · ' + f.impuesto + ' ' + f.periodo })]));
+        tr.appendChild(el('td', {}, [f.fecha_envio, el('span', { clase: 'sub', texto: 'por ' + (f.enviado_por || '—') })]));
+        tr.appendChild(el('td', {}, [
+          f.documentoUrl ? el('a', { href: f.documentoUrl, target: '_blank', rel: 'noopener', texto: f.documento }) : el('span', { texto: f.documento }),
+          el('span', { clase: 'sub', texto: 'a ' + (f.correo_oficina || '—') })]));
+        var esp = [f.estimada];
+        if (f.despuesDeVencer) esp.push(el('span', { clase: 'sub' }, [chip('por-vencer', 'Llegaría después del vencimiento (' + f.vence + ')')]));
+        else esp.push(el('span', { clase: 'sub', texto: 'Vence ' + f.vence }));
+        tr.appendChild(el('td', {}, esp));
+        var e = ETIQUETAS[f.estadoResp];
+        var texto = e[1];
+        if (f.estadoResp === 'ATRASADA') texto = 'Atrasada ' + plural(-f.diasParaEstimada, 'día', 'días');
+        else if (f.estadoResp === 'EN_ESPERA') texto = f.diasParaEstimada === 0 ? 'Se espera hoy' : 'En espera · ' + plural(f.diasParaEstimada, 'día', 'días');
+        tr.appendChild(el('td', {}, [chip(e[0], texto)]));
+        var resp = [];
+        if (f.fecha_respuesta) {
+          resp.push(f.fecha_respuesta, el('span', { clase: 'sub', texto: 'de ' + f.respondio_por }));
+          if (f.selladoUrl) resp.push(el('a', { href: f.selladoUrl, target: '_blank', rel: 'noopener', texto: 'Ver sellado' }));
+        } else resp.push(el('span', { clase: 'sub', texto: f.estadoResp === 'REBOTO' ? 'El correo no llegó' : 'Aún sin respuesta' }));
+        tr.appendChild(el('td', {}, resp));
+        cuerpo.appendChild(tr);
+      });
+      $('r-vacio').hidden = lista.length > 0;
+      $('r-vacio-txt').textContent = info.filas.length ? 'Ningún resultado con ese filtro.' : 'Cuando envíes declaraciones aparecerán en esta lista.';
+    }
+
+    $('r-buscar').oninput = function () { if (info) filtrar(); };
+    $('r-estado').onchange = function () { if (info) filtrar(); };
+    $('r-revisar').onclick = function () {
+      var b = $('r-revisar'); b.disabled = true; b.lastChild.textContent = ' Revisando…';
+      api('revisarAhora').then(function (r) {
+        b.disabled = false; b.lastChild.textContent = ' Revisar ahora';
+        if (r.error) { toast(r.error, true); return; }
+        toast(r.respondidas ? plural(r.respondidas, 'sellado nuevo', 'sellados nuevos') + '.' : 'Revisé ' + plural(r.revisadas, 'envío', 'envíos') + ': no hay respuestas nuevas.');
+        return cargar();
+      }).catch(function (e) { b.disabled = false; b.lastChild.textContent = ' Revisar ahora'; toast(mensajeError(e), true); });
+    };
+
+    modulos.respuestas = { cargar: cargar, insignia: function () { cargar(); } };
+  })();
+  </script>
+</section>

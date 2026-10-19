@@ -8,6 +8,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('SINAV')
       .addItem('Instalar / reparar hojas', 'instalar')
       .addItem('Cargar 3 filas de prueba', 'cargarPrueba')
+      .addItem('Activar revisión de respuestas y avisos', 'instalarDisparadores')
       .addToUi();
   } catch (e) { /* script sin libro asociado */ }
 }
@@ -40,7 +41,10 @@ function instalar() {
   });
   h1.getRange(2, COLUMNAS.indexOf('estado') + 1, filasFormato, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(ESTADOS, true).setAllowInvalid(false).build());
-  // Las columnas del programa avisan si alguien las edita a mano.
+  // Las columnas del programa avisan si alguien las edita a mano (sin duplicar protecciones al re-ejecutar).
+  h1.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) {
+    if (p.getDescription() === 'Las llena el programa') p.remove();
+  });
   const prot = h1.getRange(1, PRIMERA_DEL_PROGRAMA, h1.getMaxRows(), COLUMNAS.length - PRIMERA_DEL_PROGRAMA + 1)
     .protect().setDescription('Las llena el programa');
   prot.setWarningOnly(true);
@@ -86,7 +90,7 @@ function cargarPrueba() {
     const hoy = new Date();
     const suma = function (dias) { return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + dias); };
     const base = function (extra) {
-      const f = { estado: 'PENDIENTE', soporte_id: '', fecha_envio: '', hilo: '', fecha_respuesta: '', sellado_id: '' };
+      const f = { estado: 'PENDIENTE', soporte_link: '', fecha_envio: '', hilo: '', fecha_respuesta: '', sellado_link: '' };
       Object.keys(extra).forEach(function (k) { f[k] = extra[k]; });
       return COLUMNAS.map(function (c) { return f[c] === undefined ? '' : f[c]; });
     };

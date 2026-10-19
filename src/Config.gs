@@ -5,12 +5,14 @@
 const COLUMNAS = [
   'municipio', 'cod_oficina', 'impuesto', 'periodo', 'vence', 'nit_municipio',
   'correo_oficina', 'responsable', 'consecutivo', 'sticker', 'valor',
-  'estado', 'soporte_id', 'fecha_envio', 'hilo', 'fecha_respuesta', 'sellado_id'
+  'estado', 'soporte_link', 'fecha_envio', 'hilo', 'fecha_respuesta', 'sellado_link',
+  'enviado_por', 'respondio_por'
 ];
 const PRIMERA_DEL_PROGRAMA = 12; // columna "estado" (1-based)
 const ESTADOS = ['PENDIENTE', 'ENVIADA', 'RESPONDIDA', 'ERROR'];
 const COLUMNAS_EVENTOS = ['fecha', 'obligacion', 'que_paso', 'detalle'];
 const LIMITE_CORREOS = 1500;
+const DIAS_VENCIDA_AVISO = 30; // las vencidas siguen en el aviso diario hasta este tope
 const TIEMPO_MAX_MS = 4.5 * 60 * 1000; // margen bajo los 6 min de Apps Script
 
 // Los ids de Drive no van en el código ni en la hoja: viven en Propiedades del script
@@ -25,7 +27,10 @@ const CONFIG_INICIAL = [
   // Agregados en esta fase (ver LEEME):
   ['copia_oculta', ''],        // correos que reciben copia sin que nadie los vea (BCC)
   ['responder_a', ''],         // si está vacío se usa correo_remitente
-  ['usar_alias', 'NO']         // SI solo cuando "Enviar como" ya esté autorizado en Gmail
+  ['usar_alias', 'NO'],        // SI solo cuando "Enviar como" ya esté autorizado en Gmail
+  ['dias_respuesta', '3'],     // días hábiles que se espera que tarde la oficina en responder
+  ['avisar_equipo', 'SI']      // al llegar un sellado, avisar también a la lista en copia oculta
+  // Para los avisos diarios agrega filas  correo_<Responsable>  |  correo@davivienda.com
 ];
 
 // ---------- Libro y hojas ----------

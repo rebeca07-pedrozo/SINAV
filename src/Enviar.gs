@@ -14,8 +14,8 @@ function listarEnviar() {
         fila: o.fila, municipio: o.municipio, cod_oficina: o.cod_oficina, impuesto: o.impuesto,
         periodo: o.periodo, vence: textoFecha(o.vence), dias: diasPara(o.vence),
         responsable: o.responsable, consecutivo: o.consecutivo, valor: o.valor,
-        correo_oficina: o.correo_oficina, estado: o.estado, tieneSoporte: !!o.soporte_id,
-        soporteUrl: o.soporte_id ? 'https://drive.google.com/file/d/' + o.soporte_id + '/view' : ''
+        correo_oficina: o.correo_oficina, estado: o.estado, tieneSoporte: !!o.soporte_link,
+        soporteUrl: linkDeDrive(o.soporte_link)
       };
     })
     .sort(function (a, b) { return (a.dias === null ? 9999 : a.dias) - (b.dias === null ? 9999 : b.dias); });
@@ -46,7 +46,7 @@ function subirSoporte(idFila, archivo) {
   if (!o) throw new Error('No encontré la fila ' + idFila + '.');
   if (o.estado === 'ENVIADA' || o.estado === 'RESPONDIDA') throw new Error('Esa declaración ya fue enviada.');
 
-  const nombre = limpiarNombre(o.cod_oficina + '-' + o.municipio + '-' + o.periodo) + '.pdf';
+  const nombre = nombreSoporte(o);
   // Drive es lento: se hace fuera del lock. Solo la escritura en la hoja va con lock.
   const archivoDrive = DriveApp.getFolderById(cfg.carpeta_soportes)
     .createFile(Utilities.newBlob(bytes, 'application/pdf', nombre));
@@ -54,23 +54,20 @@ function subirSoporte(idFila, archivo) {
   return conLock(function () {
     const actual = leerObligaciones().filter(function (x) { return x.fila === Number(idFila); })[0];
     if (!actual || actual.consecutivo !== o.consecutivo) throw new Error('La hoja cambió mientras subías el archivo. Recarga la lista.');
-    actual.soporte_id = archivoDrive.getId();
+    actual.soporte_link = archivoDrive.getUrl(); // enlace completo, no solo el id
     if (actual.estado === 'ERROR') actual.estado = 'PENDIENTE';
     guardarBloquePrograma(actual);
     registrarEventos([[etiqueta(actual), 'SOPORTE', 'Cargado ' + nombre]]);
-    return { soporte_id: actual.soporte_id, nombre: nombre };
+    return { soporte_link: actual.soporte_link, nombre: nombre };
   });
 }
 
-function limpiarNombre(t) {
-  return String(t).replace(/[\\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
-}
 
 // ---------- Enviar ----------
 
 /**
  * listaDeFilas = números de fila de la hoja OBLIGACIONES.
- * Sin soporte_id no se manda. Guarda el threadId en la columna hilo.
+ * Sin soporte_link no se manda. Guarda el threadId en la columna hilo.
  * Si se acerca a los 6 minutos, se detiene y devuelve las que quedaron sin procesar.
  */
 function enviar(listaDeFilas) {
@@ -86,6 +83,7 @@ function enviar(listaDeFilas) {
     const resultado = { enviadas: 0, errores: 0, sinProcesar: [], detalle: [] };
     let cupo = cupoRestante();
     const destinoPrueba = cfg.correo_remitente;
+    const quien = quienSoy();
     const copia = cfg.esPrueba ? [] : listaCorreos(cfg.copia_oculta);
 
     // Si piden alias y no está autorizado en Gmail, no se manda nada con otra identidad.
@@ -111,14 +109,14 @@ function enviar(listaDeFilas) {
           return;
         }
         if (errorGeneral) return falla(errorGeneral);
-        if (!o.soporte_id) return falla('Sin soporte: no se envía.');
+        if (!o.soporte_link) return falla('Sin soporte: no se envía.');
 
         const para = cfg.esPrueba ? destinoPrueba : listaCorreos(o.correo_oficina).join(',');
         if (!para) return falla('La fila no tiene un correo_oficina válido.');
         if (cupo < 1) { resultado.sinProcesar.push(o.fila); return; }
 
         try {
-          const pdf = DriveApp.getFileById(o.soporte_id).getBlob();
+          const pdf = DriveApp.getFileById(idDeLink(o.soporte_link)).getBlob();
           const msg = armarCorreo(o, cfg, para);
           const opciones = {
             name: cfg.nombre_remitente, replyTo: cfg.responder_a,
@@ -132,11 +130,12 @@ function enviar(listaDeFilas) {
           o.hilo = enviado.getThread().getId();
           o.estado = 'ENVIADA';
           o.fecha_envio = new Date();
+          o.enviado_por = quien;
           guardarBloquePrograma(o);
           cupo--;
           sumarCorreos(1);
           eventos.push([etiqueta(o), 'ENVIADO',
-            (cfg.esPrueba ? 'PRUEBA → ' + para : 'A ' + para + (copia.length ? ' (+' + copia.length + ' en copia oculta)' : '')) + ' · hilo ' + o.hilo]);
+            (cfg.esPrueba ? 'PRUEBA → ' + para : 'A ' + para + (copia.length ? ' (+' + copia.length + ' en copia oculta)' : '')) + ' · lo envió ' + quien + ' · hilo ' + o.hilo]);
           resultado.enviadas++;
           resultado.detalle.push({ fila: o.fila, ok: true });
         } catch (e) {

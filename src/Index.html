@@ -3,205 +3,348 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
-    /* Marca: solo cromo de la interfaz */
-    --marca-rojo: #E30518;
-    --marca-naranja: #FF8D00;
-    --marca-amarillo: #FFE11B;
+    /* Marca: solo cromo (acentos, botón principal, pestaña activa) */
+    --rojo: #E30518; --rojo-hover: #C70417; --naranja: #FF8D00; --amarillo: #FFE11B;
     /* Estado: distintos a la marca a propósito */
-    --vencido: #B00510;
-    --por-vencer: #B06C00;
-    --al-dia: #1F7A4D;
-    --neutro: #7A756B;
-    --texto: #000000;
-    --fondo: #F6F5F2;
-    --tarjeta: #FFFFFF;
-    --linea: #DEDBD3;
-    --fuente: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", sans-serif;
+    --vencido: #B00510; --por-vencer: #B06C00; --al-dia: #1F7A4D; --neutro: #7A756B; --azul: #2F6DB5;
+    --vencido-fondo: #FCE8EA; --por-vencer-fondo: #FFF1DA; --al-dia-fondo: #E2F4EA; --neutro-fondo: #EEEDEA; --azul-fondo: #E4EDFA;
+    --por-vencer-texto: #84500A; --neutro-texto: #55514A; --azul-texto: #1F4F94;
+    --fondo: #F4F5F9; --tarjeta: #FFFFFF; --texto: #1B1B21; --suave: #666673; --linea: #E8E9F1;
+    --radio: 18px;
+    --sombra: 0 1px 2px rgba(25,25,50,.05), 0 10px 30px rgba(25,25,50,.07);
+    --fuente: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.45 var(--fuente); }
-  header { background: var(--marca-rojo); color: #fff; }
-  .franja { height: 5px; background: var(--marca-naranja); }
-  .cabecera { display: flex; align-items: center; gap: 16px; padding: 12px 20px; max-width: 1280px; margin: 0 auto; }
-  .logo { background: #fff; border-radius: 4px; padding: 4px 8px; width: 168px; height: 44px; display: flex; align-items: center; justify-content: center; flex: none; }
-  .logo img { max-width: 100%; max-height: 100%; display: block; }
-  .logo.vacio { border: 2px dashed var(--neutro); color: var(--neutro); font-size: 12px; background: #fff; }
-  .titulo { font-size: 18px; font-weight: 600; margin: 0; }
-  .cuota { margin-left: auto; text-align: right; font-size: 12px; }
-  .cuota b { font-size: 16px; }
-  .modo { background: var(--marca-amarillo); color: #000; padding: 8px 20px; font-size: 13px; text-align: center; }
-  .modo.real { background: #000; color: #fff; }
-  main { max-width: 1280px; margin: 0 auto; padding: 16px 20px 96px; }
-  nav[role=tablist] { display: flex; gap: 4px; border-bottom: 2px solid var(--linea); margin-bottom: 16px; flex-wrap: wrap; }
-  nav button { font: inherit; font-weight: 600; letter-spacing: .03em; padding: 10px 18px; border: 0; background: none; cursor: pointer; border-bottom: 4px solid transparent; margin-bottom: -2px; color: #000; }
-  nav button[aria-selected=true] { border-bottom-color: var(--marca-rojo); }
-  nav button:disabled { color: var(--neutro); cursor: default; }
-  nav .ajustes { margin-left: auto; font-weight: 400; }
-  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
-  .resumen { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-  .dato { background: var(--tarjeta); border: 1px solid var(--linea); border-left: 5px solid var(--neutro); padding: 8px 14px; min-width: 150px; }
-  .dato b { font-size: 22px; display: block; }
-  .dato.rojo { border-left-color: var(--vencido); } .dato.ambar { border-left-color: var(--por-vencer); }
-  .dato.verde { border-left-color: var(--al-dia); }
-  .tabla-caja { background: var(--tarjeta); border: 1px solid var(--linea); overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 980px; }
-  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #3d3a34; background: #EFEDE8; padding: 8px 10px; white-space: nowrap; }
-  td { padding: 8px 10px; border-top: 1px solid var(--linea); vertical-align: middle; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .etiqueta { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; white-space: nowrap; }
-  .etiqueta::before { content: ""; width: 10px; height: 10px; background: currentColor; flex: none; }
-  .vencido { color: var(--vencido); } .vencido::before { border-radius: 0; }
-  .por-vencer { color: var(--por-vencer); } .por-vencer::before { border-radius: 50%; }
-  .al-dia { color: var(--al-dia); } .al-dia::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-  .neutro { color: var(--neutro); } .neutro::before { border-radius: 50%; background: none; border: 2px solid currentColor; }
-  .btn { font: inherit; font-weight: 600; padding: 9px 18px; border: 2px solid var(--marca-rojo); background: var(--marca-rojo); color: #fff; cursor: pointer; border-radius: 4px; }
-  .btn.sec { background: #fff; color: var(--marca-rojo); }
-  .btn:disabled { background: #E7E4DD; border-color: #E7E4DD; color: var(--neutro); cursor: not-allowed; }
-  .btn.chico { padding: 4px 10px; font-size: 12px; }
-  .barra { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 3px solid var(--marca-amarillo); padding: 10px 20px; display: flex; gap: 14px; align-items: center; }
-  .barra .estado { flex: 1; }
-  .barra .progreso { height: 8px; background: var(--linea); flex: 1; max-width: 260px; display: none; }
-  .barra .progreso i { display: block; height: 100%; background: var(--marca-rojo); width: 0; }
-  .vacio-msg { padding: 28px; text-align: center; color: var(--neutro); }
-  .error { color: var(--vencido); font-weight: 600; }
-  a { color: var(--marca-rojo); }
-  dialog { border: 0; padding: 0; max-width: 560px; width: calc(100% - 32px); box-shadow: 0 8px 40px rgba(0,0,0,.35); }
-  dialog::backdrop { background: rgba(0,0,0,.45); }
-  .dlg-t { background: var(--marca-rojo); color: #fff; padding: 12px 18px; font-weight: 600; }
-  .dlg-c { padding: 16px 18px; } .dlg-p { padding: 12px 18px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--linea); }
-  label { display: block; font-weight: 600; margin: 12px 0 4px; }
-  textarea, input[type=text], select { width: 100%; font: inherit; padding: 8px; border: 1px solid #8a867d; border-radius: 3px; }
-  .nota { font-size: 12px; color: #4a4741; margin-top: 4px; }
-  .resultados { margin: 8px 0 0; padding-left: 18px; }
-  .pronto { padding: 40px; text-align: center; color: var(--neutro); background: #fff; border: 1px dashed var(--linea); }
-  @media (max-width: 640px) { .cabecera { flex-wrap: wrap; } .cuota { margin-left: 0; text-align: left; } .barra { flex-wrap: wrap; } }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.5 var(--fuente); -webkit-font-smoothing: antialiased; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Encabezado ---------- */
+  .top { background: #fff; position: sticky; top: 0; z-index: 20; box-shadow: 0 1px 0 var(--linea); }
+  .acento { height: 4px; background: linear-gradient(90deg, var(--rojo) 0 62%, var(--naranja) 62% 86%, var(--amarillo) 86%); }
+  .top-in { max-width: 1320px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .logo img { height: 40px; width: auto; display: block; }
+  .logo.vacio { width: 150px; height: 40px; border: 2px dashed #B9B6AE; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--neutro); font-size: 12px; }
+  .marca { padding-left: 18px; border-left: 1px solid var(--linea); line-height: 1.2; }
+  .marca b { font-size: 16px; font-weight: 650; display: block; }
+  .marca span { color: var(--suave); font-size: 12px; }
+  .top-der { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pildora { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--fondo); font-size: 12px; color: var(--suave); }
+  .pildora b { color: var(--texto); font-size: 13px; }
+  .pildora.prueba { background: var(--amarillo); color: #000; font-weight: 600; }
+  .pildora.real { background: #111; color: #fff; font-weight: 600; }
+
+  /* ---------- Botones ---------- */
+  .btn { font: inherit; font-weight: 600; border: 0; border-radius: 999px; padding: 10px 20px; cursor: pointer; background: var(--rojo); color: #fff;
+         box-shadow: 0 6px 16px rgba(227,5,24,.25); transition: transform .12s, box-shadow .12s, background .12s; display: inline-flex; align-items: center; gap: 8px; }
+  .btn:hover:not(:disabled) { background: var(--rojo-hover); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(227,5,24,.3); }
+  .btn.suave { background: #ECEDF4; color: var(--texto); box-shadow: none; }
+  .btn.suave:hover:not(:disabled) { background: #E0E2EC; box-shadow: none; }
+  .btn.chico { padding: 6px 14px; font-size: 12.5px; }
+  .btn:disabled { background: #E7E8EF; color: #9A9AA6; box-shadow: none; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid #111; outline-offset: 2px; }
+  svg.ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ---------- Pestañas ---------- */
+  main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 110px; }
+  .tabs { display: inline-flex; gap: 4px; background: #fff; padding: 5px; border-radius: 999px; box-shadow: var(--sombra); margin-bottom: 22px; flex-wrap: wrap; }
+  .tab { font: inherit; font-weight: 600; letter-spacing: .02em; border: 0; background: none; padding: 9px 20px; border-radius: 999px; cursor: pointer; color: var(--suave); display: inline-flex; align-items: center; gap: 8px; }
+  .tab:hover { color: var(--texto); background: var(--fondo); }
+  .tab[aria-selected=true] { background: var(--rojo); color: #fff; box-shadow: 0 4px 12px rgba(227,5,24,.28); }
+  .tab .num { background: rgba(0,0,0,.08); border-radius: 999px; padding: 0 8px; font-size: 11.5px; min-width: 22px; text-align: center; }
+  .tab[aria-selected=true] .num { background: rgba(255,255,255,.25); }
+
+  /* ---------- Tarjetas y datos ---------- */
+  .tarjeta { background: var(--tarjeta); border-radius: var(--radio); box-shadow: var(--sombra); }
+  .rejilla-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .dato { background: #fff; border-radius: var(--radio); box-shadow: var(--sombra); padding: 16px 18px; position: relative; overflow: hidden; }
+  .dato::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 4px 4px 0; background: var(--neutro); }
+  .dato.rojo::before { background: var(--vencido); } .dato.ambar::before { background: var(--por-vencer); }
+  .dato.verde::before { background: var(--al-dia); } .dato.azul::before { background: var(--azul); }
+  .dato small { display: block; color: var(--suave); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+  .dato b { font-size: 28px; line-height: 1.15; font-weight: 700; display: block; margin: 2px 0; font-variant-numeric: tabular-nums; }
+  .dato span { color: var(--suave); font-size: 12px; }
+
+  .tabla-caja { overflow-x: auto; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 940px; }
+  th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); padding: 14px 14px 10px; font-weight: 650; white-space: nowrap; background: #fff; position: sticky; top: 0; }
+  th.orden { cursor: pointer; user-select: none; } th.orden:hover { color: var(--texto); }
+  td { padding: 12px 14px; border-top: 1px solid var(--linea); vertical-align: middle; }
+  tbody tr:hover td { background: #FAFAFD; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sub { display: block; color: var(--suave); font-size: 12px; }
+  td b { font-weight: 650; }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--rojo); cursor: pointer; }
+  input[type=checkbox]:disabled { cursor: not-allowed; opacity: .4; }
+
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 650; white-space: nowrap; }
+  .chip::before { content: ""; width: 8px; height: 8px; background: currentColor; flex: none; }
+  .chip.vencido { background: var(--vencido-fondo); color: var(--vencido); } .chip.vencido::before { border-radius: 1px; }
+  .chip.por-vencer { background: var(--por-vencer-fondo); color: var(--por-vencer-texto); } .chip.por-vencer::before { border-radius: 50%; background: var(--por-vencer); }
+  .chip.al-dia { background: var(--al-dia-fondo); color: var(--al-dia); } .chip.al-dia::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .chip.neutro { background: var(--neutro-fondo); color: var(--neutro-texto); } .chip.neutro::before { background: none; border: 2px solid currentColor; border-radius: 50%; }
+  .chip.azul { background: var(--azul-fondo); color: var(--azul-texto); } .chip.azul::before { border-radius: 50%; background: var(--azul); }
+
+  .vacio-msg { padding: 44px 20px; text-align: center; color: var(--suave); }
+  .vacio-msg b { display: block; color: var(--texto); font-size: 16px; margin-bottom: 4px; }
+  a { color: var(--rojo); font-weight: 600; text-decoration: none; } a:hover { text-decoration: underline; }
+
+  /* ---------- Barra flotante ---------- */
+  .flota { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #fff; border-radius: 999px; box-shadow: 0 12px 40px rgba(25,25,50,.22); padding: 8px 10px 8px 22px; display: flex; align-items: center; gap: 16px; z-index: 30; max-width: calc(100% - 24px); }
+  .flota .txt { color: var(--suave); font-size: 13px; }
+  .flota .txt b { color: var(--texto); }
+  .barra-prog { width: 160px; height: 8px; background: var(--linea); border-radius: 99px; overflow: hidden; display: none; }
+  .barra-prog i { display: block; height: 100%; width: 0; background: var(--rojo); border-radius: 99px; transition: width .3s; }
+
+  /* ---------- Avisos ---------- */
+  .toasts { position: fixed; top: 84px; right: 18px; z-index: 60; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+  .toast { background: #111; color: #fff; padding: 12px 16px; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 13px; border-left: 5px solid var(--al-dia); }
+  .toast.mal { border-left-color: #FF6B75; } .toast ul { margin: 6px 0 0; padding-left: 18px; }
+
+  /* ---------- Diálogos ---------- */
+  dialog { border: 0; padding: 0; border-radius: 22px; max-width: 540px; width: calc(100% - 28px); box-shadow: 0 24px 80px rgba(10,10,30,.4); color: var(--texto); }
+  dialog::backdrop { background: rgba(15,15,35,.5); backdrop-filter: blur(3px); }
+  .dlg-t { padding: 22px 26px 4px; font-size: 19px; font-weight: 700; }
+  .dlg-s { padding: 0 26px; color: var(--suave); }
+  .dlg-c { padding: 14px 26px; }
+  .dlg-p { padding: 14px 26px 22px; display: flex; gap: 10px; justify-content: flex-end; }
+  .bloque { background: var(--fondo); border-radius: 14px; padding: 14px 16px; margin-top: 12px; }
+  .bloque h4 { margin: 0 0 2px; font-size: 13.5px; }
+  .bloque p { margin: 0; color: var(--suave); font-size: 12.5px; }
+  .correo-demo { background: #fff; border: 1px solid var(--linea); border-radius: 12px; padding: 10px 14px; margin-top: 10px; font-size: 13px; }
+  .correo-demo div { display: flex; gap: 10px; } .correo-demo span { color: var(--suave); width: 92px; flex: none; }
+  .fichas { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+  .ficha { background: #fff; border: 1px solid var(--linea); border-radius: 999px; padding: 3px 4px 3px 12px; display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; }
+  .ficha button { border: 0; background: #ECEDF4; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 14px; line-height: 1; }
+  .ficha button:hover { background: var(--vencido-fondo); color: var(--vencido); }
+  .fila-add { display: flex; gap: 8px; }
+  input[type=text], input[type=number], input[type=search], select { font: inherit; padding: 9px 14px; border: 1px solid #D3D5E2; border-radius: 12px; background: #fff; color: var(--texto); min-width: 0; }
+  .fila-add input { flex: 1; }
+  .interruptor { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .interruptor input { width: 40px; height: 22px; appearance: none; background: #C9CBD8; border-radius: 99px; position: relative; cursor: pointer; transition: background .15s; accent-color: initial; }
+  .interruptor input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform .15s; }
+  .interruptor input:checked { background: var(--al-dia); } .interruptor input:checked::after { transform: translateX(18px); }
+  .error { color: var(--vencido); font-weight: 600; margin-top: 8px; }
+
+  /* ---------- Barras de filtros y listas ---------- */
+  .filtros { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px 18px; }
+  .filtros .grow { flex: 1; min-width: 200px; }
+  .filtros label { color: var(--suave); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .nota-pie { color: var(--suave); font-size: 12px; padding: 12px 18px; border-top: 1px solid var(--linea); }
+
+  @media (max-width: 720px) {
+    .top-in { padding: 10px 14px; } .marca { display: none; } main { padding: 16px 14px 120px; }
+    .flota { border-radius: 22px; flex-wrap: wrap; justify-content: center; padding: 10px 14px; }
+  }
+  @media print { .top, .flota, .tabs, .filtros .btn { display: none; } body { background: #fff; } .tarjeta, .dato { box-shadow: none; border: 1px solid var(--linea); } }
 </style>
 </head>
 <body>
-<header>
-  <div class="cabecera">
+
+<header class="top">
+  <div class="acento"></div>
+  <div class="top-in">
     <? if (logo) { ?>
       <div class="logo"><img src="<?!= logo ?>" alt="Davivienda"></div>
     <? } else { ?>
       <!-- Cuando exista el archivo oficial: súbelo a Drive y pon su id en la propiedad del script logo_id -->
       <div class="logo vacio" role="img" aria-label="Espacio reservado para el logo de Davivienda">logo</div>
     <? } ?>
-    <h1 class="titulo">Obligaciones de impuestos</h1>
-    <div class="cuota" id="cuota" aria-live="polite"></div>
-  </div>
-  <div class="franja"></div>
-</header>
-<div class="modo" id="modo" role="status"></div>
-
-<main>
-  <nav role="tablist" aria-label="Secciones">
-    <button role="tab" aria-selected="true" id="tab-enviar">ENVIAR</button>
-    <button role="tab" aria-selected="false" disabled title="Próxima fase">RESPUESTAS</button>
-    <button role="tab" aria-selected="false" disabled title="Próxima fase">ALERTAS</button>
-    <button class="ajustes btn sec chico" id="abrir-ajustes" type="button">Destinatarios y envío</button>
-  </nav>
-
-  <section id="panel-enviar" role="tabpanel" aria-labelledby="tab-enviar">
-    <div class="resumen" id="resumen"></div>
-    <div class="tabla-caja">
-      <table>
-        <thead><tr>
-          <th><input type="checkbox" id="todas" aria-label="Seleccionar todas las que tienen soporte"></th>
-          <th>Municipio</th><th>Oficina</th><th>Impuesto</th><th>Periodo</th><th>Vence</th>
-          <th>Responsable</th><th>Consecutivo</th><th style="text-align:right">Valor</th><th>Soporte (PDF)</th><th>Estado</th>
-        </tr></thead>
-        <tbody id="cuerpo"></tbody>
-      </table>
-      <div class="vacio-msg" id="vacio" hidden>No hay declaraciones pendientes.</div>
+    <div class="marca"><b>Obligaciones de impuestos</b><span>Departamento de Impuestos</span></div>
+    <div class="top-der">
+      <span class="pildora" id="modo" role="status"></span>
+      <span class="pildora" id="cuota" title="Correos enviados hoy desde la cuenta"></span>
+      <button class="btn suave chico" id="abrir-ajustes" type="button">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Equipo y avisos
+      </button>
     </div>
-    <div id="resultado" role="status" aria-live="polite"></div>
-  </section>
-</main>
-
-<div class="barra">
-  <button class="btn" id="enviar" type="button" disabled>Enviar seleccionadas (0)</button>
-  <div class="progreso" id="progreso"><i></i></div>
-  <div class="estado" id="estado" role="status" aria-live="polite"></div>
-</div>
-
-<dialog id="dlg-confirmar">
-  <div class="dlg-t">Confirmar envío</div>
-  <div class="dlg-c" id="confirmar-txt"></div>
-  <div class="dlg-p">
-    <button class="btn sec" id="confirmar-no" type="button">Cancelar</button>
-    <button class="btn" id="confirmar-si" type="button">Enviar</button>
   </div>
-</dialog>
+</header>
 
-<dialog id="dlg-ajustes">
-  <div class="dlg-t">Destinatarios y envío</div>
-  <div class="dlg-c">
-    <label for="aj-copia">Copia oculta (reciben el correo sin que nadie vea sus direcciones)</label>
-    <textarea id="aj-copia" rows="4" placeholder="una@davivienda.com, otra@davivienda.com"></textarea>
-    <div class="nota">Separa con coma o salto de línea. En modo PRUEBA no se usa: todo va solo al remitente.</div>
-
-    <label for="aj-responder">Las respuestas de las oficinas llegan a</label>
-    <input type="text" id="aj-responder">
-    <div class="nota">Debe ser una dirección cuyo buzón recibas tú (grupo o delegación). Si queda vacía se usa el remitente.</div>
-
-    <label for="aj-alias">Enviar con el alias del departamento</label>
-    <select id="aj-alias"><option value="NO">NO — sale desde mi cuenta con el nombre del departamento</option><option value="SI">SI — usar "Enviar como" (solo si Gmail ya lo tiene autorizado)</option></select>
-    <div class="nota" id="aj-aliases"></div>
-    <div class="nota"><b>Modo actual: <span id="aj-modo"></span></b>. El modo solo se cambia en la hoja CONFIG.</div>
-    <div class="error" id="aj-error"></div>
-  </div>
-  <div class="dlg-p">
-    <button class="btn sec" id="aj-cerrar" type="button">Cerrar</button>
-    <button class="btn" id="aj-guardar" type="button">Guardar</button>
-  </div>
-</dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
-  var datos = null;
-  var elegidas = {};
-  var ocupado = false;
+  // ---------- Utilidades comunes ----------
   var $ = function (id) { return document.getElementById(id); };
-
+  var modulos = {};
   function el(tag, props, hijos) {
     var e = document.createElement(tag);
     Object.keys(props || {}).forEach(function (k) {
       if (k === 'texto') e.textContent = props[k]; else if (k === 'clase') e.className = props[k]; else e.setAttribute(k, props[k]);
     });
-    (hijos || []).forEach(function (h) { e.appendChild(h); });
+    (hijos || []).forEach(function (h) { if (h) e.appendChild(typeof h === 'string' ? document.createTextNode(h) : h); });
     return e;
   }
-  function pesos(n) { return '$ ' + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
-  function falloGeneral(e) { ocupado = false; $('estado').innerHTML = ''; $('estado').appendChild(el('span', { clase: 'error', texto: (e && e.message) || String(e) })); pintarBarra(); }
-
-  function estadoVence(dias, tieneEstado) {
-    if (dias === null) return { c: 'neutro', t: 'Sin fecha' };
-    if (dias < 0) return { c: 'vencido', t: 'Vencida hace ' + (-dias) + (dias === -1 ? ' día' : ' días') };
-    if (dias <= 4) return { c: 'por-vencer', t: dias === 0 ? 'Vence hoy' : 'Vence en ' + dias + (dias === 1 ? ' día' : ' días') };
-    return { c: 'al-dia', t: 'Vence en ' + dias + ' días' };
+  function api(nombre) {
+    var args = [].slice.call(arguments, 1);
+    return new Promise(function (ok, mal) {
+      var r = google.script.run.withSuccessHandler(ok).withFailureHandler(mal);
+      r[nombre].apply(r, args);
+    });
   }
+  function pesos(n) { return '$ ' + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function pesosCorto(n) {
+    n = Number(n) || 0;
+    if (n >= 1e9) return '$ ' + (n / 1e9).toFixed(1).replace('.', ',') + ' mil M';
+    if (n >= 1e6) return '$ ' + (n / 1e6).toFixed(1).replace('.', ',') + ' M';
+    if (n >= 1e3) return '$ ' + Math.round(n / 1e3) + ' mil';
+    return '$ ' + Math.round(n);
+  }
+  function chip(clase, texto) { return el('span', { clase: 'chip ' + clase, texto: texto }); }
+  function plural(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
+  function chipVence(dias) {
+    if (dias === null || dias === undefined) return chip('neutro', 'Sin fecha');
+    if (dias < 0) return chip('vencido', 'Vencida hace ' + plural(-dias, 'día', 'días'));
+    if (dias === 0) return chip('vencido', 'Vence hoy');
+    if (dias <= 4) return chip('por-vencer', 'Vence en ' + plural(dias, 'día', 'días'));
+    return chip('al-dia', 'Vence en ' + dias + ' días');
+  }
+  function toast(msg, mal, lista) {
+    var t = el('div', { clase: 'toast' + (mal ? ' mal' : ''), role: mal ? 'alert' : 'status' }, [msg]);
+    if (lista && lista.length) t.appendChild(el('ul', {}, lista.map(function (x) { return el('li', { texto: x }); })));
+    $('toasts').appendChild(t);
+    setTimeout(function () { t.remove(); }, mal ? 9000 : 5000);
+  }
+  function mensajeError(e) { return (e && e.message) || String(e); }
+  function haceCuanto(iso) {
+    if (!iso) return 'todavía no se ha revisado';
+    var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (m < 1) return 'hace un momento';
+    if (m < 60) return 'hace ' + m + ' min';
+    if (m < 1440) return 'hace ' + Math.round(m / 60) + ' h';
+    return 'hace ' + Math.round(m / 1440) + ' d';
+  }
+  function pintarCabecera(modo, hoy, limite) {
+    var m = $('modo');
+    m.className = 'pildora ' + (modo === 'PRUEBA' ? 'prueba' : 'real');
+    m.textContent = modo === 'PRUEBA' ? 'MODO PRUEBA · no sale nada a las oficinas' : 'MODO REAL';
+    if (hoy !== undefined) { $('cuota').textContent = ''; $('cuota').appendChild(document.createTextNode('Correos hoy ')); $('cuota').appendChild(el('b', { texto: hoy + ' / ' + limite })); }
+  }
+  function insignia(id, n) { var e = $(id); if (e) e.textContent = n; }
+</script>
+
+<main>
+  <div class="tabs" role="tablist" aria-label="Secciones">
+    <button class="tab" role="tab" id="tab-enviar" aria-selected="true" aria-controls="panel-enviar">ENVIAR <span class="num" id="n-enviar">·</span></button>
+    <button class="tab" role="tab" id="tab-respuestas" aria-selected="false" aria-controls="panel-respuestas">RESPUESTAS <span class="num" id="n-respuestas">·</span></button>
+    <button class="tab" role="tab" id="tab-alertas" aria-selected="false" aria-controls="panel-alertas">ALERTAS <span class="num" id="n-alertas">·</span></button>
+  </div>
+
+  <!-- ===== ENVIAR ===== -->
+  <section id="panel-enviar" role="tabpanel" aria-labelledby="tab-enviar">
+    <div class="rejilla-datos" id="resumen"></div>
+    <div class="tarjeta">
+      <div class="tabla-caja">
+        <table>
+          <thead><tr>
+            <th style="width:44px"><input type="checkbox" id="todas" aria-label="Seleccionar todas las que tienen soporte"></th>
+            <th>Municipio</th><th>Impuesto</th><th>Vence</th><th>Responsable</th><th class="num">Valor</th><th>Soporte (PDF)</th><th>Estado</th>
+          </tr></thead>
+          <tbody id="cuerpo"></tbody>
+        </table>
+        <div class="vacio-msg" id="vacio" hidden><b>Todo al día por aquí</b>No hay declaraciones pendientes de enviar.</div>
+      </div>
+    </div>
+  </section>
+
+  <?!= incluir('Respuestas') ?>
+  <?!= incluir('Alertas') ?>
+</main>
+
+<div class="flota" id="flota">
+  <span class="txt" id="estado" role="status" aria-live="polite">Cargando…</span>
+  <div class="barra-prog" id="progreso"><i></i></div>
+  <button class="btn" id="enviar" type="button" disabled>Enviar seleccionadas (0)</button>
+</div>
+
+<dialog id="dlg-confirmar">
+  <div class="dlg-t" id="confirmar-titulo">Confirmar envío</div>
+  <div class="dlg-c" id="confirmar-txt"></div>
+  <div class="dlg-p">
+    <button class="btn suave" id="confirmar-no" type="button">Cancelar</button>
+    <button class="btn" id="confirmar-si" type="button">Enviar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-ajustes">
+  <div class="dlg-t">Equipo y avisos</div>
+  <div class="dlg-s">Quién recibe copia y cuándo se avisa. No cambia nada de lo que ya se envió.</div>
+  <div class="dlg-c">
+    <div class="bloque">
+      <h4>Lo que ve la oficina</h4>
+      <p>Solo el nombre del departamento. Las respuestas llegan al buzón del departamento.</p>
+      <div class="correo-demo">
+        <div><span>De</span><b id="aj-nombre"></b></div>
+        <div><span>Responder a</span><b id="aj-depto"></b></div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h4>Copia para el equipo</h4>
+      <p>Reciben cada correo en copia oculta: nadie ve las direcciones de los demás.</p>
+      <div class="fichas" id="aj-fichas"></div>
+      <div class="fila-add">
+        <input type="text" id="aj-nuevo" placeholder="nombre@davivienda.com" aria-label="Agregar correo a la copia" autocomplete="off">
+        <button class="btn suave chico" id="aj-agregar" type="button">Agregar</button>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h4>Cuando llegue el sellado</h4>
+      <p>Siempre se le avisa a quien hizo el envío (<b id="aj-yo"></b>).</p>
+      <label class="interruptor"><input type="checkbox" id="aj-equipo" role="switch"> <span>Avisar también al equipo en copia</span></label>
+    </div>
+
+    <div class="bloque">
+      <h4>Tiempo de espera</h4>
+      <p>Días hábiles en los que esperamos que la oficina responda.</p>
+      <p style="margin-top:8px"><input type="number" id="aj-dias" min="1" max="30" style="width:90px" aria-label="Días hábiles de espera"> días hábiles</p>
+    </div>
+    <div class="error" id="aj-error" role="alert"></div>
+  </div>
+  <div class="dlg-p">
+    <button class="btn suave" id="aj-cerrar" type="button">Cerrar</button>
+    <button class="btn" id="aj-guardar" type="button">Guardar</button>
+  </div>
+</dialog>
+
+<script>
+  // ---------- Pestañas ----------
+  var cargados = {};
+  function irA(nombre) {
+    ['enviar', 'respuestas', 'alertas'].forEach(function (n) {
+      $('panel-' + n).hidden = n !== nombre;
+      $('tab-' + n).setAttribute('aria-selected', n === nombre ? 'true' : 'false');
+    });
+    $('flota').hidden = nombre !== 'enviar';
+    if (nombre !== 'enviar' && modulos[nombre]) modulos[nombre].cargar(!cargados[nombre]);
+    if (nombre !== 'enviar') cargados[nombre] = true;
+  }
+  ['enviar', 'respuestas', 'alertas'].forEach(function (n) { $('tab-' + n).onclick = function () { irA(n); }; });
+  $('panel-respuestas').hidden = true; $('panel-alertas').hidden = true;
+
+  // ---------- ENVIAR ----------
+  var datos = null, elegidas = {}, ocupado = false;
 
   function cargar() {
     $('estado').textContent = 'Cargando…';
-    google.script.run.withSuccessHandler(function (r) { datos = r; $('estado').textContent = ''; pintar(); }).withFailureHandler(falloGeneral).listarEnviar();
+    return api('listarEnviar').then(function (r) { datos = r; pintar(); }).catch(function (e) { $('estado').textContent = ''; toast(mensajeError(e), true); });
   }
 
   function pintar() {
-    var prueba = datos.modo === 'PRUEBA';
-    var m = $('modo');
-    m.className = 'modo' + (prueba ? '' : ' real');
-    m.textContent = prueba ? 'MODO PRUEBA — todos los correos van a ' + datos.destinoPrueba + ', no a las oficinas.' : 'MODO REAL — los correos salen a las oficinas.';
-    $('cuota').innerHTML = '';
-    $('cuota').appendChild(document.createTextNode('Correos hoy '));
-    $('cuota').appendChild(el('b', { texto: datos.correosHoy + ' / ' + datos.limite }));
-
+    pintarCabecera(datos.modo, datos.correosHoy, datos.limite);
     var sinSoporte = datos.filas.filter(function (f) { return !f.tieneSoporte; }).length;
     var vencidas = datos.filas.filter(function (f) { return f.dias !== null && f.dias < 0; }).length;
-    var listas = datos.filas.length - sinSoporte;
+    var errores = datos.filas.filter(function (f) { return f.estado === 'ERROR'; }).length;
+    insignia('n-enviar', datos.filas.length);
     var r = $('resumen'); r.innerHTML = '';
-    [['Por enviar', datos.filas.length, ''], ['Listas (con soporte)', listas, 'verde'], ['Sin soporte', sinSoporte, sinSoporte ? 'ambar' : ''], ['Vencidas', vencidas, vencidas ? 'rojo' : '']]
-      .forEach(function (d) { r.appendChild(el('div', { clase: 'dato ' + d[2] }, [el('b', { texto: String(d[1]) }), el('span', { texto: d[0] })])); });
+    [['Por enviar', datos.filas.length, '', 'declaraciones'], ['Listas', datos.filas.length - sinSoporte, 'verde', 'con PDF cargado'],
+     ['Sin soporte', sinSoporte, sinSoporte ? 'ambar' : '', 'no se pueden enviar'], ['Vencidas', vencidas, vencidas ? 'rojo' : '', errores ? errores + ' con error de envío' : 'ya pasó la fecha']]
+      .forEach(function (d) { r.appendChild(el('div', { clase: 'dato ' + d[2] }, [el('small', { texto: d[0] }), el('b', { texto: String(d[1]) }), el('span', { texto: d[3] })])); });
 
     var cuerpo = $('cuerpo'); cuerpo.innerHTML = '';
     datos.filas.forEach(function (f) {
@@ -211,17 +354,14 @@
       cb.checked = !!elegidas[f.fila] && f.tieneSoporte;
       cb.onchange = function () { if (cb.checked) elegidas[f.fila] = true; else delete elegidas[f.fila]; pintarBarra(); };
       tr.appendChild(el('td', {}, [cb]));
-      [f.municipio, f.cod_oficina, f.impuesto, f.periodo, f.vence].forEach(function (t) { tr.appendChild(el('td', { texto: t })); });
-      tr.children[5].textContent = '';
-      var ev = estadoVence(f.dias);
-      tr.children[5].appendChild(document.createTextNode(f.vence + ' '));
-      tr.children[5].appendChild(el('span', { clase: 'etiqueta ' + ev.c, texto: ev.t }));
+      tr.appendChild(el('td', {}, [el('b', { texto: f.municipio }), el('span', { clase: 'sub', texto: 'Oficina ' + f.cod_oficina + ' · ' + f.consecutivo })]));
+      tr.appendChild(el('td', {}, [f.impuesto, el('span', { clase: 'sub', texto: 'Periodo ' + f.periodo })]));
+      tr.appendChild(el('td', {}, [f.vence, el('span', { clase: 'sub' }, [chipVence(f.dias)])]));
       tr.appendChild(el('td', { texto: f.responsable }));
-      tr.appendChild(el('td', { texto: f.consecutivo }));
       tr.appendChild(el('td', { clase: 'num', texto: pesos(f.valor) }));
       tr.appendChild(celdaSoporte(f));
-      var est = f.estado === 'ERROR' ? { c: 'vencido', t: 'Error' } : (f.tieneSoporte ? { c: 'al-dia', t: 'Lista' } : { c: 'neutro', t: 'Sin soporte' });
-      tr.appendChild(el('td', {}, [el('span', { clase: 'etiqueta ' + est.c, texto: est.t })]));
+      var est = f.estado === 'ERROR' ? chip('vencido', 'Error · reintentar') : (f.tieneSoporte ? chip('al-dia', 'Lista') : chip('neutro', 'Falta PDF'));
+      tr.appendChild(el('td', {}, [est]));
       cuerpo.appendChild(tr);
     });
     $('vacio').hidden = datos.filas.length > 0;
@@ -230,29 +370,27 @@
 
   function celdaSoporte(f) {
     var td = el('td');
-    if (f.tieneSoporte) {
-      td.appendChild(el('a', { href: f.soporteUrl, target: '_blank', rel: 'noopener', texto: 'Ver PDF' }));
-      td.appendChild(document.createTextNode(' · '));
-    }
-    var id = 'f' + f.fila;
-    var input = el('input', { type: 'file', accept: 'application/pdf', id: id, hidden: 'hidden' });
-    var b = el('button', { type: 'button', clase: 'btn sec chico', texto: f.tieneSoporte ? 'Reemplazar' : 'Subir PDF' });
+    var input = el('input', { type: 'file', accept: 'application/pdf', hidden: 'hidden' });
+    var b = el('button', { type: 'button', clase: 'btn suave chico', texto: f.tieneSoporte ? 'Reemplazar' : 'Subir PDF' });
     b.onclick = function () { input.click(); };
     input.onchange = function () { if (input.files[0]) subir(f, input.files[0], b); };
+    if (f.tieneSoporte) { td.appendChild(el('a', { href: f.soporteUrl, target: '_blank', rel: 'noopener', texto: 'Ver PDF' })); td.appendChild(document.createTextNode('  ')); }
     td.appendChild(input); td.appendChild(b);
+    td.title = 'También puedes arrastrar el PDF hasta aquí';
+    td.ondragover = function (e) { e.preventDefault(); td.style.background = 'var(--azul-fondo)'; };
+    td.ondragleave = function () { td.style.background = ''; };
+    td.ondrop = function (e) { e.preventDefault(); td.style.background = ''; if (e.dataTransfer.files[0]) subir(f, e.dataTransfer.files[0], b); };
     return td;
   }
 
   function subir(f, archivo, boton) {
-    if (archivo.type !== 'application/pdf' && !/\.pdf$/i.test(archivo.name)) { $('estado').innerHTML = ''; $('estado').appendChild(el('span', { clase: 'error', texto: 'Solo PDF.' })); return; }
+    if (archivo.type !== 'application/pdf' && !/\.pdf$/i.test(archivo.name)) { toast('Solo se aceptan archivos PDF.', true); return; }
     boton.disabled = true; boton.textContent = 'Subiendo…';
     var lector = new FileReader();
     lector.onload = function () {
-      var base64 = String(lector.result).split(',')[1];
-      google.script.run
-        .withSuccessHandler(function () { cargar(); })
-        .withFailureHandler(function (e) { boton.disabled = false; boton.textContent = 'Subir PDF'; falloGeneral(e); })
-        .subirSoporte(f.fila, { nombre: archivo.name, base64: base64 });
+      api('subirSoporte', f.fila, { nombre: archivo.name, base64: String(lector.result).split(',')[1] })
+        .then(function () { toast('PDF cargado para ' + f.municipio + '.'); return cargar(); })
+        .catch(function (e) { boton.disabled = false; boton.textContent = 'Subir PDF'; toast(mensajeError(e), true); });
     };
     lector.readAsDataURL(archivo);
   }
@@ -262,6 +400,7 @@
     var n = filasElegidas().length;
     $('enviar').textContent = 'Enviar seleccionadas (' + n + ')';
     $('enviar').disabled = ocupado || n === 0;
+    if (!ocupado) $('estado').innerHTML = n ? '<b>' + n + '</b> lista' + (n === 1 ? '' : 's') + ' para enviar' : 'Selecciona las declaraciones que ya tienen su PDF';
     var conSoporte = datos ? datos.filas.filter(function (f) { return f.tieneSoporte; }).length : 0;
     $('todas').checked = conSoporte > 0 && n === conSoporte;
   }
@@ -273,11 +412,11 @@
   };
 
   $('enviar').onclick = function () {
-    var n = filasElegidas().length;
-    var prueba = datos.modo === 'PRUEBA';
+    var n = filasElegidas().length, prueba = datos.modo === 'PRUEBA';
+    $('confirmar-titulo').textContent = prueba ? 'Enviar correos de prueba' : 'Enviar a las oficinas';
     $('confirmar-txt').textContent = prueba
       ? 'Se enviarán ' + n + ' correos de PRUEBA a ' + datos.destinoPrueba + '. Las oficinas no recibirán nada.'
-      : 'Se enviarán ' + n + ' correos REALES a las oficinas. Esto no se puede deshacer.';
+      : 'Se enviarán ' + n + ' correos REALES a las oficinas, con copia oculta al equipo. Esto no se puede deshacer.';
     $('dlg-confirmar').showModal();
   };
   $('confirmar-no').onclick = function () { $('dlg-confirmar').close(); };
@@ -286,58 +425,74 @@
   function enviarLotes(filas) {
     ocupado = true; pintarBarra();
     var total = filas.length, hechas = 0, ok = 0, errores = [];
-    var lote = 15;
     $('progreso').style.display = 'block';
+    function terminar(aviso) {
+      ocupado = false; elegidas = {};
+      $('progreso').style.display = 'none'; $('progreso').firstChild.style.width = '0';
+      toast(ok + ' enviadas' + (errores.length ? ', ' + errores.length + ' con problema' : '') + '.' + (aviso ? ' ' + aviso : ''), errores.length > 0,
+        errores.map(function (d) { return 'Fila ' + d.fila + ': ' + d.motivo; }));
+      cargar();
+    }
     function siguiente() {
       if (!filas.length) { terminar(); return; }
-      var tanda = filas.splice(0, lote);
+      var tanda = filas.splice(0, 15);
       $('estado').textContent = 'Enviando… ' + hechas + ' de ' + total;
-      google.script.run.withSuccessHandler(function (r) {
+      api('enviar', tanda).then(function (r) {
         ok += r.enviadas;
         r.detalle.forEach(function (d) { if (!d.ok) errores.push(d); });
         hechas += tanda.length - r.sinProcesar.length;
         if (r.sinProcesar.length) filas = r.sinProcesar.concat(filas);
         $('progreso').firstChild.style.width = Math.round(100 * hechas / total) + '%';
-        if (r.sinProcesar.length && !r.enviadas && !r.errores) { terminar('Se detuvo: sin cupo de correos hoy o sin tiempo. Quedaron ' + filas.length + ' sin enviar.'); return; }
+        if (r.sinProcesar.length && !r.enviadas && !r.errores) { terminar('Se detuvo: sin cupo de correos hoy. Quedaron ' + filas.length + ' sin enviar.'); return; }
         siguiente();
-      }).withFailureHandler(function (e) { falloGeneral(e); terminar(e.message); }).enviar(tanda);
-    }
-    function terminar(aviso) {
-      ocupado = false; elegidas = {};
-      $('progreso').style.display = 'none'; $('progreso').firstChild.style.width = '0';
-      $('estado').textContent = '';
-      var caja = $('resultado'); caja.innerHTML = '';
-      var resumen = el('p', { texto: ok + ' enviadas, ' + errores.length + ' con problema.' + (aviso ? ' ' + aviso : '') });
-      caja.appendChild(resumen);
-      if (errores.length) {
-        var ul = el('ul', { clase: 'resultados' });
-        errores.forEach(function (d) { ul.appendChild(el('li', { texto: 'Fila ' + d.fila + ': ' + d.motivo })); });
-        caja.appendChild(ul);
-      }
-      cargar();
+      }).catch(function (e) { toast(mensajeError(e), true); terminar(); });
     }
     siguiente();
   }
 
-  // ----- Ajustes -----
+  // ---------- Equipo y avisos ----------
+  var copiaEditable = [];
+  function pintarFichas() {
+    var c = $('aj-fichas'); c.innerHTML = '';
+    if (!copiaEditable.length) c.appendChild(el('span', { clase: 'sub', texto: 'Todavía no hay nadie en copia.' }));
+    copiaEditable.forEach(function (m, i) {
+      var x = el('button', { type: 'button', 'aria-label': 'Quitar ' + m, texto: '×' });
+      x.onclick = function () { copiaEditable.splice(i, 1); pintarFichas(); };
+      c.appendChild(el('span', { clase: 'ficha' }, [m, x]));
+    });
+  }
+  function agregarCorreo() {
+    var v = $('aj-nuevo').value.trim().toLowerCase();
+    if (!v) return;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { $('aj-error').textContent = '«' + v + '» no parece un correo válido.'; return; }
+    $('aj-error').textContent = '';
+    if (copiaEditable.indexOf(v) === -1) copiaEditable.push(v);
+    $('aj-nuevo').value = ''; pintarFichas();
+  }
+  $('aj-agregar').onclick = agregarCorreo;
+  $('aj-nuevo').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); agregarCorreo(); } };
   $('abrir-ajustes').onclick = function () {
     $('aj-error').textContent = '';
-    google.script.run.withSuccessHandler(function (a) {
-      $('aj-copia').value = a.copia_oculta; $('aj-responder').value = a.responder_a; $('aj-alias').value = a.usar_alias === 'SI' ? 'SI' : 'NO';
-      $('aj-modo').textContent = a.modo;
-      $('aj-aliases').textContent = a.aliasDisponibles.length ? 'Alias autorizados en tu Gmail: ' + a.aliasDisponibles.join(', ') : 'Tu Gmail no tiene alias "Enviar como" autorizados.';
+    api('leerAjustes').then(function (a) {
+      $('aj-nombre').textContent = a.nombre; $('aj-depto').textContent = a.correoDepto; $('aj-yo').textContent = a.yo;
+      copiaEditable = a.copia.slice(); pintarFichas();
+      $('aj-equipo').checked = a.avisarEquipo; $('aj-dias').value = a.diasRespuesta;
       $('dlg-ajustes').showModal();
-    }).withFailureHandler(falloGeneral).leerAjustes();
+    }).catch(function (e) { toast(mensajeError(e), true); });
   };
   $('aj-cerrar').onclick = function () { $('dlg-ajustes').close(); };
   $('aj-guardar').onclick = function () {
+    agregarCorreo();
+    if ($('aj-error').textContent) return;
     $('aj-guardar').disabled = true;
-    google.script.run.withSuccessHandler(function () { $('aj-guardar').disabled = false; $('dlg-ajustes').close(); })
-      .withFailureHandler(function (e) { $('aj-guardar').disabled = false; $('aj-error').textContent = e.message; })
-      .guardarAjustes({ copia_oculta: $('aj-copia').value, responder_a: $('aj-responder').value, usar_alias: $('aj-alias').value });
+    api('guardarAjustes', { copia: copiaEditable, avisarEquipo: $('aj-equipo').checked, diasRespuesta: $('aj-dias').value })
+      .then(function () { $('aj-guardar').disabled = false; $('dlg-ajustes').close(); toast('Ajustes guardados.'); if (cargados.respuestas) modulos.respuestas.cargar(); })
+      .catch(function (e) { $('aj-guardar').disabled = false; $('aj-error').textContent = mensajeError(e); });
   };
 
   cargar();
+  // Los números de las otras dos pestañas se llenan al abrirlas; precarga ligera para las insignias.
+  setTimeout(function () { if (modulos.respuestas) modulos.respuestas.insignia(); if (modulos.alertas) modulos.alertas.insignia(); }, 600);
 </script>
 </body>
 </html>

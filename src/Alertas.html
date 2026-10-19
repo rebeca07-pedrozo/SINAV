@@ -1,0 +1,303 @@
+<section id="panel-alertas" role="tabpanel" aria-labelledby="tab-alertas" hidden>
+  <style>
+    .a-filtros { margin-bottom: 18px; }
+    .a-filtros .info { margin-left: auto; color: var(--suave); font-size: 12px; }
+    .a-grid { display: grid; gap: 18px; margin-bottom: 18px; }
+    .a-2 { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+    .a-2b { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+    .a-caja { padding: 20px 22px 18px; }
+    .a-caja h3 { margin: 0; font-size: 15px; font-weight: 700; }
+    .a-caja .bajada { margin: 2px 0 12px; color: var(--suave); font-size: 12.5px; }
+    .a-lienzo { position: relative; height: 270px; }
+    .a-lienzo.alto { height: 320px; }
+    .a-aviso-grafico { display: none; padding: 40px 10px; text-align: center; color: var(--suave); }
+    .a-imp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 28px; }
+    .impuesto-fila { margin: 4px 0; }
+    .impuesto-fila .cab { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+    .pista { height: 10px; background: var(--neutro-fondo); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+    .pista i { display: block; height: 100%; background: var(--al-dia); border-radius: 99px; }
+    .a-tabla-cab { display: flex; align-items: center; gap: 12px; padding: 18px 22px 8px; }
+    .a-tabla-cab h3 { margin: 0; font-size: 15px; flex: 1; }
+    @media (max-width: 960px) { .a-2, .a-2b { grid-template-columns: 1fr; } }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+
+  <div class="tarjeta a-filtros">
+    <div class="filtros">
+      <label>Impuesto <select id="a-f-im" aria-label="Filtrar por impuesto"></select></label>
+      <label>Responsable <select id="a-f-re" aria-label="Filtrar por responsable"></select></label>
+      <label>Periodo <select id="a-f-pe" aria-label="Filtrar por periodo"></select></label>
+      <button class="btn suave chico" id="a-limpiar" type="button">Limpiar</button>
+      <span class="info" id="a-info"></span>
+    </div>
+  </div>
+
+  <div class="rejilla-datos" id="a-kpis"></div>
+
+  <div class="a-grid a-2">
+    <div class="tarjeta a-caja">
+      <h3>¿Cuándo vencen las abiertas?</h3>
+      <p class="bajada">Declaraciones que aún no tienen el sellado de la oficina.</p>
+      <div class="a-lienzo"><canvas id="a-c-cuando" role="img" aria-label="Declaraciones abiertas por tiempo para vencer"></canvas></div>
+      <div class="a-aviso-grafico" id="a-sin-chart">No se pudo cargar la librería de gráficos (revisa que la red permita cdn.jsdelivr.net). Los números y la tabla siguen disponibles.</div>
+    </div>
+    <div class="tarjeta a-caja">
+      <h3>En qué paso va cada una</h3>
+      <p class="bajada">De la hoja al sellado de vuelta.</p>
+      <div class="a-lienzo"><canvas id="a-c-flujo" role="img" aria-label="Declaraciones por paso del proceso"></canvas></div>
+    </div>
+  </div>
+
+  <div class="a-grid a-2b">
+    <div class="tarjeta a-caja">
+      <h3>Abiertas por responsable</h3>
+      <p class="bajada">Quién tiene más cosas pendientes y qué tan urgentes.</p>
+      <div class="a-lienzo alto"><canvas id="a-c-resp" role="img" aria-label="Declaraciones abiertas por responsable"></canvas></div>
+    </div>
+    <div class="tarjeta a-caja">
+      <h3>Actividad de los últimos 30 días</h3>
+      <p class="bajada">Envíos hechos y sellados recibidos por día.</p>
+      <div class="a-lienzo alto"><canvas id="a-c-act" role="img" aria-label="Envíos y sellados por día en los últimos 30 días"></canvas></div>
+    </div>
+  </div>
+
+  <div class="tarjeta a-caja" style="margin-bottom:18px">
+    <h3>Avance por impuesto</h3>
+    <p class="bajada">Sellados recibidos sobre el total.</p>
+    <div id="a-impuestos" class="a-imp-grid"></div>
+  </div>
+
+  <div class="tarjeta" style="padding-bottom:6px">
+    <div class="a-tabla-cab"><h3>Requieren atención</h3><span class="sub" id="a-tabla-n"></span></div>
+    <div class="tabla-caja">
+      <table style="min-width:860px">
+        <thead><tr>
+          <th class="orden" data-k="mu">Municipio</th><th>Impuesto</th><th class="orden" data-k="di">Vence</th><th>Responsable</th><th>Estado</th><th class="num orden" data-k="va">Valor</th>
+        </tr></thead>
+        <tbody id="a-cuerpo"></tbody>
+      </table>
+      <div class="vacio-msg" id="a-vacio" hidden><b>Sin pendientes</b>Con estos filtros no hay nada abierto.</div>
+    </div>
+    <div style="padding:10px 18px 14px"><button class="btn suave chico" id="a-mas" type="button" hidden>Mostrar más</button></div>
+  </div>
+
+  <script>
+  (function () {
+    var D = null, F = [], graficos = {}, mostrar = 25, orden = { k: 'di', dir: 1 };
+    var COL = { vencido: '#B00510', ambar: '#B06C00', verde: '#1F7A4D', neutro: '#7A756B', azul: '#2F6DB5' };
+    var FUENTE = '"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif';
+    var hayChart = typeof Chart !== 'undefined';
+    if (hayChart) { Chart.defaults.font.family = FUENTE; Chart.defaults.color = '#666673'; Chart.defaults.font.size = 12; }
+    else $('a-sin-chart').style.display = 'block';
+
+    function abierta(f) { return f.es !== 'RESPONDIDA'; }
+
+    function cargar() {
+      return api('datosAlertas').then(function (r) {
+        D = r;
+        llenarFiltros();
+        var vencidas = D.filas.filter(function (f) { return abierta(f) && f.di !== null && f.di < 0; }).length;
+        insignia('n-alertas', vencidas);
+        pintarCabecera(D.modo);
+        if (!$('panel-alertas').hidden) pintar();
+      }).catch(function (e) { toast(mensajeError(e), true); });
+    }
+
+    function llenarFiltros() {
+      [['a-f-im', 'im', 'Todos'], ['a-f-re', 're', 'Todos'], ['a-f-pe', 'pe', 'Todos']].forEach(function (c) {
+        var s = $(c[0]), actual = s.value;
+        var valores = Object.keys(D.filas.reduce(function (m, f) { if (f[c[1]]) m[f[c[1]]] = 1; return m; }, {})).sort();
+        if (c[1] === 'pe') valores.reverse();
+        s.innerHTML = '';
+        s.appendChild(el('option', { value: '', texto: c[2] }));
+        valores.forEach(function (v) { s.appendChild(el('option', { value: v, texto: v })); });
+        s.value = valores.indexOf(actual) !== -1 ? actual : '';
+      });
+    }
+
+    function filtrar() {
+      var im = $('a-f-im').value, re = $('a-f-re').value, pe = $('a-f-pe').value;
+      F = D.filas.filter(function (f) { return (!im || f.im === im) && (!re || f.re === re) && (!pe || f.pe === pe); });
+    }
+
+    function pintar() {
+      if (!D) return;
+      filtrar();
+      $('a-info').textContent = F.length + ' de ' + D.filas.length + ' declaraciones · datos de hoy ' + D.hoy;
+      kpis(); graficosTodos(); impuestos(); tabla();
+    }
+
+    // ---------- KPIs ----------
+    function kpis() {
+      var ab = F.filter(abierta);
+      var venc = ab.filter(function (f) { return f.di !== null && f.di < 0; });
+      var crit = ab.filter(function (f) { return f.di !== null && f.di >= 0 && f.di <= 4; });
+      var esp = F.filter(function (f) { return f.es === 'ENVIADA'; }).length;
+      var rec = F.filter(function (f) { return f.es === 'RESPONDIDA'; }).length;
+      var suma = function (l) { return l.reduce(function (a, f) { return a + f.va; }, 0); };
+      var pct = F.length ? Math.round(100 * rec / F.length) : 0;
+      var k = $('a-kpis'); k.innerHTML = '';
+      [['Vencidas sin sellado', venc.length, venc.length ? 'rojo' : 'verde', pesosCorto(suma(venc)) + ' en juego'],
+       ['Vencen en 4 días o menos', crit.length, crit.length ? 'ambar' : 'verde', pesosCorto(suma(crit)) + ' en juego'],
+       ['Esperando respuesta', esp, 'azul', 'enviadas, sin sellado'],
+       ['Sellados recibidos', rec, 'verde', 'de ' + F.length + ' declaraciones'],
+       ['Cumplimiento', pct + '%', pct >= 80 ? 'verde' : (pct >= 50 ? 'ambar' : 'rojo'), 'sellados sobre el total'],
+       ['Valor abierto', pesosCorto(suma(ab)), '', plural(ab.length, 'declaración abierta', 'declaraciones abiertas')]]
+        .forEach(function (d) { k.appendChild(el('div', { clase: 'dato ' + d[2] }, [el('small', { texto: d[0] }), el('b', { texto: String(d[1]) }), el('span', { texto: d[3] })])); });
+    }
+
+    // ---------- Gráficos ----------
+    function crear(id, config) {
+      if (!hayChart) return;
+      if (graficos[id]) { graficos[id].data = config.data; graficos[id].options = config.options; graficos[id].update('none'); return; }
+      graficos[id] = new Chart($(id).getContext('2d'), config);
+    }
+    var valoresPlugin = {
+      id: 'valores',
+      afterDatasetsDraw: function (chart) {
+        var ctx = chart.ctx;
+        chart.data.datasets.forEach(function (ds, i) {
+          chart.getDatasetMeta(i).data.forEach(function (barra, j) {
+            var v = ds.data[j]; if (!v) return;
+            ctx.save(); ctx.fillStyle = '#1B1B21'; ctx.font = '700 12px ' + FUENTE; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.fillText(v, barra.x, barra.y - 5); ctx.restore();
+          });
+        });
+      }
+    };
+    var centroPlugin = {
+      id: 'centro',
+      afterDraw: function (chart) {
+        var total = chart.data.datasets[0].data.reduce(function (a, b) { return a + b; }, 0);
+        var a = chart.chartArea, ctx = chart.ctx, cx = (a.left + a.right) / 2, cy = (a.top + a.bottom) / 2;
+        ctx.save(); ctx.textAlign = 'center'; ctx.fillStyle = '#1B1B21'; ctx.font = '700 28px ' + FUENTE; ctx.textBaseline = 'alphabetic'; ctx.fillText(total, cx, cy + 6);
+        ctx.fillStyle = '#666673'; ctx.font = '12px ' + FUENTE; ctx.fillText('declaraciones', cx, cy + 24); ctx.restore();
+      }
+    };
+
+    function graficosTodos() {
+      var ab = F.filter(abierta);
+
+      // 1. Cuándo vencen
+      var cubos = [['Vencidas', COL.vencido, function (d) { return d < 0; }], ['Hoy a 2 días', COL.ambar, function (d) { return d >= 0 && d <= 2; }],
+        ['3 a 4 días', COL.ambar, function (d) { return d >= 3 && d <= 4; }], ['5 a 10 días', COL.neutro, function (d) { return d >= 5 && d <= 10; }],
+        ['11 a 30 días', COL.neutro, function (d) { return d >= 11 && d <= 30; }], ['Más de 30', COL.neutro, function (d) { return d > 30; }]];
+      var cuenta = cubos.map(function (c) { return ab.filter(function (f) { return f.di !== null && c[2](f.di); }).length; });
+      $('a-c-cuando').setAttribute('aria-label', 'Abiertas por tiempo para vencer: ' + cubos.map(function (c, i) { return c[0] + ' ' + cuenta[i]; }).join(', '));
+      crear('a-c-cuando', {
+        type: 'bar', plugins: [valoresPlugin],
+        data: { labels: cubos.map(function (c) { return c[0]; }), datasets: [{ label: 'Declaraciones', data: cuenta, backgroundColor: cubos.map(function (c) { return c[1]; }), borderRadius: 8, maxBarThickness: 64 }] },
+        options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 20 } }, plugins: { legend: { display: false } },
+          scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#EEF0F6' } } } }
+      });
+
+      // 2. Flujo
+      var pasos = [['Por enviar', COL.neutro, function (f) { return f.es === 'PENDIENTE'; }], ['Con error', COL.vencido, function (f) { return f.es === 'ERROR'; }],
+        ['Esperando sellado', COL.azul, function (f) { return f.es === 'ENVIADA'; }], ['Sellado recibido', COL.verde, function (f) { return f.es === 'RESPONDIDA'; }]];
+      var cp = pasos.map(function (p) { return F.filter(p[2]).length; });
+      $('a-c-flujo').setAttribute('aria-label', 'Por paso: ' + pasos.map(function (p, i) { return p[0] + ' ' + cp[i]; }).join(', '));
+      crear('a-c-flujo', {
+        type: 'doughnut', plugins: [centroPlugin],
+        data: { labels: pasos.map(function (p, i) { return p[0] + ' (' + cp[i] + ')'; }), datasets: [{ data: cp, backgroundColor: pasos.map(function (p) { return p[1]; }), borderColor: '#fff', borderWidth: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '66%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 14 } } } }
+      });
+
+      // 3. Por responsable
+      var porResp = {};
+      ab.forEach(function (f) {
+        var r = f.re || '(sin responsable)';
+        var o = porResp[r] = porResp[r] || { v: 0, c: 0, o: 0 };
+        if (f.di !== null && f.di < 0) o.v++; else if (f.di !== null && f.di <= 4) o.c++; else o.o++;
+      });
+      var nombres = Object.keys(porResp).sort(function (a, b) {
+        var A = porResp[a], B = porResp[b]; return (B.v * 10000 + B.c * 100 + B.o) - (A.v * 10000 + A.c * 100 + A.o);
+      }).slice(0, 10);
+      $('a-c-resp').setAttribute('aria-label', 'Abiertas por responsable: ' + nombres.map(function (n) { var o = porResp[n]; return n + ' ' + (o.v + o.c + o.o); }).join(', '));
+      crear('a-c-resp', {
+        type: 'bar',
+        data: { labels: nombres, datasets: [
+          { label: 'Vencidas', data: nombres.map(function (n) { return porResp[n].v; }), backgroundColor: COL.vencido },
+          { label: 'Vencen en 4 días o menos', data: nombres.map(function (n) { return porResp[n].c; }), backgroundColor: COL.ambar },
+          { label: 'Con más tiempo', data: nombres.map(function (n) { return porResp[n].o; }), backgroundColor: COL.neutro, borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 14 } } },
+          scales: { x: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#EEF0F6' } }, y: { stacked: true, grid: { display: false } } } }
+      });
+
+      // 4. Actividad 30 días
+      var dias = [], base = new Date(D.hoy + 'T12:00:00');
+      for (var i = 29; i >= 0; i--) { var d = new Date(base.getTime() - i * 86400000); dias.push(d.toISOString().slice(0, 10)); }
+      var env = dias.map(function (d) { return F.filter(function (f) { return f.fe === d; }).length; });
+      var rec = dias.map(function (d) { return F.filter(function (f) { return f.es === 'RESPONDIDA' && f.fr === d; }).length; });
+      $('a-c-act').setAttribute('aria-label', 'Últimos 30 días: ' + env.reduce(function (a, b) { return a + b; }, 0) + ' envíos y ' + rec.reduce(function (a, b) { return a + b; }, 0) + ' sellados recibidos');
+      crear('a-c-act', {
+        type: 'line',
+        data: { labels: dias.map(function (d) { return d.slice(8) + '/' + d.slice(5, 7); }), datasets: [
+          { label: 'Enviadas', data: env, borderColor: COL.azul, backgroundColor: COL.azul + '22', fill: true, tension: .2, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2.5 },
+          { label: 'Sellados recibidos', data: rec, borderColor: COL.verde, backgroundColor: COL.verde + '22', fill: true, tension: .2, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2.5 }] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 14 } } },
+          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#EEF0F6' } } } }
+      });
+    }
+
+    // ---------- Avance por impuesto ----------
+    function impuestos() {
+      var g = {};
+      F.forEach(function (f) {
+        var o = g[f.im || '(sin impuesto)'] = g[f.im || '(sin impuesto)'] || { t: 0, r: 0, v: 0 };
+        o.t++; if (f.es === 'RESPONDIDA') o.r++; else if (f.di !== null && f.di < 0) o.v++;
+      });
+      var c = $('a-impuestos'); c.innerHTML = '';
+      var claves = Object.keys(g).sort(function (a, b) { return g[b].t - g[a].t; });
+      if (!claves.length) c.appendChild(el('div', { clase: 'sub', texto: 'Sin datos.' }));
+      claves.forEach(function (k) {
+        var o = g[k], pct = Math.round(100 * o.r / o.t);
+        var cab = el('div', { clase: 'cab' }, [el('b', { texto: k }), el('span', { clase: 'sub', texto: o.r + ' de ' + o.t + ' · ' + pct + '%' })]);
+        var pista = el('div', { clase: 'pista', role: 'img', 'aria-label': k + ': ' + pct + '% con sellado' }, [el('i', { style: 'width:' + pct + '%' })]);
+        var fila = el('div', { clase: 'impuesto-fila' }, [cab, pista]);
+        if (o.v) fila.appendChild(el('div', { style: 'margin-top:6px' }, [chip('vencido', plural(o.v, 'vencida', 'vencidas') + ' sin sellado')]));
+        c.appendChild(fila);
+      });
+    }
+
+    // ---------- Tabla ----------
+    var ESTADO = { PENDIENTE: ['neutro', 'Por enviar'], ERROR: ['vencido', 'Error de envío'], ENVIADA: ['azul', 'Esperando sellado'] };
+    function tabla() {
+      var ab = F.filter(abierta).sort(function (a, b) {
+        var A = a[orden.k], B = b[orden.k];
+        if (orden.k === 'di') { A = A === null ? 99999 : A; B = B === null ? 99999 : B; }
+        return (A < B ? -1 : A > B ? 1 : 0) * orden.dir;
+      });
+      $('a-tabla-n').textContent = ab.length + ' abiertas';
+      var cuerpo = $('a-cuerpo'); cuerpo.innerHTML = '';
+      ab.slice(0, mostrar).forEach(function (f) {
+        var e = ESTADO[f.es] || ['neutro', f.es];
+        cuerpo.appendChild(el('tr', {}, [
+          el('td', {}, [el('b', { texto: f.mu }), el('span', { clase: 'sub', texto: 'Oficina ' + f.co })]),
+          el('td', {}, [f.im, el('span', { clase: 'sub', texto: f.pe })]),
+          el('td', {}, [f.ve ? f.ve.slice(8) + '/' + f.ve.slice(5, 7) + '/' + f.ve.slice(0, 4) : '—', el('span', { clase: 'sub' }, [chipVence(f.di)])]),
+          el('td', { texto: f.re }),
+          el('td', {}, [chip(e[0], e[1])]),
+          el('td', { clase: 'num', texto: pesos(f.va) })
+        ]));
+      });
+      $('a-vacio').hidden = ab.length > 0;
+      $('a-mas').hidden = ab.length <= mostrar;
+      $('a-mas').textContent = 'Mostrar más (' + (ab.length - mostrar) + ' restantes)';
+    }
+    document.querySelectorAll('#panel-alertas th.orden').forEach(function (th) {
+      th.onclick = function () {
+        var k = th.getAttribute('data-k');
+        orden = { k: k, dir: orden.k === k ? -orden.dir : 1 };
+        tabla();
+      };
+    });
+    $('a-mas').onclick = function () { mostrar += 25; tabla(); };
+
+    ['a-f-im', 'a-f-re', 'a-f-pe'].forEach(function (id) { $(id).onchange = function () { mostrar = 25; pintar(); }; });
+    $('a-limpiar').onclick = function () { ['a-f-im', 'a-f-re', 'a-f-pe'].forEach(function (id) { $(id).value = ''; }); mostrar = 25; pintar(); };
+
+    modulos.alertas = { cargar: cargar, insignia: function () { cargar(); } };
+  })();
+  </script>
+</section>

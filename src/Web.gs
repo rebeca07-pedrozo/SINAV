@@ -10,14 +10,19 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+/** Permite partir la interfaz en varios archivos .html con <?!= incluir('Nombre') ?>. */
+function incluir(nombre) {
+  return HtmlService.createTemplateFromFile(nombre).evaluate().getContent();
+}
+
 /**
  * Apps Script no sirve archivos sueltos como assets/logo-davivienda.png.
- * El logo oficial se sube a Drive y su id va en CONFIG (propiedad del script logo_id). Si falta, la página
- * muestra el espacio reservado "logo".
+ * El logo oficial se sube a Drive y su id va en la propiedad del script logo_id.
+ * Si falta, la página muestra el espacio reservado "logo".
  */
 function logoComoDatos() {
   try {
-    const id = leerConfig().logo_id;
+    const id = idDeLink(leerConfig().logo_id);
     if (!id) return '';
     const blob = DriveApp.getFileById(id).getBlob();
     return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
@@ -26,27 +31,35 @@ function logoComoDatos() {
   }
 }
 
-// ---------- Ajustes (destinatarios) ----------
+// ---------- Ajustes: equipo y avisos ----------
 // El modo NO se puede cambiar desde aquí: solo se edita a mano en CONFIG.
 
 function leerAjustes() {
   const cfg = leerConfig();
   return {
-    copia_oculta: cfg.copia_oculta, responder_a: cfg.responder_a, usar_alias: cfg.usar_alias,
-    correo_remitente: cfg.correo_remitente, modo: cfg.esPrueba ? 'PRUEBA' : 'PRODUCCION',
-    aliasDisponibles: GmailApp.getAliases()
+    nombre: cfg.nombre_remitente,
+    correoDepto: cfg.correo_remitente,
+    copia: listaCorreos(cfg.copia_oculta),
+    avisarEquipo: String(cfg.avisar_equipo).toUpperCase() !== 'NO',
+    diasRespuesta: Number(cfg.dias_respuesta) || 3,
+    yo: quienSoy(),
+    modo: cfg.esPrueba ? 'PRUEBA' : 'PRODUCCION'
   };
 }
 
-function guardarAjustes(ajustes) {
-  const copia = listaCorreos(ajustes.copia_oculta);
-  const responder = listaCorreos(ajustes.responder_a);
-  if (ajustes.responder_a && !responder.length) throw new Error('El correo para respuestas no es válido.');
+function guardarAjustes(a) {
+  const copia = (a.copia || []).map(function (c) { return String(c).trim(); }).filter(Boolean);
+  copia.forEach(function (c) {
+    if (listaCorreos(c).length !== 1) throw new Error('«' + c + '» no parece un correo válido.');
+  });
+  const dias = Math.round(Number(a.diasRespuesta));
+  if (!(dias >= 1 && dias <= 30)) throw new Error('Los días de espera deben estar entre 1 y 30.');
   conLock(function () {
     guardarConfig('copia_oculta', copia.join(', '));
-    guardarConfig('responder_a', responder.join(', '));
-    guardarConfig('usar_alias', ajustes.usar_alias === 'SI' ? 'SI' : 'NO');
-    registrarEventos([['AJUSTES', 'AVISO', 'Copia oculta: ' + copia.length + ' correos · usar_alias: ' + (ajustes.usar_alias === 'SI' ? 'SI' : 'NO')]]);
+    guardarConfig('avisar_equipo', a.avisarEquipo ? 'SI' : 'NO');
+    guardarConfig('dias_respuesta', String(dias));
+    registrarEventos([['AJUSTES', 'AVISO', quienSoy() + ' dejó ' + copia.length + ' correos en copia oculta, avisar al equipo: ' +
+      (a.avisarEquipo ? 'SI' : 'NO') + ', días de espera: ' + dias]]);
   });
   return leerAjustes();
 }

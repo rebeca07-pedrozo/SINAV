@@ -46,7 +46,7 @@ function leerObligaciones() {
   return lista;
 }
 
-/** Escribe solo las columnas del programa (estado → sellado_id) de una fila. */
+/** Escribe solo las columnas del programa (estado → respondio_por) de una fila. */
 function guardarBloquePrograma(o) {
   const bloque = COLUMNAS.slice(PRIMERA_DEL_PROGRAMA - 1).map(function (c) { return o[c] === undefined ? '' : o[c]; });
   hoja('OBLIGACIONES').getRange(o.fila, PRIMERA_DEL_PROGRAMA, 1, bloque.length).setValues([bloque]);
@@ -63,4 +63,44 @@ function registrarEventos(eventos) {
   const ahora = new Date();
   const filas = eventos.map(function (e) { return [ahora, e[0], e[1], e[2]]; });
   h.getRange(h.getLastRow() + 1, 1, filas.length, 4).setValues(filas);
+}
+
+// ---------- Enlaces de Drive ----------
+// En la hoja se guarda el enlace completo. Si hay un id suelto (filas viejas) también se entiende.
+
+function idDeLink(v) {
+  const t = String(v || '').trim();
+  if (!t) return '';
+  const m = t.match(/\/d\/([A-Za-z0-9_-]+)/) || t.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  return m ? m[1] : t;
+}
+
+function linkDeDrive(v) {
+  const id = idDeLink(v);
+  return id ? 'https://drive.google.com/file/d/' + id + '/view' : '';
+}
+
+function limpiarNombre(t) {
+  return String(t).replace(/[\\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
+}
+
+function nombreSoporte(o) {
+  return limpiarNombre(o.cod_oficina + '-' + o.municipio + '-' + o.periodo) + '.pdf';
+}
+
+/** Suma días hábiles (lunes a viernes). No considera festivos. */
+function diasHabilesMas(fecha, n) {
+  const d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+  let faltan = Number(n) || 0;
+  while (faltan > 0) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) faltan--;
+  }
+  return d;
+}
+
+function quienSoy() {
+  let c = '';
+  try { c = Session.getActiveUser().getEmail(); } catch (e) { /* sin permiso */ }
+  return c || Session.getEffectiveUser().getEmail();
 }
