@@ -87,7 +87,7 @@ function procesarHilo(o, hilo, cfg, propios, carpeta, eventos, resumen) {
   if (!respuestas.length && rebotes.length) {
     o.estado = 'ERROR';
     guardarBloquePrograma(o);
-    eventos.push([etiqueta(o), 'ERROR', 'El correo rebotó (' + o.correo_oficina + '). Revisa la dirección y vuelve a enviar.']);
+    eventos.push([etiqueta(o), 'ERROR', 'El correo rebotó (' + (o.enviado_a || o.correo_oficina) + '). Revisa la dirección y vuelve a enviar.']);
     resumen.rebotes++;
     return;
   }
@@ -171,7 +171,7 @@ function listarRespuestas() {
       else est = dEst < 0 ? 'ATRASADA' : 'EN_ESPERA';
       return {
         fila: o.fila, municipio: o.municipio, cod_oficina: o.cod_oficina, impuesto: o.impuesto, periodo: o.periodo,
-        consecutivo: o.consecutivo, correo_oficina: o.correo_oficina, enviado_por: o.enviado_por,
+        consecutivo: o.consecutivo, correo_oficina: o.enviado_a || o.correo_oficina, enviado_por: o.enviado_por,
         fecha_envio: textoFecha(o.fecha_envio, 'dd/MM/yyyy HH:mm'), ts_envio: o.fecha_envio.getTime(),
         documento: nombreSoporte(o), documentoUrl: linkDeDrive(o.soporte_link),
         estimada: textoFecha(estimada), diasParaEstimada: dEst, despuesDeVencer: !!(o.vence && estimada > o.vence),

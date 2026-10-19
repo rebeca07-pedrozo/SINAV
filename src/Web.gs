@@ -40,6 +40,7 @@ function leerAjustes() {
     nombre: cfg.nombre_remitente,
     correoDepto: cfg.correo_remitente,
     copia: listaCorreos(cfg.copia_oculta),
+    copiaVisible: listaCorreos(cfg.copia_visible),
     avisarEquipo: String(cfg.avisar_equipo).toUpperCase() !== 'NO',
     diasRespuesta: Number(cfg.dias_respuesta) || 3,
     yo: quienSoy(),
@@ -50,18 +51,21 @@ function leerAjustes() {
 }
 
 function guardarAjustes(a) {
-  const copia = (a.copia || []).map(function (c) { return String(c).trim(); }).filter(Boolean);
-  copia.forEach(function (c) {
-    if (listaCorreos(c).length !== 1) throw new Error('«' + c + '» no parece un correo válido.');
-  });
+  const limpiar = function (lista) {
+    const l = (lista || []).map(function (c) { return String(c).trim(); }).filter(Boolean);
+    l.forEach(function (c) { if (listaCorreos(c).length !== 1) throw new Error('«' + c + '» no parece un correo válido.'); });
+    return l;
+  };
+  const copia = limpiar(a.copia), copiaVisible = limpiar(a.copiaVisible);
   const dias = Math.round(Number(a.diasRespuesta));
   if (!(dias >= 1 && dias <= 30)) throw new Error('Los días de espera deben estar entre 1 y 30.');
   conLock(function () {
     guardarConfig('copia_oculta', copia.join(', '));
+    guardarConfig('copia_visible', copiaVisible.join(', '));
     guardarConfig('avisar_equipo', a.avisarEquipo ? 'SI' : 'NO');
     guardarConfig('dias_respuesta', String(dias));
     guardarConfig('copia_a_mi', a.copiaAMi ? 'SI' : 'NO');
-    registrarEventos([['AJUSTES', 'AVISO', quienSoy() + ' dejó ' + copia.length + ' correos en copia oculta, avisar al equipo: ' +
+    registrarEventos([['AJUSTES', 'AVISO', quienSoy() + ' dejó ' + copia.length + ' en copia oculta y ' + copiaVisible.length + ' en copia visible, avisar al equipo: ' +
       (a.avisarEquipo ? 'SI' : 'NO') + ', días de espera: ' + dias]]);
   });
   return leerAjustes();

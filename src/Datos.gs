@@ -36,9 +36,10 @@ function leerObligaciones() {
     const o = { fila: i + 2 };
     COLUMNAS.forEach(function (c, j) { o[c] = fila[j]; });
     if (o.municipio === '' && o.consecutivo === '') return; // fila vacía
-    ['cod_oficina', 'nit_municipio', 'sticker', 'periodo'].forEach(function (c) {
-      o[c] = o[c] instanceof Date ? Utilities.formatDate(o[c], 'America/Bogota', 'yyyy-MM') : String(o[c]);
+    ['cod_oficina', 'nit_municipio', 'sticker', 'periodo', 'periodicidad', 'egreso'].forEach(function (c) {
+      o[c] = o[c] instanceof Date ? Utilities.formatDate(o[c], 'America/Bogota', 'yyyy-MM') : String(o[c]).trim();
     });
+    o.cod_oficina = normalizarCodigo(o.cod_oficina);
     o.vence = parsearFecha(o.vence);
     o.estado = String(o.estado || 'PENDIENTE').toUpperCase();
     lista.push(o);
@@ -108,4 +109,45 @@ function quienSoy() {
   let c = '';
   try { c = Session.getActiveUser().getEmail(); } catch (e) { /* sin permiso */ }
   return c || Session.getEffectiveUser().getEmail();
+}
+
+// ---------- Listas: DIRECTORIO (oficinas) y RESPONSABLES ----------
+
+/** Si Sheets se comió un cero ("851"), lo devuelve a 4 dígitos. */
+function normalizarCodigo(c) {
+  const t = String(c || '').trim();
+  return /^\d{1,3}$/.test(t) ? ('0000' + t).slice(-4) : t;
+}
+
+function leerLista(nombre, columnas) {
+  const h = hoja(nombre);
+  const ultima = h.getLastRow();
+  if (ultima < 2) return [];
+  return h.getRange(2, 1, ultima - 1, columnas.length).getValues().map(function (fila) {
+    const o = {};
+    columnas.forEach(function (c, j) { o[c] = String(fila[j] === null ? '' : fila[j]).trim(); });
+    return o;
+  }).filter(function (o) { return o[columnas[0]] !== ''; });
+}
+
+/** { '0851': { municipio, correos_para, contacto } } */
+function leerDirectorio() {
+  const mapa = {};
+  leerLista('DIRECTORIO', COLUMNAS_DIRECTORIO).forEach(function (d) { mapa[normalizarCodigo(d.cod_oficina)] = d; });
+  return mapa;
+}
+
+/** { 'jesús jaimes': { responsable, correo, cargo, celular } } */
+function leerResponsables() {
+  const mapa = {};
+  leerLista('RESPONSABLES', COLUMNAS_RESPONSABLES).forEach(function (r) { mapa[r.responsable.toLowerCase()] = r; });
+  return mapa;
+}
+
+/** A quién va la declaración: el correo escrito en la fila, o si está vacío el del DIRECTORIO. */
+function destinatariosOficina(o, directorio) {
+  const propios = listaCorreos(o.correo_oficina);
+  if (propios.length) return propios;
+  const d = directorio[o.cod_oficina];
+  return d ? listaCorreos(d.correos_para) : [];
 }

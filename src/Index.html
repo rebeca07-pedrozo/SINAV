@@ -105,7 +105,7 @@
   .toast.mal { border-left-color: #FF6B75; } .toast ul { margin: 6px 0 0; padding-left: 18px; }
 
   /* ---------- Diálogos ---------- */
-  dialog { border: 0; padding: 0; border-radius: 22px; max-width: 540px; width: calc(100% - 28px); box-shadow: 0 24px 80px rgba(10,10,30,.4); color: var(--texto); }
+  dialog { border: 0; padding: 0; border-radius: 22px; max-height: calc(100vh - 28px); overflow-y: auto; max-width: 540px; width: calc(100% - 28px); box-shadow: 0 24px 80px rgba(10,10,30,.4); color: var(--texto); }
   dialog::backdrop { background: rgba(15,15,35,.5); backdrop-filter: blur(3px); }
   .dlg-t { padding: 22px 26px 4px; font-size: 19px; font-weight: 700; }
   .dlg-s { padding: 0 26px; color: var(--suave); }
@@ -276,19 +276,30 @@
   <div class="dlg-c">
     <div class="bloque">
       <h4>Lo que ve la oficina</h4>
-      <p>Solo el nombre del departamento. Las respuestas llegan al buzón del departamento.</p>
+      <p>El correo sale con el nombre del departamento y las respuestas llegan a la misma cuenta que envía.</p>
       <div class="correo-demo">
         <div><span>De</span><b id="aj-nombre"></b></div>
-        <div><span>Responder a</span><b id="aj-depto"></b></div>
+        <div><span>Cuenta</span><b id="aj-depto"></b></div>
+        <div><span>Para</span><b>Los correos de la oficina (hoja DIRECTORIO)</b></div>
       </div>
     </div>
 
     <div class="bloque">
-      <h4>Copia para el equipo</h4>
-      <p>Reciben cada correo en copia oculta: nadie ve las direcciones de los demás.</p>
+      <h4>Copia visible (CC)</h4>
+      <p>La oficina sí ve estas direcciones. Úsalo para quien el correo menciona, como GRP Conceptos Especiales.</p>
+      <div class="fichas" id="aj-fichas-v"></div>
+      <div class="fila-add">
+        <input type="text" id="aj-nuevo-v" placeholder="grpconceptosespeciales@davivienda.com" aria-label="Agregar correo a la copia visible" autocomplete="off">
+        <button class="btn suave chico" id="aj-agregar-v" type="button">Agregar</button>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h4>Copia oculta (equipo)</h4>
+      <p>Reciben cada correo sin que nadie vea sus direcciones.</p>
       <div class="fichas" id="aj-fichas"></div>
       <div class="fila-add">
-        <input type="text" id="aj-nuevo" placeholder="nombre@davivienda.com" aria-label="Agregar correo a la copia" autocomplete="off">
+        <input type="text" id="aj-nuevo" placeholder="nombre@davivienda.com" aria-label="Agregar correo a la copia oculta" autocomplete="off">
         <button class="btn suave chico" id="aj-agregar" type="button">Agregar</button>
       </div>
     </div>
@@ -457,41 +468,44 @@
   }
 
   // ---------- Equipo y avisos ----------
-  var copiaEditable = [];
-  function pintarFichas() {
-    var c = $('aj-fichas'); c.innerHTML = '';
-    if (!copiaEditable.length) c.appendChild(el('span', { clase: 'sub', texto: 'Todavía no hay nadie en copia.' }));
-    copiaEditable.forEach(function (m, i) {
+  var listas = { oculta: [], visible: [] };
+  var CAJAS = { oculta: ['aj-fichas', 'aj-nuevo', 'aj-agregar'], visible: ['aj-fichas-v', 'aj-nuevo-v', 'aj-agregar-v'] };
+  function pintarFichas(cual) {
+    var c = $(CAJAS[cual][0]); c.innerHTML = '';
+    if (!listas[cual].length) c.appendChild(el('span', { clase: 'sub', texto: 'Todavía no hay nadie.' }));
+    listas[cual].forEach(function (m, i) {
       var x = el('button', { type: 'button', 'aria-label': 'Quitar ' + m, texto: '×' });
-      x.onclick = function () { copiaEditable.splice(i, 1); pintarFichas(); };
+      x.onclick = function () { listas[cual].splice(i, 1); pintarFichas(cual); };
       c.appendChild(el('span', { clase: 'ficha' }, [m, x]));
     });
   }
-  function agregarCorreo() {
-    var v = $('aj-nuevo').value.trim().toLowerCase();
+  function agregarCorreo(cual) {
+    var campo = $(CAJAS[cual][1]), v = campo.value.trim().toLowerCase();
     if (!v) return;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { $('aj-error').textContent = '«' + v + '» no parece un correo válido.'; return; }
     $('aj-error').textContent = '';
-    if (copiaEditable.indexOf(v) === -1) copiaEditable.push(v);
-    $('aj-nuevo').value = ''; pintarFichas();
+    if (listas[cual].indexOf(v) === -1) listas[cual].push(v);
+    campo.value = ''; pintarFichas(cual);
   }
-  $('aj-agregar').onclick = agregarCorreo;
-  $('aj-nuevo').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); agregarCorreo(); } };
+  ['oculta', 'visible'].forEach(function (cual) {
+    $(CAJAS[cual][2]).onclick = function () { agregarCorreo(cual); };
+    $(CAJAS[cual][1]).onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); agregarCorreo(cual); } };
+  });
   $('abrir-ajustes').onclick = function () {
     $('aj-error').textContent = '';
     api('leerAjustes').then(function (a) {
-      $('aj-nombre').textContent = a.nombre; $('aj-depto').textContent = a.correoDepto; $('aj-yo').textContent = a.yo; $('aj-dueno').textContent = a.dueno; $('aj-mi').checked = a.copiaAMi;
-      copiaEditable = a.copia.slice(); pintarFichas();
+      $('aj-nombre').textContent = a.nombre; $('aj-depto').textContent = a.dueno; $('aj-yo').textContent = a.yo; $('aj-dueno').textContent = a.dueno; $('aj-mi').checked = a.copiaAMi;
+      listas.oculta = a.copia.slice(); listas.visible = a.copiaVisible.slice(); pintarFichas('oculta'); pintarFichas('visible');
       $('aj-equipo').checked = a.avisarEquipo; $('aj-dias').value = a.diasRespuesta;
       $('dlg-ajustes').showModal();
     }).catch(function (e) { toast(mensajeError(e), true); });
   };
   $('aj-cerrar').onclick = function () { $('dlg-ajustes').close(); };
   $('aj-guardar').onclick = function () {
-    agregarCorreo();
+    agregarCorreo('oculta'); agregarCorreo('visible');
     if ($('aj-error').textContent) return;
     $('aj-guardar').disabled = true;
-    api('guardarAjustes', { copia: copiaEditable, avisarEquipo: $('aj-equipo').checked, copiaAMi: $('aj-mi').checked, diasRespuesta: $('aj-dias').value })
+    api('guardarAjustes', { copia: listas.oculta, copiaVisible: listas.visible, avisarEquipo: $('aj-equipo').checked, copiaAMi: $('aj-mi').checked, diasRespuesta: $('aj-dias').value })
       .then(function () { $('aj-guardar').disabled = false; $('dlg-ajustes').close(); toast('Ajustes guardados.'); if (cargados.respuestas) modulos.respuestas.cargar(); })
       .catch(function (e) { $('aj-guardar').disabled = false; $('aj-error').textContent = mensajeError(e); });
   };

@@ -27,11 +27,13 @@ function instalar() {
   const h1 = obtenerOCrear(libroActual, 'OBLIGACIONES');
   const h2 = obtenerOCrear(libroActual, 'EVENTOS');
   const h3 = obtenerOCrear(libroActual, 'CONFIG');
+  const h4 = obtenerOCrear(libroActual, 'DIRECTORIO');
+  const h5 = obtenerOCrear(libroActual, 'RESPONSABLES');
 
   // OBLIGACIONES
   encabezados(h1, COLUMNAS);
   const filasFormato = 3000;
-  ['cod_oficina', 'periodo', 'nit_municipio', 'sticker'].forEach(function (c) {
+  ['cod_oficina', 'periodo', 'nit_municipio', 'sticker', 'periodicidad', 'egreso'].forEach(function (c) {
     h1.getRange(2, COLUMNAS.indexOf(c) + 1, filasFormato, 1).setNumberFormat('@'); // texto: conserva ceros
   });
   h1.getRange(2, COLUMNAS.indexOf('vence') + 1, filasFormato, 1).setNumberFormat('dd/MM/yyyy');
@@ -64,9 +66,19 @@ function instalar() {
   h3.getRange(2, 2, 40, 1).setNumberFormat('@');
   h3.setColumnWidth(1, 190); h3.setColumnWidth(2, 420);
 
+  // DIRECTORIO: a quién va la declaración de cada oficina (varios correos separados por coma).
+  encabezados(h4, COLUMNAS_DIRECTORIO);
+  h4.getRange(2, 1, 3000, 1).setNumberFormat('@');
+  h4.getRange(2, 3, 3000, 1).setWrap(true);
+  h4.setColumnWidth(3, 420);
+  // RESPONSABLES: correo para los avisos y datos de la firma.
+  encabezados(h5, COLUMNAS_RESPONSABLES);
+  h5.getRange(2, 4, 500, 1).setNumberFormat('@');
+  h5.setColumnWidth(2, 260); h5.setColumnWidth(3, 260);
+
   // Quita la hoja vacía por defecto si quedó sola.
   const sobrante = libroActual.getSheetByName('Hoja 1') || libroActual.getSheetByName('Sheet1');
-  if (sobrante && libroActual.getSheets().length > 3 && sobrante.getLastRow() === 0) libroActual.deleteSheet(sobrante);
+  if (sobrante && libroActual.getSheets().length > 5 && sobrante.getLastRow() === 0) libroActual.deleteSheet(sobrante);
 
   Logger.log('Listo. Libro: ' + libroActual.getUrl());
   return libroActual.getUrl();
@@ -90,22 +102,32 @@ function cargarPrueba() {
     const hoy = new Date();
     const suma = function (dias) { return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + dias); };
     const base = function (extra) {
-      const f = { estado: 'PENDIENTE', soporte_link: '', fecha_envio: '', hilo: '', fecha_respuesta: '', sellado_link: '' };
+      const f = { estado: 'PENDIENTE' };
       Object.keys(extra).forEach(function (k) { f[k] = extra[k]; });
       return COLUMNAS.map(function (c) { return f[c] === undefined ? '' : f[c]; });
     };
     const filas = [
-      base({ municipio: 'AGUADAS', cod_oficina: '0851', impuesto: 'ReteICA', periodo: '2026-09', vence: suma(20),
-        nit_municipio: '825000442', correo_oficina: 'director0851@davivienda.com', responsable: 'Jesús Jaimes',
-        consecutivo: 'JJ26-08-184', sticker: '55331449', valor: 3981000 }),
-      base({ municipio: 'SALAMINA', cod_oficina: '0623', impuesto: 'ReteICA', periodo: '2026-09', vence: suma(4),
-        nit_municipio: '890801130', correo_oficina: 'director0623@davivienda.com', responsable: 'Jesús Jaimes',
-        consecutivo: 'JJ26-08-185', sticker: '55331450', valor: 1250000 }),
-      base({ municipio: 'PACORA', cod_oficina: '0417', impuesto: 'ReteICA', periodo: '2026-08', vence: suma(-5),
+      // Con el correo escrito en la fila.
+      base({ municipio: 'FONSECA', cod_oficina: '2335', impuesto: 'Retención de ICA', periodo: '2025-06', vence: suma(20),
+        nit_municipio: '825000442', correo_oficina: 'director2335@davivienda.com, subdirector2335@davivienda.com', responsable: 'Jesús Jaimes',
+        consecutivo: 'JJ26-08-184', sticker: '55331449', valor: 722000, periodicidad: 'BIMESTRAL', egreso: '25' }),
+      // Sin correo en la fila: lo toma del DIRECTORIO. Sin soporte a propósito.
+      base({ municipio: 'SALAMINA', cod_oficina: '0623', impuesto: 'Retención de ICA', periodo: '2025-06', vence: suma(4),
+        nit_municipio: '890801130', responsable: 'Jesús Jaimes',
+        consecutivo: 'JJ26-08-185', sticker: '55331450', valor: 1250000, periodicidad: 'BIMESTRAL', egreso: '25' }),
+      // Ya vencida.
+      base({ municipio: 'PACORA', cod_oficina: '0417', impuesto: 'Retención de ICA', periodo: '2025-05', vence: suma(-5),
         nit_municipio: '890801133', correo_oficina: 'director0417@davivienda.com', responsable: 'Jesús Jaimes',
-        consecutivo: 'JJ26-08-170', sticker: '55331301', valor: 760000 })
+        consecutivo: 'JJ26-08-170', sticker: '55331301', valor: 760000, periodicidad: 'BIMESTRAL', egreso: '25' })
     ];
     h.getRange(h.getLastRow() + 1, 1, filas.length, COLUMNAS.length).setValues(filas);
+
+    // Ejemplos en las listas, solo si están vacías.
+    const dir = hoja('DIRECTORIO');
+    if (dir.getLastRow() < 2) dir.getRange(2, 1, 1, 4).setValues([['0623', 'SALAMINA', 'director0623@davivienda.com, claudia.ejemplo@davivienda.com', 'Claudia (ejemplo)']]);
+    const res = hoja('RESPONSABLES');
+    if (res.getLastRow() < 2) res.getRange(2, 1, 1, 4).setValues([['Jesús Jaimes', 'jesus.jaimes@davivienda.com', 'Profesional I Dpto. Impuestos', '313 461 2504']]);
+
     registrarEventos(filas.map(function (f) { return [f[8], 'AVISO', 'Fila de prueba cargada']; }));
   });
 }

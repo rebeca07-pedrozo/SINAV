@@ -4,11 +4,13 @@
 
 const COLUMNAS = [
   'municipio', 'cod_oficina', 'impuesto', 'periodo', 'vence', 'nit_municipio',
-  'correo_oficina', 'responsable', 'consecutivo', 'sticker', 'valor',
+  'correo_oficina', 'responsable', 'consecutivo', 'sticker', 'valor', 'periodicidad', 'egreso',
   'estado', 'soporte_link', 'fecha_envio', 'hilo', 'fecha_respuesta', 'sellado_link',
-  'enviado_por', 'respondio_por'
+  'enviado_por', 'respondio_por', 'enviado_a'
 ];
-const PRIMERA_DEL_PROGRAMA = 12; // columna "estado" (1-based)
+const PRIMERA_DEL_PROGRAMA = 14; // columna "estado" (1-based): de aquí en adelante las llena el programa
+const COLUMNAS_DIRECTORIO = ['cod_oficina', 'municipio', 'correos_para', 'contacto'];
+const COLUMNAS_RESPONSABLES = ['responsable', 'correo', 'cargo', 'celular'];
 const ESTADOS = ['PENDIENTE', 'ENVIADA', 'RESPONDIDA', 'ERROR'];
 const COLUMNAS_EVENTOS = ['fecha', 'obligacion', 'que_paso', 'detalle'];
 const LIMITE_CORREOS = 1500;
@@ -21,17 +23,21 @@ const PROPIEDADES_DRIVE = ['carpeta_soportes', 'carpeta_sellados', 'logo_id'];
 
 const CONFIG_INICIAL = [
   ['correo_remitente', 'impuestosdavivienda@davivienda.com'],
-  ['nombre_remitente', 'Departamento de Impuestos'],
+  ['nombre_remitente', 'Departamento de impuestos - Banco Davivienda'],
   ['dias_aviso', '10,4,2,0'],
   ['modo', 'PRUEBA'],
   // Agregados en esta fase (ver LEEME):
+  ['copia_visible', ''],       // correos en CC que la oficina sí ve (ej. grpconceptosespeciales@...)
   ['copia_oculta', ''],        // correos que reciben copia sin que nadie los vea (BCC)
-  ['responder_a', ''],         // si está vacío se usa correo_remitente
+  ['responder_a', ''],         // vacío = las respuestas llegan a la cuenta que envía (recomendado)
+  ['codigo_depto', '9413'],    // código del Dpto. de Impuestos que va en el cuerpo del correo
+  ['concepto', '40'],          // concepto del cheque que va en el cuerpo del correo
+  ['direccion_firma', 'Avenida El Dorado # 68B - 31. Piso 5. Bogotá'],
   ['usar_alias', 'NO'],        // SI solo cuando "Enviar como" ya esté autorizado en Gmail
   ['dias_respuesta', '3'],     // días hábiles que se espera que tarde la oficina en responder
   ['avisar_equipo', 'SI'],     // al llegar un sellado, avisar también a la lista en copia oculta
   ['copia_a_mi', 'SI']         // el dueño de la app recibe copia de cada aviso y de cada sellado
-  // Para los avisos diarios agrega filas  correo_<Responsable>  |  correo@davivienda.com
+  // Correos de oficinas: pestaña DIRECTORIO. Responsables (aviso y firma): pestaña RESPONSABLES.
 ];
 
 // ---------- Libro y hojas ----------
@@ -64,7 +70,6 @@ function leerConfig() {
   PROPIEDADES_DRIVE.forEach(function (k) { cfg[k] = (props.getProperty(k) || '').trim(); });
   // Seguro por defecto: cualquier cosa distinta de PRODUCCION es PRUEBA.
   cfg.esPrueba = String(cfg.modo).toUpperCase() !== 'PRODUCCION';
-  cfg.responder_a = cfg.responder_a || cfg.correo_remitente;
   return cfg;
 }
 

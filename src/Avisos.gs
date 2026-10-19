@@ -23,28 +23,25 @@ function avisar(forzar) {
 
     const dias = String(cfg.dias_aviso).split(',').map(function (s) { return parseInt(s, 10); }).filter(function (n) { return !isNaN(n); });
     const grupos = {};
+    const esLunes = Utilities.formatDate(new Date(), 'America/Bogota', 'u') === '1';
     leerObligaciones().forEach(function (o) {
       if (o.estado === 'RESPONDIDA' || !o.vence) return;
       const d = diasPara(o.vence);
-      const entra = (d < 0 && d >= -DIAS_VENCIDA_AVISO) || dias.indexOf(d) !== -1;
+      // Los lunes entra todo lo que vence en la semana, además de los días de aviso.
+      const entra = (d < 0 && d >= -DIAS_VENCIDA_AVISO) || dias.indexOf(d) !== -1 || (esLunes && d >= 0 && d <= 7);
       if (!entra) return;
       const r = o.responsable || '(sin responsable)';
       (grupos[r] = grupos[r] || []).push({ o: o, d: d });
     });
 
-    const correos = {};
-    Object.keys(cfg).forEach(function (k) {
-      if (/^correo_/i.test(k) && k.toLowerCase() !== 'correo_remitente' && k.toLowerCase() !== 'correo_oficina') {
-        correos[k.slice(7).trim().toLowerCase()] = cfg[k];
-      }
-    });
-
+    const responsables = leerResponsables();
     const eventos = [];
     let enviados = 0;
     Object.keys(grupos).forEach(function (resp) {
       if (cupoRestante() < 1) return;
       const items = grupos[resp].sort(function (a, b) { return a.d - b.d; });
-      const propio = listaCorreos(correos[resp.toLowerCase()])[0];
+      const ficha = responsables[resp.toLowerCase()];
+      const propio = ficha ? listaCorreos(ficha.correo)[0] : '';
       const para = cfg.esPrueba ? cfg.correo_remitente : (propio || cfg.correo_remitente);
       const msg = armarAviso(resp, items, cfg);
       const opciones = { name: cfg.nombre_remitente, htmlBody: msg.html };
@@ -53,7 +50,7 @@ function avisar(forzar) {
       GmailApp.sendEmail(para, msg.asunto, msg.texto, opciones);
       sumarCorreos(1);
       enviados++;
-      eventos.push([resp, 'AVISO', items.length + ' obligaciones → ' + para + (!cfg.esPrueba && !propio ? ' (falta la fila correo_' + resp + ' en CONFIG)' : '')]);
+      eventos.push([resp, 'AVISO', items.length + ' obligaciones → ' + para + (!cfg.esPrueba && !propio ? ' (falta su correo en la pestaña RESPONSABLES)' : '')]);
     });
     registrarEventos(eventos);
     props.setProperty('avisar_dia', hoy);

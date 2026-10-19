@@ -85,6 +85,9 @@ function enviar(listaDeFilas) {
     const destinoPrueba = cfg.correo_remitente;
     const quien = quienSoy();
     const copia = cfg.esPrueba ? [] : listaCorreos(cfg.copia_oculta);
+    const copiaVisible = cfg.esPrueba ? [] : listaCorreos(cfg.copia_visible);
+    const directorio = leerDirectorio();
+    const responsables = leerResponsables();
 
     // Si piden alias y no está autorizado en Gmail, no se manda nada con otra identidad.
     let errorGeneral = '';
@@ -111,17 +114,19 @@ function enviar(listaDeFilas) {
         if (errorGeneral) return falla(errorGeneral);
         if (!o.soporte_link) return falla('Sin soporte: no se envía.');
 
-        const para = cfg.esPrueba ? destinoPrueba : listaCorreos(o.correo_oficina).join(',');
-        if (!para) return falla('La fila no tiene un correo_oficina válido.');
+        const faltan = camposFaltantes(o);
+        if (faltan.length) return falla('Faltan datos para armar el correo: ' + faltan.join(', ') + '.');
+        const oficina = destinatariosOficina(o, directorio);
+        if (!oficina.length) return falla('No hay correo para la oficina ' + o.cod_oficina + ': llénalo en la fila o en la pestaña DIRECTORIO.');
+        const para = cfg.esPrueba ? destinoPrueba : oficina.join(',');
         if (cupo < 1) { resultado.sinProcesar.push(o.fila); return; }
 
         try {
           const pdf = DriveApp.getFileById(idDeLink(o.soporte_link)).getBlob();
-          const msg = armarCorreo(o, cfg, para);
-          const opciones = {
-            name: cfg.nombre_remitente, replyTo: cfg.responder_a,
-            htmlBody: msg.html, attachments: [pdf]
-          };
+          const msg = armarCorreo(o, cfg, oficina, responsables[String(o.responsable).toLowerCase()]);
+          const opciones = { name: cfg.nombre_remitente, htmlBody: msg.html, attachments: [pdf] };
+          if (cfg.responder_a) opciones.replyTo = cfg.responder_a; // vacío: responden a la cuenta que envía
+          if (copiaVisible.length) opciones.cc = copiaVisible.join(',');
           if (copia.length) opciones.bcc = copia.join(',');
           if (cfg.usar_alias.toUpperCase() === 'SI') opciones.from = cfg.correo_remitente;
 
@@ -131,11 +136,12 @@ function enviar(listaDeFilas) {
           o.estado = 'ENVIADA';
           o.fecha_envio = new Date();
           o.enviado_por = quien;
+          o.enviado_a = oficina.join(', ');
           guardarBloquePrograma(o);
           cupo--;
           sumarCorreos(1);
           eventos.push([etiqueta(o), 'ENVIADO',
-            (cfg.esPrueba ? 'PRUEBA → ' + para : 'A ' + para + (copia.length ? ' (+' + copia.length + ' en copia oculta)' : '')) + ' · lo envió ' + quien + ' · hilo ' + o.hilo]);
+            (cfg.esPrueba ? 'PRUEBA → ' + para : 'A ' + para + (copiaVisible.length ? ' · CC ' + copiaVisible.join(', ') : '') + (copia.length ? ' (+' + copia.length + ' en copia oculta)' : '')) + ' · lo envió ' + quien + ' · hilo ' + o.hilo]);
           resultado.enviadas++;
           resultado.detalle.push({ fila: o.fila, ok: true });
         } catch (e) {
@@ -157,35 +163,4 @@ function listaCorreos(texto) {
 
 function escapar(t) {
   return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function pesos(n) {
-  return '$ ' + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-}
-
-function armarCorreo(o, cfg, para) {
-  const prefijo = cfg.esPrueba ? '[PRUEBA] ' : '';
-  const asunto = prefijo + 'Declaración ' + o.impuesto + ' ' + o.periodo + ' - ' + o.municipio + ' - ' + o.consecutivo;
-  const datos = [
-    ['Municipio', o.municipio], ['Código de oficina', o.cod_oficina], ['Impuesto', o.impuesto],
-    ['Periodo', o.periodo], ['Fecha de vencimiento', textoFecha(o.vence)], ['NIT del municipio', o.nit_municipio],
-    ['Consecutivo', o.consecutivo], ['Sticker', o.sticker], ['Valor', pesos(o.valor)]
-  ];
-  const aviso = 'Por favor presente la declaración adjunta en el municipio y responda sobre este mismo correo, ' +
-    'no abra uno nuevo, adjuntando el soporte sellado.';
-
-  const texto = (cfg.esPrueba ? 'MODO PRUEBA. Habría ido a: ' + o.correo_oficina + '\n\n' : '') +
-    'Cordial saludo,\n\n' + aviso + '\n\n' +
-    datos.map(function (d) { return d[0] + ': ' + d[1]; }).join('\n') +
-    '\n\nResponsable: ' + o.responsable + '\n' + cfg.nombre_remitente;
-
-  const filas = datos.map(function (d) {
-    return '<tr><td style="padding:4px 12px 4px 0;color:#7A756B">' + escapar(d[0]) + '</td><td style="padding:4px 0"><b>' + escapar(d[1]) + '</b></td></tr>';
-  }).join('');
-  const html = '<div style="font-family:Segoe UI,Helvetica,sans-serif;font-size:14px;color:#000">' +
-    (cfg.esPrueba ? '<p style="background:#FFE11B;color:#000;padding:8px 12px;margin:0 0 12px"><b>MODO PRUEBA</b> — habría ido a: ' + escapar(o.correo_oficina) + '</p>' : '') +
-    '<p>Cordial saludo,</p><p>' + escapar(aviso) + '</p>' +
-    '<table style="border-collapse:collapse">' + filas + '</table>' +
-    '<p style="margin-top:16px">Responsable: ' + escapar(o.responsable) + '<br>' + escapar(cfg.nombre_remitente) + '</p></div>';
-  return { asunto: asunto, texto: texto, html: html };
 }
