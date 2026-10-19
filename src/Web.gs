@@ -43,6 +43,8 @@ function leerAjustes() {
     avisarEquipo: String(cfg.avisar_equipo).toUpperCase() !== 'NO',
     diasRespuesta: Number(cfg.dias_respuesta) || 3,
     yo: quienSoy(),
+    dueno: correoDueno(),
+    copiaAMi: String(cfg.copia_a_mi).toUpperCase() !== 'NO',
     modo: cfg.esPrueba ? 'PRUEBA' : 'PRODUCCION'
   };
 }
@@ -58,6 +60,7 @@ function guardarAjustes(a) {
     guardarConfig('copia_oculta', copia.join(', '));
     guardarConfig('avisar_equipo', a.avisarEquipo ? 'SI' : 'NO');
     guardarConfig('dias_respuesta', String(dias));
+    guardarConfig('copia_a_mi', a.copiaAMi ? 'SI' : 'NO');
     registrarEventos([['AJUSTES', 'AVISO', quienSoy() + ' dejó ' + copia.length + ' correos en copia oculta, avisar al equipo: ' +
       (a.avisarEquipo ? 'SI' : 'NO') + ', días de espera: ' + dias]]);
   });

@@ -29,7 +29,8 @@ const CONFIG_INICIAL = [
   ['responder_a', ''],         // si está vacío se usa correo_remitente
   ['usar_alias', 'NO'],        // SI solo cuando "Enviar como" ya esté autorizado en Gmail
   ['dias_respuesta', '3'],     // días hábiles que se espera que tarde la oficina en responder
-  ['avisar_equipo', 'SI']      // al llegar un sellado, avisar también a la lista en copia oculta
+  ['avisar_equipo', 'SI'],     // al llegar un sellado, avisar también a la lista en copia oculta
+  ['copia_a_mi', 'SI']         // el dueño de la app recibe copia de cada aviso y de cada sellado
   // Para los avisos diarios agrega filas  correo_<Responsable>  |  correo@davivienda.com
 ];
 

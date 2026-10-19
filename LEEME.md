@@ -4,7 +4,7 @@ Tres pestañas, una sola hoja: **ENVIAR** (pendientes), **RESPUESTAS** (lo envia
 
 ## Puesta en marcha
 1. Google Sheets vacío → **Extensiones → Apps Script**.
-2. Crea un archivo por cada uno de `src/`: `Config.gs`, `Datos.gs`, `Instalar.gs`, `Enviar.gs`, `Respuestas.gs`, `Avisos.gs`, `Web.gs` y los HTML `Index`, `Respuestas`, `Alertas` (Archivo → Nuevo → HTML; el nombre sin `.html`). En Configuración del proyecto activa "Mostrar appsscript.json" y pega `src/appsscript.json`.
+2. Crea un archivo por cada uno de `src/`: `Config.gs`, `Datos.gs`, `Instalar.gs`, `Enviar.gs`, `Buzon.gs`, `Avisos.gs`, `Web.gs` y los HTML `Index`, `Respuestas`, `Alertas` (Archivo → Nuevo → HTML; el nombre sin `.html`). Ojo: Apps Script no deja repetir nombres aunque sean de tipo distinto, por eso el script del buzón se llama `Buzon.gs`. En Configuración del proyecto activa "Mostrar appsscript.json" y pega `src/appsscript.json`.
 3. Ejecuta `instalar` (acepta permisos). Si ya la habías corrido antes, vuelve a ejecutarla: renombra encabezados y agrega las 2 columnas nuevas sin tocar tus datos.
 4. **Configuración del proyecto → Propiedades del script**: `carpeta_soportes`, `carpeta_sellados` (ids de dos carpetas de Drive) y `logo_id` (id del logo en Drive).
 5. Ejecuta `instalarDisparadores` (o menú SINAV): revisa el buzón cada 10 min y manda el aviso diario a las 7am.
@@ -22,6 +22,8 @@ Tres pestañas, una sola hoja: **ENVIAR** (pendientes), **RESPUESTAS** (lo envia
 - Se guarda en `enviado_por` quién hizo clic. Cuando llega el sellado, el programa le **reenvía el aviso con el PDF adjunto a esa persona** y, si está activado, al equipo en copia oculta. Así "le llega a quien envió" sin que la oficina conozca su correo.
 - Importante: `impuestosdavivienda@…` debe entregar en tu buzón (grupo, alias o delegación), si no `revisarRespuestas` no verá lo que respondan. En modo PRUEBA lo compruebas: el correo llega ahí; responde ese correo (desde la misma cuenta sirve en PRUEBA) y pulsa **Revisar ahora** en RESPUESTAS.
 - Si respondieron sin adjunto, queda como "Respondió sin sellado" y sigue esperando. Si el correo rebota, queda en ERROR para corregir y reenviar.
+
+- **Tus notificaciones**: con `copia_a_mi = SI` (por defecto; se apaga en "Equipo y avisos") el dueño de la app recibe copia oculta de cada aviso diario y, además de quien envió, el aviso de cada sellado que llegue.
 
 ## Lo que asumí
 - Respuesta esperada = fecha de envío + `dias_respuesta` días hábiles (lunes a viernes, sin festivos).

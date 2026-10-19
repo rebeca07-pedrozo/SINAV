@@ -99,6 +99,11 @@ function diasHabilesMas(fecha, n) {
   return d;
 }
 
+/** Dueño de la app (la cuenta que la implementó): recibe copia de los avisos si copia_a_mi = SI. */
+function correoDueno() {
+  return Session.getEffectiveUser().getEmail();
+}
+
 function quienSoy() {
   let c = '';
   try { c = Session.getActiveUser().getEmail(); } catch (e) { /* sin permiso */ }

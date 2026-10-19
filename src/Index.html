@@ -300,6 +300,12 @@
     </div>
 
     <div class="bloque">
+      <h4>Mis avisos</h4>
+      <p>El dueño de la app (<b id="aj-dueno"></b>) recibe copia de cada aviso de vencimiento y de cada sellado que llegue, aunque lo haya enviado otra persona.</p>
+      <label class="interruptor"><input type="checkbox" id="aj-mi" role="switch"> <span>Mandarme copia de todo</span></label>
+    </div>
+
+    <div class="bloque">
       <h4>Tiempo de espera</h4>
       <p>Días hábiles en los que esperamos que la oficina responda.</p>
       <p style="margin-top:8px"><input type="number" id="aj-dias" min="1" max="30" style="width:90px" aria-label="Días hábiles de espera"> días hábiles</p>
@@ -474,7 +480,7 @@
   $('abrir-ajustes').onclick = function () {
     $('aj-error').textContent = '';
     api('leerAjustes').then(function (a) {
-      $('aj-nombre').textContent = a.nombre; $('aj-depto').textContent = a.correoDepto; $('aj-yo').textContent = a.yo;
+      $('aj-nombre').textContent = a.nombre; $('aj-depto').textContent = a.correoDepto; $('aj-yo').textContent = a.yo; $('aj-dueno').textContent = a.dueno; $('aj-mi').checked = a.copiaAMi;
       copiaEditable = a.copia.slice(); pintarFichas();
       $('aj-equipo').checked = a.avisarEquipo; $('aj-dias').value = a.diasRespuesta;
       $('dlg-ajustes').showModal();
@@ -485,7 +491,7 @@
     agregarCorreo();
     if ($('aj-error').textContent) return;
     $('aj-guardar').disabled = true;
-    api('guardarAjustes', { copia: copiaEditable, avisarEquipo: $('aj-equipo').checked, diasRespuesta: $('aj-dias').value })
+    api('guardarAjustes', { copia: copiaEditable, avisarEquipo: $('aj-equipo').checked, copiaAMi: $('aj-mi').checked, diasRespuesta: $('aj-dias').value })
       .then(function () { $('aj-guardar').disabled = false; $('dlg-ajustes').close(); toast('Ajustes guardados.'); if (cargados.respuestas) modulos.respuestas.cargar(); })
       .catch(function (e) { $('aj-guardar').disabled = false; $('aj-error').textContent = mensajeError(e); });
   };

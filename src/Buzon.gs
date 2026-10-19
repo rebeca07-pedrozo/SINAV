@@ -1,5 +1,5 @@
 /**
- * Respuestas.gs — pestaña RESPUESTAS y el trigger que lee el buzón.
+ * Buzon.gs — lee el buzón (trigger) y arma los datos de la pestaña RESPUESTAS.
  */
 
 // ---------- Leer el buzón ----------
@@ -131,7 +131,9 @@ function procesarHilo(o, hilo, cfg, propios, carpeta, eventos, resumen) {
 /** Avisa a quien envió (y al equipo en copia oculta) que llegó el sellado. */
 function avisarRespuesta(o, cfg, blobs) {
   if (cupoRestante() < 1) return;
-  const para = listaCorreos(o.enviado_por).join(',') || cfg.correo_remitente;
+  const destinatarios = listaCorreos(o.enviado_por);
+  if (String(cfg.copia_a_mi).toUpperCase() !== 'NO' && destinatarios.indexOf(correoDueno().toLowerCase()) === -1) destinatarios.push(correoDueno());
+  const para = destinatarios.join(',') || cfg.correo_remitente;
   const equipo = (cfg.esPrueba || String(cfg.avisar_equipo).toUpperCase() === 'NO') ? [] : listaCorreos(cfg.copia_oculta);
   const asunto = (cfg.esPrueba ? '[PRUEBA] ' : '') + 'Llegó el sellado: ' + o.municipio + ' · ' + o.impuesto + ' ' + o.periodo;
   const datos = [['Municipio', o.municipio + ' (oficina ' + o.cod_oficina + ')'], ['Impuesto', o.impuesto + ' · ' + o.periodo],

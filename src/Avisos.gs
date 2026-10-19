@@ -47,7 +47,10 @@ function avisar(forzar) {
       const propio = listaCorreos(correos[resp.toLowerCase()])[0];
       const para = cfg.esPrueba ? cfg.correo_remitente : (propio || cfg.correo_remitente);
       const msg = armarAviso(resp, items, cfg);
-      GmailApp.sendEmail(para, msg.asunto, msg.texto, { name: cfg.nombre_remitente, htmlBody: msg.html });
+      const opciones = { name: cfg.nombre_remitente, htmlBody: msg.html };
+      // Copia oculta al dueño de la app para que vea exactamente lo que salió.
+      if (String(cfg.copia_a_mi).toUpperCase() !== 'NO' && para.toLowerCase().indexOf(correoDueno().toLowerCase()) === -1) opciones.bcc = correoDueno();
+      GmailApp.sendEmail(para, msg.asunto, msg.texto, opciones);
       sumarCorreos(1);
       enviados++;
       eventos.push([resp, 'AVISO', items.length + ' obligaciones → ' + para + (!cfg.esPrueba && !propio ? ' (falta la fila correo_' + resp + ' en CONFIG)' : '')]);
