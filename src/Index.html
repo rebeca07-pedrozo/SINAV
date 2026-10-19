@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    /* Marca: solo cromo de la interfaz */
+    --marca-rojo: #E30518;
+    --marca-naranja: #FF8D00;
+    --marca-amarillo: #FFE11B;
+    /* Estado: distintos a la marca a propósito */
+    --vencido: #B00510;
+    --por-vencer: #B06C00;
+    --al-dia: #1F7A4D;
+    --neutro: #7A756B;
+    --texto: #000000;
+    --fondo: #F6F5F2;
+    --tarjeta: #FFFFFF;
+    --linea: #DEDBD3;
+    --fuente: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.45 var(--fuente); }
+  header { background: var(--marca-rojo); color: #fff; }
+  .franja { height: 5px; background: var(--marca-naranja); }
+  .cabecera { display: flex; align-items: center; gap: 16px; padding: 12px 20px; max-width: 1280px; margin: 0 auto; }
+  .logo { background: #fff; border-radius: 4px; padding: 4px 8px; width: 168px; height: 44px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .logo img { max-width: 100%; max-height: 100%; display: block; }
+  .logo.vacio { border: 2px dashed var(--neutro); color: var(--neutro); font-size: 12px; background: #fff; }
+  .titulo { font-size: 18px; font-weight: 600; margin: 0; }
+  .cuota { margin-left: auto; text-align: right; font-size: 12px; }
+  .cuota b { font-size: 16px; }
+  .modo { background: var(--marca-amarillo); color: #000; padding: 8px 20px; font-size: 13px; text-align: center; }
+  .modo.real { background: #000; color: #fff; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px 20px 96px; }
+  nav[role=tablist] { display: flex; gap: 4px; border-bottom: 2px solid var(--linea); margin-bottom: 16px; flex-wrap: wrap; }
+  nav button { font: inherit; font-weight: 600; letter-spacing: .03em; padding: 10px 18px; border: 0; background: none; cursor: pointer; border-bottom: 4px solid transparent; margin-bottom: -2px; color: #000; }
+  nav button[aria-selected=true] { border-bottom-color: var(--marca-rojo); }
+  nav button:disabled { color: var(--neutro); cursor: default; }
+  nav .ajustes { margin-left: auto; font-weight: 400; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+  .resumen { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .dato { background: var(--tarjeta); border: 1px solid var(--linea); border-left: 5px solid var(--neutro); padding: 8px 14px; min-width: 150px; }
+  .dato b { font-size: 22px; display: block; }
+  .dato.rojo { border-left-color: var(--vencido); } .dato.ambar { border-left-color: var(--por-vencer); }
+  .dato.verde { border-left-color: var(--al-dia); }
+  .tabla-caja { background: var(--tarjeta); border: 1px solid var(--linea); overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 980px; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #3d3a34; background: #EFEDE8; padding: 8px 10px; white-space: nowrap; }
+  td { padding: 8px 10px; border-top: 1px solid var(--linea); vertical-align: middle; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .etiqueta { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; white-space: nowrap; }
+  .etiqueta::before { content: ""; width: 10px; height: 10px; background: currentColor; flex: none; }
+  .vencido { color: var(--vencido); } .vencido::before { border-radius: 0; }
+  .por-vencer { color: var(--por-vencer); } .por-vencer::before { border-radius: 50%; }
+  .al-dia { color: var(--al-dia); } .al-dia::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .neutro { color: var(--neutro); } .neutro::before { border-radius: 50%; background: none; border: 2px solid currentColor; }
+  .btn { font: inherit; font-weight: 600; padding: 9px 18px; border: 2px solid var(--marca-rojo); background: var(--marca-rojo); color: #fff; cursor: pointer; border-radius: 4px; }
+  .btn.sec { background: #fff; color: var(--marca-rojo); }
+  .btn:disabled { background: #E7E4DD; border-color: #E7E4DD; color: var(--neutro); cursor: not-allowed; }
+  .btn.chico { padding: 4px 10px; font-size: 12px; }
+  .barra { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 3px solid var(--marca-amarillo); padding: 10px 20px; display: flex; gap: 14px; align-items: center; }
+  .barra .estado { flex: 1; }
+  .barra .progreso { height: 8px; background: var(--linea); flex: 1; max-width: 260px; display: none; }
+  .barra .progreso i { display: block; height: 100%; background: var(--marca-rojo); width: 0; }
+  .vacio-msg { padding: 28px; text-align: center; color: var(--neutro); }
+  .error { color: var(--vencido); font-weight: 600; }
+  a { color: var(--marca-rojo); }
+  dialog { border: 0; padding: 0; max-width: 560px; width: calc(100% - 32px); box-shadow: 0 8px 40px rgba(0,0,0,.35); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .dlg-t { background: var(--marca-rojo); color: #fff; padding: 12px 18px; font-weight: 600; }
+  .dlg-c { padding: 16px 18px; } .dlg-p { padding: 12px 18px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--linea); }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  textarea, input[type=text], select { width: 100%; font: inherit; padding: 8px; border: 1px solid #8a867d; border-radius: 3px; }
+  .nota { font-size: 12px; color: #4a4741; margin-top: 4px; }
+  .resultados { margin: 8px 0 0; padding-left: 18px; }
+  .pronto { padding: 40px; text-align: center; color: var(--neutro); background: #fff; border: 1px dashed var(--linea); }
+  @media (max-width: 640px) { .cabecera { flex-wrap: wrap; } .cuota { margin-left: 0; text-align: left; } .barra { flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="cabecera">
+    <? if (logo) { ?>
+      <div class="logo"><img src="<?!= logo ?>" alt="Davivienda"></div>
+    <? } else { ?>
+      <!-- Cuando exista el archivo oficial: súbelo a Drive y pon su id en CONFIG → logo_id -->
+      <div class="logo vacio" role="img" aria-label="Espacio reservado para el logo de Davivienda">logo</div>
+    <? } ?>
+    <h1 class="titulo">Obligaciones de impuestos</h1>
+    <div class="cuota" id="cuota" aria-live="polite"></div>
+  </div>
+  <div class="franja"></div>
+</header>
+<div class="modo" id="modo" role="status"></div>
+
+<main>
+  <nav role="tablist" aria-label="Secciones">
+    <button role="tab" aria-selected="true" id="tab-enviar">ENVIAR</button>
+    <button role="tab" aria-selected="false" disabled title="Próxima fase">RESPUESTAS</button>
+    <button role="tab" aria-selected="false" disabled title="Próxima fase">ALERTAS</button>
+    <button class="ajustes btn sec chico" id="abrir-ajustes" type="button">Destinatarios y envío</button>
+  </nav>
+
+  <section id="panel-enviar" role="tabpanel" aria-labelledby="tab-enviar">
+    <div class="resumen" id="resumen"></div>
+    <div class="tabla-caja">
+      <table>
+        <thead><tr>
+          <th><input type="checkbox" id="todas" aria-label="Seleccionar todas las que tienen soporte"></th>
+          <th>Municipio</th><th>Oficina</th><th>Impuesto</th><th>Periodo</th><th>Vence</th>
+          <th>Responsable</th><th>Consecutivo</th><th style="text-align:right">Valor</th><th>Soporte (PDF)</th><th>Estado</th>
+        </tr></thead>
+        <tbody id="cuerpo"></tbody>
+      </table>
+      <div class="vacio-msg" id="vacio" hidden>No hay declaraciones pendientes.</div>
+    </div>
+    <div id="resultado" role="status" aria-live="polite"></div>
+  </section>
+</main>
+
+<div class="barra">
+  <button class="btn" id="enviar" type="button" disabled>Enviar seleccionadas (0)</button>
+  <div class="progreso" id="progreso"><i></i></div>
+  <div class="estado" id="estado" role="status" aria-live="polite"></div>
+</div>
+
+<dialog id="dlg-confirmar">
+  <div class="dlg-t">Confirmar envío</div>
+  <div class="dlg-c" id="confirmar-txt"></div>
+  <div class="dlg-p">
+    <button class="btn sec" id="confirmar-no" type="button">Cancelar</button>
+    <button class="btn" id="confirmar-si" type="button">Enviar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-ajustes">
+  <div class="dlg-t">Destinatarios y envío</div>
+  <div class="dlg-c">
+    <label for="aj-copia">Copia oculta (reciben el correo sin que nadie vea sus direcciones)</label>
+    <textarea id="aj-copia" rows="4" placeholder="una@davivienda.com, otra@davivienda.com"></textarea>
+    <div class="nota">Separa con coma o salto de línea. En modo PRUEBA no se usa: todo va solo al remitente.</div>
+
+    <label for="aj-responder">Las respuestas de las oficinas llegan a</label>
+    <input type="text" id="aj-responder">
+    <div class="nota">Debe ser una dirección cuyo buzón recibas tú (grupo o delegación). Si queda vacía se usa el remitente.</div>
+
+    <label for="aj-alias">Enviar con el alias del departamento</label>
+    <select id="aj-alias"><option value="NO">NO — sale desde mi cuenta con el nombre del departamento</option><option value="SI">SI — usar "Enviar como" (solo si Gmail ya lo tiene autorizado)</option></select>
+    <div class="nota" id="aj-aliases"></div>
+    <div class="nota"><b>Modo actual: <span id="aj-modo"></span></b>. El modo solo se cambia en la hoja CONFIG.</div>
+    <div class="error" id="aj-error"></div>
+  </div>
+  <div class="dlg-p">
+    <button class="btn sec" id="aj-cerrar" type="button">Cerrar</button>
+    <button class="btn" id="aj-guardar" type="button">Guardar</button>
+  </div>
+</dialog>
+
+<script>
+  var datos = null;
+  var elegidas = {};
+  var ocupado = false;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function el(tag, props, hijos) {
+    var e = document.createElement(tag);
+    Object.keys(props || {}).forEach(function (k) {
+      if (k === 'texto') e.textContent = props[k]; else if (k === 'clase') e.className = props[k]; else e.setAttribute(k, props[k]);
+    });
+    (hijos || []).forEach(function (h) { e.appendChild(h); });
+    return e;
+  }
+  function pesos(n) { return '$ ' + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function falloGeneral(e) { ocupado = false; $('estado').innerHTML = ''; $('estado').appendChild(el('span', { clase: 'error', texto: (e && e.message) || String(e) })); pintarBarra(); }
+
+  function estadoVence(dias, tieneEstado) {
+    if (dias === null) return { c: 'neutro', t: 'Sin fecha' };
+    if (dias < 0) return { c: 'vencido', t: 'Vencida hace ' + (-dias) + (dias === -1 ? ' día' : ' días') };
+    if (dias <= 4) return { c: 'por-vencer', t: dias === 0 ? 'Vence hoy' : 'Vence en ' + dias + (dias === 1 ? ' día' : ' días') };
+    return { c: 'al-dia', t: 'Vence en ' + dias + ' días' };
+  }
+
+  function cargar() {
+    $('estado').textContent = 'Cargando…';
+    google.script.run.withSuccessHandler(function (r) { datos = r; $('estado').textContent = ''; pintar(); }).withFailureHandler(falloGeneral).listarEnviar();
+  }
+
+  function pintar() {
+    var prueba = datos.modo === 'PRUEBA';
+    var m = $('modo');
+    m.className = 'modo' + (prueba ? '' : ' real');
+    m.textContent = prueba ? 'MODO PRUEBA — todos los correos van a ' + datos.destinoPrueba + ', no a las oficinas.' : 'MODO REAL — los correos salen a las oficinas.';
+    $('cuota').innerHTML = '';
+    $('cuota').appendChild(document.createTextNode('Correos hoy '));
+    $('cuota').appendChild(el('b', { texto: datos.correosHoy + ' / ' + datos.limite }));
+
+    var sinSoporte = datos.filas.filter(function (f) { return !f.tieneSoporte; }).length;
+    var vencidas = datos.filas.filter(function (f) { return f.dias !== null && f.dias < 0; }).length;
+    var listas = datos.filas.length - sinSoporte;
+    var r = $('resumen'); r.innerHTML = '';
+    [['Por enviar', datos.filas.length, ''], ['Listas (con soporte)', listas, 'verde'], ['Sin soporte', sinSoporte, sinSoporte ? 'ambar' : ''], ['Vencidas', vencidas, vencidas ? 'rojo' : '']]
+      .forEach(function (d) { r.appendChild(el('div', { clase: 'dato ' + d[2] }, [el('b', { texto: String(d[1]) }), el('span', { texto: d[0] })])); });
+
+    var cuerpo = $('cuerpo'); cuerpo.innerHTML = '';
+    datos.filas.forEach(function (f) {
+      var tr = el('tr');
+      var cb = el('input', { type: 'checkbox', 'aria-label': 'Seleccionar ' + f.municipio });
+      if (!f.tieneSoporte) cb.disabled = true;
+      cb.checked = !!elegidas[f.fila] && f.tieneSoporte;
+      cb.onchange = function () { if (cb.checked) elegidas[f.fila] = true; else delete elegidas[f.fila]; pintarBarra(); };
+      tr.appendChild(el('td', {}, [cb]));
+      [f.municipio, f.cod_oficina, f.impuesto, f.periodo, f.vence].forEach(function (t) { tr.appendChild(el('td', { texto: t })); });
+      tr.children[5].textContent = '';
+      var ev = estadoVence(f.dias);
+      tr.children[5].appendChild(document.createTextNode(f.vence + ' '));
+      tr.children[5].appendChild(el('span', { clase: 'etiqueta ' + ev.c, texto: ev.t }));
+      tr.appendChild(el('td', { texto: f.responsable }));
+      tr.appendChild(el('td', { texto: f.consecutivo }));
+      tr.appendChild(el('td', { clase: 'num', texto: pesos(f.valor) }));
+      tr.appendChild(celdaSoporte(f));
+      var est = f.estado === 'ERROR' ? { c: 'vencido', t: 'Error' } : (f.tieneSoporte ? { c: 'al-dia', t: 'Lista' } : { c: 'neutro', t: 'Sin soporte' });
+      tr.appendChild(el('td', {}, [el('span', { clase: 'etiqueta ' + est.c, texto: est.t })]));
+      cuerpo.appendChild(tr);
+    });
+    $('vacio').hidden = datos.filas.length > 0;
+    pintarBarra();
+  }
+
+  function celdaSoporte(f) {
+    var td = el('td');
+    if (f.tieneSoporte) {
+      td.appendChild(el('a', { href: f.soporteUrl, target: '_blank', rel: 'noopener', texto: 'Ver PDF' }));
+      td.appendChild(document.createTextNode(' · '));
+    }
+    var id = 'f' + f.fila;
+    var input = el('input', { type: 'file', accept: 'application/pdf', id: id, hidden: 'hidden' });
+    var b = el('button', { type: 'button', clase: 'btn sec chico', texto: f.tieneSoporte ? 'Reemplazar' : 'Subir PDF' });
+    b.onclick = function () { input.click(); };
+    input.onchange = function () { if (input.files[0]) subir(f, input.files[0], b); };
+    td.appendChild(input); td.appendChild(b);
+    return td;
+  }
+
+  function subir(f, archivo, boton) {
+    if (archivo.type !== 'application/pdf' && !/\.pdf$/i.test(archivo.name)) { $('estado').innerHTML = ''; $('estado').appendChild(el('span', { clase: 'error', texto: 'Solo PDF.' })); return; }
+    boton.disabled = true; boton.textContent = 'Subiendo…';
+    var lector = new FileReader();
+    lector.onload = function () {
+      var base64 = String(lector.result).split(',')[1];
+      google.script.run
+        .withSuccessHandler(function () { cargar(); })
+        .withFailureHandler(function (e) { boton.disabled = false; boton.textContent = 'Subir PDF'; falloGeneral(e); })
+        .subirSoporte(f.fila, { nombre: archivo.name, base64: base64 });
+    };
+    lector.readAsDataURL(archivo);
+  }
+
+  function filasElegidas() { return Object.keys(elegidas).map(Number); }
+  function pintarBarra() {
+    var n = filasElegidas().length;
+    $('enviar').textContent = 'Enviar seleccionadas (' + n + ')';
+    $('enviar').disabled = ocupado || n === 0;
+    var conSoporte = datos ? datos.filas.filter(function (f) { return f.tieneSoporte; }).length : 0;
+    $('todas').checked = conSoporte > 0 && n === conSoporte;
+  }
+
+  $('todas').onchange = function () {
+    elegidas = {};
+    if ($('todas').checked) datos.filas.forEach(function (f) { if (f.tieneSoporte) elegidas[f.fila] = true; });
+    pintar();
+  };
+
+  $('enviar').onclick = function () {
+    var n = filasElegidas().length;
+    var prueba = datos.modo === 'PRUEBA';
+    $('confirmar-txt').textContent = prueba
+      ? 'Se enviarán ' + n + ' correos de PRUEBA a ' + datos.destinoPrueba + '. Las oficinas no recibirán nada.'
+      : 'Se enviarán ' + n + ' correos REALES a las oficinas. Esto no se puede deshacer.';
+    $('dlg-confirmar').showModal();
+  };
+  $('confirmar-no').onclick = function () { $('dlg-confirmar').close(); };
+  $('confirmar-si').onclick = function () { $('dlg-confirmar').close(); enviarLotes(filasElegidas()); };
+
+  function enviarLotes(filas) {
+    ocupado = true; pintarBarra();
+    var total = filas.length, hechas = 0, ok = 0, errores = [];
+    var lote = 15;
+    $('progreso').style.display = 'block';
+    function siguiente() {
+      if (!filas.length) { terminar(); return; }
+      var tanda = filas.splice(0, lote);
+      $('estado').textContent = 'Enviando… ' + hechas + ' de ' + total;
+      google.script.run.withSuccessHandler(function (r) {
+        ok += r.enviadas;
+        r.detalle.forEach(function (d) { if (!d.ok) errores.push(d); });
+        hechas += tanda.length - r.sinProcesar.length;
+        if (r.sinProcesar.length) filas = r.sinProcesar.concat(filas);
+        $('progreso').firstChild.style.width = Math.round(100 * hechas / total) + '%';
+        if (r.sinProcesar.length && !r.enviadas && !r.errores) { terminar('Se detuvo: sin cupo de correos hoy o sin tiempo. Quedaron ' + filas.length + ' sin enviar.'); return; }
+        siguiente();
+      }).withFailureHandler(function (e) { falloGeneral(e); terminar(e.message); }).enviar(tanda);
+    }
+    function terminar(aviso) {
+      ocupado = false; elegidas = {};
+      $('progreso').style.display = 'none'; $('progreso').firstChild.style.width = '0';
+      $('estado').textContent = '';
+      var caja = $('resultado'); caja.innerHTML = '';
+      var resumen = el('p', { texto: ok + ' enviadas, ' + errores.length + ' con problema.' + (aviso ? ' ' + aviso : '') });
+      caja.appendChild(resumen);
+      if (errores.length) {
+        var ul = el('ul', { clase: 'resultados' });
+        errores.forEach(function (d) { ul.appendChild(el('li', { texto: 'Fila ' + d.fila + ': ' + d.motivo })); });
+        caja.appendChild(ul);
+      }
+      cargar();
+    }
+    siguiente();
+  }
+
+  // ----- Ajustes -----
+  $('abrir-ajustes').onclick = function () {
+    $('aj-error').textContent = '';
+    google.script.run.withSuccessHandler(function (a) {
+      $('aj-copia').value = a.copia_oculta; $('aj-responder').value = a.responder_a; $('aj-alias').value = a.usar_alias === 'SI' ? 'SI' : 'NO';
+      $('aj-modo').textContent = a.modo;
+      $('aj-aliases').textContent = a.aliasDisponibles.length ? 'Alias autorizados en tu Gmail: ' + a.aliasDisponibles.join(', ') : 'Tu Gmail no tiene alias "Enviar como" autorizados.';
+      $('dlg-ajustes').showModal();
+    }).withFailureHandler(falloGeneral).leerAjustes();
+  };
+  $('aj-cerrar').onclick = function () { $('dlg-ajustes').close(); };
+  $('aj-guardar').onclick = function () {
+    $('aj-guardar').disabled = true;
+    google.script.run.withSuccessHandler(function () { $('aj-guardar').disabled = false; $('dlg-ajustes').close(); })
+      .withFailureHandler(function (e) { $('aj-guardar').disabled = false; $('aj-error').textContent = e.message; })
+      .guardarAjustes({ copia_oculta: $('aj-copia').value, responder_a: $('aj-responder').value, usar_alias: $('aj-alias').value });
+  };
+
+  cargar();
+</script>
+</body>
+</html>
