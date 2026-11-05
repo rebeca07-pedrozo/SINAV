@@ -1,0 +1,11 @@
+{
+  "name": "sinav",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SINAV · control de obligaciones tributarias territoriales (Google Apps Script) · Banco Davivienda",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node tools/pruebas.mjs && node build.js",
+    "mock": "node tools/mock.mjs"
+  }
+}
