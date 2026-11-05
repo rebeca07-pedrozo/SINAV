@@ -1,0 +1,8 @@
+Pon aqui el archivo oficial, con este nombre exacto:
+
+  logo-davivienda.png
+
+Mientras no exista, la interfaz muestra un espacio reservado punteado del tamano
+correcto con la palabra "logo". El logo no se dibuja ni se recrea en codigo.
+
+Alternativa: subelo a Drive y pon su id en la hoja CONFIG, parametro logo_id.
