@@ -13,13 +13,30 @@ Contexto de producto en [PRODUCT.md](PRODUCT.md). Decisiones visuales en
 Son **tres**, y las tres viven en el menú **SINAV** que aparece dentro del
 Sheets. No hace falta abrir el editor de Apps Script para el día a día.
 
-| Función | Cómo se corre | Qué hace | Cuándo |
+| Función | En qué archivo vive | Cómo se corre | Cuándo |
 |---|---|---|---|
-| `instalar()` | Menú **SINAV → Instalar / verificar** | Crea hojas, encabezados, formatos, carpetas de Drive, la hoja ROLES, las listas desplegables y te inscribe como ADMIN | La primera vez, y **cada vez que actualices el código** |
-| `migrar()` | Menú **SINAV → Migrar columnas** | Pasa un libro del esquema viejo al nuevo y reparte los datos | Una sola vez, **después** de `instalar()`, si el libro ya tenía filas |
-| `pruebas()` | Menú **SINAV → Correr pruebas** | Corre 178 aserciones sobre las reglas delicadas | Cuando cambies código o algo huela raro |
+| `instalar()` | `01_Instalar` | Menú **SINAV → Instalar / verificar** | La primera vez, y **cada vez que actualices el código** |
+| `migrar()` | `01_Instalar` | Menú **SINAV → Migrar columnas** | Una sola vez, **después** de `instalar()`, si el libro ya tenía filas |
+| `pruebas()` | `99_Pruebas` | Menú **SINAV → Correr pruebas** | Cuando cambies código o algo huela raro |
 
 Las tres son **idempotentes**: correrlas dos veces no duplica ni rompe nada.
+
+### El archivo abierto en el editor da igual
+
+Esto confunde a todo el mundo la primera vez. En Apps Script **no se corre "la
+función del archivo que tienes abierto"**. Todos los archivos comparten un solo
+ámbito global, así que cualquier función es visible desde cualquier parte.
+
+Lo que manda es **el desplegable de funciones** en la barra de arriba del
+editor, al lado del botón **Ejecutar**. Ese desplegable lista las funciones de
+*todo* el proyecto. Eliges `instalar` ahí y le das a Ejecutar, sin importar qué
+archivo estés viendo.
+
+Por eso la columna "en qué archivo vive" es solo para que sepas dónde leer el
+código, no para correrlo.
+
+Y más fácil todavía: **usa el menú SINAV dentro del Sheets** y olvídate del
+editor. Si el menú no aparece, cierra y vuelve a abrir el libro.
 
 Hay una cuarta, `onOpen()`, que **nunca se corre a mano**: Google la llama sola
 al abrir el libro y es la que pinta el menú.
@@ -57,8 +74,15 @@ el nombre lleva la barra.
 Para ver `appsscript.json` en el editor hay que activar **Configuración del
 proyecto → Mostrar el archivo de manifiesto "appsscript.json"**.
 
-El orden de los archivos no importa: en Apps Script todo vive en un solo ámbito
-global y ninguno ejecuta nada al cargarse.
+El orden de los archivos en el editor **no importa**, y eso está garantizado por
+una comprobación: `node tools/pruebas.mjs` carga los quince `.gs` al revés y
+falla si alguno depende del orden.
+
+Esto no es un detalle menor. Si un archivo declarara en su nivel superior algo
+como `var X = [ESTADO.PENDIENTE]`, leyendo una constante de `00_Constantes`, el
+proyecto entero reventaría con `ReferenceError: ESTADO is not defined` en cuanto
+ese archivo quedara antes que `00_Constantes` en la lista. Por eso todo lo que
+lee constantes de otro archivo está dentro de una función, no suelto.
 
 ### 3 · Correr `instalar()`
 
@@ -249,6 +273,8 @@ Qué cambió y por qué es seguro:
 |---|---|
 | No aparece el menú **SINAV** | Cierra y abre el Sheets. `onOpen()` solo corre al abrir el libro |
 | *"Falta la hoja X. Corre instalar()"* | Eso: menú SINAV → Instalar / verificar |
+| `ReferenceError: ESTADO is not defined` (o `HOJA`, `COLS`, `ROL`…) | Falta `00_Constantes` en el proyecto, está vacío, o tiene un error de sintaxis que impide que cargue. Ábrelo y comprueba que tenga las ~150 líneas |
+| No encuentro la función `instalar` en el desplegable | Falta `01_Instalar` en el proyecto, o tiene un error de sintaxis. El desplegable solo lista funciones de archivos que cargaron bien |
 | *"Tu correo está en la hoja USUARIOS con activo = NO"* | Alguien lo desactivó. Cámbialo a `SI` en USUARIOS |
 | *"Tu fila en USUARIOS no tiene un rol que SINAV reconozca"* | El valor de `rol` está mal escrito. Usa el desplegable: `PROFESIONAL`, `JEFE` o `ADMIN` |
 | *"No se pudo identificar tu cuenta"* | La persona entró con una cuenta que no es la corporativa |

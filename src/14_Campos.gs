@@ -15,8 +15,19 @@
  *    otra obligacion, no la misma editada.
  */
 
-/** Lo unico que se puede escribir desde la pantalla, y con que se valida. */
-var CAMPOS_EDITABLES = {
+/**
+ * Lo unico que se puede escribir desde la pantalla, y con que se valida.
+ *
+ * Es una FUNCION y no un `var` por lo mismo que estadosPorEnviar(): un `var`
+ * aqui se evaluaria al cargar el archivo, y si este carga antes que
+ * 00_Constantes, TIPOS_PRESENTACION y los demas todavia no existen.
+ * El resultado se memoriza, que se pide varias veces por ejecucion.
+ */
+var _camposEditables = null;
+
+function camposEditables() {
+  if (_camposEditables) return _camposEditables;
+  _camposEditables = {
   tipo_presentacion: { et: 'Tipo de presentación', tipo: 'lista',
                        valores: TIPOS_PRESENTACION, norm: 'normTipoPresentacion' },
   paga_quien:        { et: 'Quién paga', tipo: 'lista',
@@ -33,8 +44,10 @@ var CAMPOS_EDITABLES = {
                        norm: 'normSiNoCampo', solo: 'AUTORRETEICA' },
   valor:             { et: 'Valor liquidado', tipo: 'valor', norm: 'normValor' },
   presentacion_fecha:{ et: 'Fecha de presentación', tipo: 'fecha', norm: 'normFecha' },
-  nota:              { et: 'Nota', tipo: 'texto', norm: 'normTexto' }
-};
+    nota:              { et: 'Nota', tipo: 'texto', norm: 'normTexto' }
+  };
+  return _camposEditables;
+}
 
 /* los normalizadores que solo usa esta pantalla */
 function normSiNoRevisar(v) { return normSiNo(v, true) || 'REVISAR'; }
@@ -44,8 +57,9 @@ function normTexto(v) { return String(v === null || v === undefined ? '' : v).tr
 /** Las listas que la pantalla necesita para pintar los desplegables. */
 function apiCamposOpciones() {
   var out = {};
-  Object.keys(CAMPOS_EDITABLES).forEach(function (k) {
-    var d = CAMPOS_EDITABLES[k];
+  var mapa = camposEditables();
+  Object.keys(mapa).forEach(function (k) {
+    var d = mapa[k];
     out[k] = { et: d.et, tipo: d.tipo, valores: d.valores || null,
                vacio: !!d.vacio, solo: d.solo || '' };
   });
@@ -75,7 +89,7 @@ function normalizadorPorNombre(nombre) {
 
 /** Aplica el normalizador que le toca a cada campo. */
 function normalizarCampo(clave, valor, impuesto) {
-  var d = CAMPOS_EDITABLES[clave];
+  var d = camposEditables()[clave];
   if (!d) throw new Error('Ese campo no se puede editar: ' + clave);
 
   // exogena solo tiene sentido en RETEICA, incluye_retencion solo en
@@ -96,8 +110,9 @@ function normalizarCampo(clave, valor, impuesto) {
 function apiGuardarCampos(id, campos) {
   if (!id) throw new Error('Falta el id de la obligación.');
   var entrada = campos || {};
+  var editables = camposEditables();
   var claves = Object.keys(entrada).filter(function (k) {
-    return CAMPOS_EDITABLES[k];
+    return editables[k];
   });
   if (!claves.length) throw new Error('No llegó ningún campo editable.');
 
@@ -132,7 +147,7 @@ function apiGuardarCampos(id, campos) {
       if (a === b) return;
 
       aEscribir[k] = nuevo;
-      bitacora.push(CAMPOS_EDITABLES[k].et + ': ' + (a || '(vacío)') + ' -> ' + (b || '(vacío)'));
+      bitacora.push(editables[k].et + ': ' + (a || '(vacío)') + ' -> ' + (b || '(vacío)'));
     });
 
     if (!Object.keys(aEscribir).length) {
