@@ -1,6 +1,17 @@
 /** SINAV · lectura del maestro. Nunca formulas vivas: lo que ve la interfaz es lo guardado. */
 
-var ESTADOS_POR_ENVIAR = [ESTADO.PENDIENTE, ESTADO.LISTA, ESTADO.DEVUELTA, ESTADO.REBOTADO];
+/**
+ * Los estados que todavia esperan un envio.
+ *
+ * Es una FUNCION y no un `var` a proposito: un `var` en el nivel superior se
+ * evalua cuando Apps Script carga el archivo, y si este archivo carga antes
+ * que 00_Constantes, ESTADO todavia no existe y el proyecto entero revienta
+ * con "ReferenceError: ESTADO is not defined". Dentro de una funcion, la
+ * constante se lee cuando alguien llama, con todo ya cargado.
+ */
+function estadosPorEnviar() {
+  return [ESTADO.PENDIENTE, ESTADO.LISTA, ESTADO.DEVUELTA, ESTADO.REBOTADO];
+}
 
 /** Agrega a una fila cruda lo que la interfaz necesita y no esta en la hoja. */
 function decorar(o) {
@@ -77,7 +88,7 @@ function listarParaEnviar() {
 
   return todas
     .filter(function (o) {
-      return o.requiere_envio === 'SI' && ESTADOS_POR_ENVIAR.indexOf(o.estado) >= 0;
+      return o.requiere_envio === 'SI' && estadosPorEnviar().indexOf(o.estado) >= 0;
     })
     .sort(function (a, b) {
       var da = a.dias === null ? 9999 : a.dias;
