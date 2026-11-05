@@ -1,0 +1,155 @@
+<script>
+/* ===========================================================================
+   SINAV · el armazon y el arranque.
+   Shell plano abierto: barra lateral etiquetada sobre el propio fondo,
+   sin barra superior.
+   =========================================================================== */
+
+const VISTAS = [
+  { id: 'enviar', et: 'Enviar', icono: 'enviar', grupo: 'trabajo', lista: true },
+  { id: 'respuestas', et: 'Respuestas', icono: 'respuestas', grupo: 'trabajo' },
+  { id: 'alertas', et: 'Alertas', icono: 'alertas', grupo: 'trabajo' },
+  { id: 'asignacion', et: 'Asignación', icono: 'asignacion', grupo: 'admin',
+    permiso: 'puedeAsignar' },
+  { id: 'configuracion', et: 'Configuración', icono: 'configuracion', grupo: 'admin',
+    permiso: 'puedeConfigurar' }
+];
+
+function Logo({ fuente }) {
+  if (typeof fuente === 'string' && fuente) {
+    return html`<img class="logo" src=${fuente} alt="Banco Davivienda" />`;
+  }
+  // el archivo oficial todavia no esta: espacio reservado del tamano correcto
+  return html`<span class="logo-hueco" role="img"
+    aria-label="Espacio reservado para el logo de Banco Davivienda">logo</span>`;
+}
+
+function Lateral({ yo, modo, vista, alCambiar, conteos, logo }) {
+  const [abierto, setAbierto] = useState(false);
+  const visibles = VISTAS.filter((v) => !v.permiso || yo[v.permiso]);
+
+  const items = (grupo) => visibles.filter((v) => v.grupo === grupo).map((v) => html`
+    <li key=${v.id}>
+      <button aria-current=${vista === v.id ? 'page' : null}
+        onClick=${() => { alCambiar(v.id); setAbierto(false); }}>
+        <${Icono} nombre=${v.icono} />
+        ${v.et}
+        ${v.lista && conteos && conteos.listas
+          ? html`<span class="cuenta">${conteos.listas}</span>` : null}
+      </button>
+    </li>`);
+
+  return html`<nav class="lateral" data-abierto=${abierto ? 'si' : 'no'}
+      aria-label="Secciones de SINAV">
+    <div class="marca-bloque">
+      <${Logo} fuente=${logo} />
+      <p class="producto">SINAV</p>
+      <p class="alcance">Impuestos territoriales</p>
+    </div>
+
+    <button class="menu-tel" aria-expanded=${abierto}
+      onClick=${() => setAbierto(!abierto)}>
+      ${abierto ? 'Cerrar' : 'Secciones'}
+    </button>
+
+    <p class="grupo-nav" id="g-trabajo">Trabajo</p>
+    <ul class="nav" aria-labelledby="g-trabajo">${items('trabajo')}</ul>
+
+    ${visibles.some((v) => v.grupo === 'admin') ? html`<${React.Fragment}>
+      <p class="grupo-nav" id="g-admin">Administración</p>
+      <ul class="nav" aria-labelledby="g-admin">${items('admin')}</ul>
+    </>` : null}
+
+    <div class="pie-lateral">
+      <p class="persona"><b>${yo.nombre}</b>
+        <span>${yo.rol.toLowerCase()}</span>
+        <span class="correo" title=${yo.correo}>${yo.correo}</span></p>
+      ${modo === 'PRUEBA' ? html`<p class="aviso-modo">
+        <b>Modo prueba</b>Los correos llegan a tu bandeja, no a las oficinas.
+      </p>` : null}
+    </div>
+  </nav>`;
+}
+
+/** Las pestanas que todavia no estan. El marco y el titulo se quedan. */
+function PorConstruir({ et, dice }) {
+  return html`<main class="lienzo">
+    <div class="titulo-fila"><div>
+      <h1>${et}</h1>
+      <p class="hallazgo">${dice}</p>
+    </div></div>
+    <section class="panel">
+      <div class="panel-cab"><h2>${et}</h2></div>
+      <p class="vacio">Se construye después de que ENVIAR esté en producción.</p>
+    </section>
+  </main>`;
+}
+
+function Pantalla({ error, children }) {
+  return html`<main class="lienzo">
+    <div class="titulo-fila"><div><h1>SINAV</h1></div></div>
+    <section class="panel">
+      <div class="panel-cab"><h2>No se pudo abrir</h2></div>
+      <div class="error-bloque"><p><b>${error}</b></p>${children}</div>
+    </section>
+  </main>`;
+}
+
+function App() {
+  const [inicio, setInicio] = useState(null);
+  const [error, setError] = useState('');
+  const [vista, setVista] = useState('enviar');
+  const [logo, setLogo] = useState('');
+
+  useEffect(() => {
+    llamar('apiInicio')
+      .then((d) => { if (d.error) setError(d.error); setInicio(d); })
+      .catch((e) => setError(String(e && e.message ? e.message : e)));
+    llamar('apiLogo').then(setLogo).catch(() => setLogo(''));
+  }, []);
+
+  if (error && (!inicio || !inicio.filas)) {
+    return html`<div class="armazon"><div /><${Pantalla} error=${error} /></div>`;
+  }
+
+  if (!inicio) {
+    return html`<div class="armazon">
+      <div class="lateral"><div class="marca-bloque"><${Logo} fuente=${logo} />
+        <p class="producto">SINAV</p>
+        <p class="alcance">Impuestos territoriales</p></div></div>
+      <main class="lienzo">
+        <div class="titulo-fila"><div>
+          <h1>Enviar</h1>
+          <p class="hallazgo"><${Hueso} ancho="420px" /></p>
+        </div></div>
+        <section class="panel">
+          <div class="panel-cab"><h2>Obligaciones por enviar</h2></div>
+          <table><${Huesos} filas=${3} /></table>
+        </section>
+      </main>
+    </div>`;
+  }
+
+  const modo = (inicio.config && inicio.config.modo) || 'PRUEBA';
+
+  return html`<div class="armazon">
+    <${Lateral} yo=${inicio.yo} modo=${modo} vista=${vista} alCambiar=${setVista}
+      conteos=${inicio.conteos} logo=${logo} />
+    ${vista === 'enviar'
+      ? html`<${Enviar} inicio=${inicio} />`
+      : vista === 'respuestas'
+        ? html`<${PorConstruir} et="Respuestas"
+            dice="Las ya enviadas, quién respondió y el sellado que volvió. Arriba, lo que no ha respondido y está por vencerse." />`
+        : vista === 'alertas'
+          ? html`<${PorConstruir} et="Alertas"
+              dice="Qué vence, qué está en rojo y los números: vencen en 4 días o menos, vencidas sin evidencia, porcentaje con evidencia completa." />`
+          : vista === 'asignacion'
+            ? html`<${PorConstruir} et="Asignación"
+                dice="Obligaciones sin responsable y asignación masiva por municipio o impuesto." />`
+            : html`<${PorConstruir} et="Configuración"
+                dice="Las hojas CONFIG y USUARIOS desde la aplicación, sin abrir el libro." />`}
+  </div>`;
+}
+
+ReactDOM.createRoot(document.getElementById('raiz')).render(html`<${App} />`);
+</script>

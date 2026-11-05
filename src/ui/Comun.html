@@ -1,0 +1,142 @@
+<script>
+/* ===========================================================================
+   SINAV · lo compartido: el puente al servidor, formatos y piezas de interfaz.
+   React 18 + htm desde CDN. Sin paso de compilacion, sin Babel en el navegador.
+   =========================================================================== */
+
+const { createElement, useState, useEffect, useMemo, useRef, useCallback } = React;
+const html = htm.bind(createElement);
+
+/** google.script.run es por callbacks: aqui queda como promesa. */
+function llamar(fn, ...args) {
+  return new Promise((ok, mal) => {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn](...args);
+  });
+}
+
+/* ---------- formatos ------------------------------------------------------- */
+
+/** Cuanto falta, siempre diciendo contra que. Nunca un "+4" solo. */
+function textoDias(dias) {
+  if (dias === null || dias === undefined) return 'sin fecha';
+  if (dias === 0) return 'vence hoy';
+  if (dias === 1) return 'en 1 día';
+  if (dias > 1) return 'en ' + dias + ' días';
+  if (dias === -1) return 'hace 1 día';
+  return 'hace ' + Math.abs(dias) + ' días';
+}
+
+function pesos(v) {
+  if (v === null || v === undefined || v === '') return null;
+  return '$' + Number(v).toLocaleString('es-CO', {
+    minimumFractionDigits: 0, maximumFractionDigits: 0
+  });
+}
+
+const ETIQUETA_ESTADO = {
+  PENDIENTE: 'Pendiente',
+  LISTA: 'Lista',
+  ENVIADA: 'Enviada',
+  RESPONDIDA: 'Respondida',
+  REVISADA: 'Revisada',
+  APROBADA: 'Aprobada',
+  DEVUELTA: 'Devuelta',
+  SIN_EVIDENCIA: 'Sin evidencia',
+  REBOTADO: 'Rebotado'
+};
+
+/* ---------- piezas --------------------------------------------------------- */
+
+/** Un solo juego de iconos: trazo de 1.5px, 16px, sin relleno. */
+function Icono({ nombre }) {
+  const trazos = {
+    enviar: 'M3 8.5 13.5 3 10 13.5 8 9.5z',
+    respuestas: 'M13.5 11.5V9A2.5 2.5 0 0 0 11 6.5H3M5.5 4 3 6.5 5.5 9',
+    alertas: 'M8 2.5v1.2M8 2.5a4 4 0 0 1 4 4v3l1.2 2H2.8L4 9.5v-3a4 4 0 0 1 4-4zM6.5 13a1.6 1.6 0 0 0 3 0',
+    asignacion: 'M10.5 13.5v-1a2.5 2.5 0 0 0-2.5-2.5H4.5A2.5 2.5 0 0 0 2 12.5v1M6.25 7.5a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5zM14 13.5v-1a2.5 2.5 0 0 0-1.9-2.4M10.5 3.1a2.25 2.25 0 0 1 0 4.3',
+    configuracion: 'M2.5 5h11M2.5 11h11M6 2.8v4.4M10.5 8.8v4.4',
+    subir: 'M8 11V3M5 6l3-3 3 3M3 12.5h10',
+    recargar: 'M13 8a5 5 0 1 1-1.6-3.7M13 2.5V5h-2.5'
+  };
+  return html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d=${trazos[nombre]}
+    stroke-linecap="round" stroke-linejoin="round" /></svg>`;
+}
+
+/**
+ * El color de la pildora dice el ESTADO, no la urgencia: la urgencia ya esta
+ * en la fecha de vencimiento. Una marca por significado.
+ */
+const NIVEL_ESTADO = {
+  ENVIADA: 'aldia',
+  RESPONDIDA: 'aldia',
+  REVISADA: 'aldia',
+  APROBADA: 'aldia',
+  DEVUELTA: 'porvencer',
+  SIN_EVIDENCIA: 'vencido',
+  REBOTADO: 'vencido'
+};
+
+/** La identidad nunca va solo por color: la pildora lleva su palabra. */
+function Pildora({ estado }) {
+  return html`<span class=${'pildora ' + (NIVEL_ESTADO[estado] || '')}>
+    ${ETIQUETA_ESTADO[estado] || estado}</span>`;
+}
+
+/**
+ * La cadena de evidencia: soporte, envio, respuesta, sellado.
+ * Es el elemento que solo tiene SINAV, y se lee igual en las tres pestanas.
+ */
+function Cadena({ cadena, trabada }) {
+  const hitos = [
+    ['soporte', 'soporte'],
+    ['envio', 'envío'],
+    ['respuesta', 'respuesta de la oficina'],
+    ['sellado', 'sellado']
+  ];
+  const hechos = hitos.filter(([k]) => cadena[k]).map(([, n]) => n);
+  const faltan = hitos.filter(([k]) => !cadena[k]).map(([, n]) => n);
+  const rotulo = (hechos.length ? 'Ya: ' + hechos.join(', ') + '. ' : '') +
+                 (faltan.length ? 'Falta: ' + faltan.join(', ') + '.' : 'Cadena completa.');
+
+  let primeraVacia = hitos.findIndex(([k]) => !cadena[k]);
+  return html`<span class="cadena" role="img" aria-label=${rotulo} title=${rotulo}>
+    ${hitos.map(([k], i) => html`<i key=${k}
+      class=${cadena[k] ? 'hecho' : (trabada && i === primeraVacia ? 'trabada' : '')} />`)}
+  </span>`;
+}
+
+/** Una barra gris del tamano real del dato que va a llegar. */
+function Hueso({ ancho, alto, alDerecha }) {
+  const estilo = { width: ancho };
+  if (alto) estilo.height = alto;
+  if (alDerecha) estilo.marginLeft = 'auto';
+  return html`<span class=${'hueso' + (alto ? ' alto' : '')} style=${estilo} />`;
+}
+
+/** Cargando: el mismo armazon, sin que la pagina se mueva cuando llegue el dato. */
+function Huesos({ filas = 3 }) {
+  return html`<tbody>
+    ${Array.from({ length: filas }).map((_, i) => html`<tr key=${i}>
+      <td class="celda-casilla"><${Hueso} ancho="16px" alto="16px" /></td>
+      <td class="celda-mun">
+        <${Hueso} ancho="140px" alto="16px" />
+        <span class="sub"><${Hueso} ancho="90px" /></span></td>
+      <td class="celda-linea2"><${Hueso} ancho="80px" /></td>
+      <td class="celda-linea2"><${Hueso} ancho="60px" /></td>
+      <td class="celda-linea2 der"><${Hueso} ancho="76px" alDerecha=${true} /></td>
+      <td class="celda-linea2"><${Hueso} ancho="48px" /></td>
+      <td class="celda-linea2"><${Hueso} ancho="70px" alto="20px" /></td>
+      <td class="celda-accion der"><${Hueso} ancho="112px" alto="32px" alDerecha=${true} /></td>
+    </tr>`)}
+  </tbody>`;
+}
+
+/** El error va dentro del bloque que fallo, nunca como banda de pantalla completa. */
+function ErrorBloque({ mensaje, cuando, alReintentar }) {
+  return html`<div class="error-bloque">
+    <p><b>No se pudo cargar la lista.</b> ${mensaje}</p>
+    ${cuando ? html`<p class="sub">Lo último que se leyó bien fue a las ${cuando}.</p>` : null}
+    <button class="btn-texto" onClick=${alReintentar}>Intentar de nuevo</button>
+  </div>`;
+}
+</script>

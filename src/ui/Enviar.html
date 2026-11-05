@@ -1,0 +1,355 @@
+<script>
+/* ===========================================================================
+   SINAV · pestana ENVIAR.
+   La pregunta de esta pantalla: que puedo mandar hoy, y que me lo esta trabando.
+   =========================================================================== */
+
+const FILTROS = [
+  { id: 'todas', et: 'Por enviar', clave: 'todas' },
+  { id: 'sin_soporte', et: 'Sin soporte', clave: 'sin_soporte' },
+  { id: 'por_vencer', et: 'Vence en 4 días o menos', clave: 'por_vencer' },
+  { id: 'vencidas', et: 'Vencidas', clave: 'vencidas' }
+];
+
+function aplicaFiltro(o, filtro) {
+  if (filtro === 'sin_soporte') return !o.cadena.soporte;
+  if (filtro === 'por_vencer') return o.dias !== null && o.dias >= 0 && o.dias <= 4;
+  if (filtro === 'vencidas') return o.dias !== null && o.dias < 0;
+  return true;
+}
+
+/**
+ * El hallazgo del dia: lo que mas necesita atencion, no un resumen.
+ * Se arma como texto plano con las cifras en negrilla, para que los espacios
+ * entre pedazos no dependan de como htm corte las lineas.
+ */
+function Hallazgo({ filas, conteos }) {
+  if (!filas.length) {
+    return html`<p class="hallazgo">No tienes obligaciones por enviar.</p>`;
+  }
+  const vencidas = filas.filter((o) => o.dias !== null && o.dias < 0);
+  const trozos = [];
+  const cifra = (n) => html`<b key=${trozos.length}>${n}</b>`;
+
+  trozos.push(cifra(conteos.listas));
+  trozos.push(conteos.listas === 1 ? ' lista para enviar' : ' listas para enviar');
+
+  if (vencidas.length) {
+    const mas = vencidas.slice().sort((a, b) => a.dias - b.dias)[0];
+    trozos.push(', ');
+    trozos.push(cifra(vencidas.length));
+    trozos.push(vencidas.length === 1 ? ' ya vencida (' : ' ya vencidas (');
+    trozos.push(mas.municipio + ' ' + mas.impuesto + ', ' + textoDias(mas.dias) + ')');
+  }
+  trozos.push('. ');
+
+  if (conteos.sin_soporte) {
+    trozos.push(cifra(conteos.sin_soporte));
+    trozos.push(conteos.sin_soporte === 1
+      ? ' no tiene soporte, así que no se puede seleccionar.'
+      : ' no tienen soporte, así que no se pueden seleccionar.');
+  } else {
+    trozos.push('Todas tienen soporte.');
+  }
+  return html`<p class="hallazgo">${trozos}</p>`;
+}
+
+function TarjetasConteo({ conteos, filtro, alFiltrar }) {
+  return html`<fieldset class="conteos">
+    <legend>Filtrar la lista</legend>
+    ${FILTROS.map((f) => {
+      const n = conteos[f.clave] || 0;
+      return html`<button key=${f.id} type="button" class="conteo"
+        aria-pressed=${filtro === f.id}
+        onClick=${() => alFiltrar(f.id)}>
+        <span class="et">${f.et}</span>
+        <span class=${'vl' + (n === 0 ? ' cero' : '')}>${n}</span>
+      </button>`;
+    })}
+  </fieldset>`;
+}
+
+function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
+  const puedo = o.enviable && o.mia !== false;
+  const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
+
+  return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
+    <td class="celda-casilla">
+      <input type="checkbox" checked=${elegida} disabled=${!puedo}
+        aria-label=${puedo
+          ? 'Seleccionar ' + o.municipio + ' ' + o.impuesto + ' ' + o.periodo
+          : 'No se puede enviar: ' + o.motivo_no_enviable}
+        title=${puedo ? '' : 'No se puede enviar: ' + o.motivo_no_enviable}
+        onChange=${() => alElegir(o.id)} />
+    </td>
+
+    <td class="celda-mun">
+      <span class="ident">${o.municipio}</span>
+      <span class="sub">DANE ${o.cod_dane}${o.cod_oficina ? ' · oficina ' + o.cod_oficina : ''}</span>
+    </td>
+
+    <td class="celda-linea2">
+      <span>${o.impuesto}</span>
+      ${o.regimen && o.regimen !== 'GENERAL'
+        ? html`<span class="sub">${o.regimen.toLowerCase()}</span>` : null}
+    </td>
+
+    <td class="celda-linea2 num">
+      <span>${o.periodo}</span>
+      <span class="sub dato-tel">${o.periodicidad.toLowerCase()}</span>
+    </td>
+
+    <td class="celda-linea2 num der">
+      <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
+      <span class=${'sub ' + nivelVence}>${textoDias(o.dias)}</span>
+    </td>
+
+    <td class="celda-linea2">
+      <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
+    </td>
+
+    <td class="celda-linea2">
+      <${Pildora} estado=${o.estado} />
+    </td>
+
+    <td class="celda-accion der">
+      ${o.cadena.soporte
+        ? html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
+            <${Icono} nombre="subir" /> Reemplazar</button>`
+        : html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
+            <${Icono} nombre="subir" /> ${subiendo ? 'Subiendo…' : 'Subir soporte'}</button>`}
+    </td>
+  </tr>`;
+}
+
+function Enviar({ inicio }) {
+  const [datos, setDatos] = useState(inicio);
+  const [filtro, setFiltro] = useState('todas');
+  const [elegidas, setElegidas] = useState([]);
+  const [confirmando, setConfirmando] = useState(false);
+  const [trabajando, setTrabajando] = useState('');
+  const [subiendo, setSubiendo] = useState('');
+  const [resultado, setResultado] = useState(null);
+  const [fallo, setFallo] = useState('');
+  const archivo = useRef(null);
+  const destino = useRef('');
+
+  const filas = datos.filas || [];
+  const visibles = useMemo(() => filas.filter((o) => aplicaFiltro(o, filtro)),
+                           [filas, filtro]);
+
+  // los conteos se calculan de la vista, y se recalculan en cada cambio
+  const conteosVista = useMemo(() => {
+    const c = { todas: filas.length, sin_soporte: 0, por_vencer: 0, vencidas: 0, listas: 0 };
+    filas.forEach((o) => {
+      if (!o.cadena.soporte) c.sin_soporte++;
+      if (o.dias !== null && o.dias < 0) c.vencidas++;
+      else if (o.dias !== null && o.dias <= 4) c.por_vencer++;
+      if (o.enviable) c.listas++;
+    });
+    return c;
+  }, [filas]);
+
+  const elegiblesVisibles = visibles.filter((o) => o.enviable);
+  const elegidasVivas = elegidas.filter((id) =>
+    elegiblesVisibles.some((o) => o.id === id));
+
+  const recargar = useCallback(async () => {
+    setTrabajando('recargando');
+    setFallo('');
+    try {
+      const d = await llamar('apiListaEnviar');
+      setDatos((v) => Object.assign({}, v, d));
+      setElegidas([]);
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando('');
+    }
+  }, []);
+
+  function alternar(id) {
+    setElegidas((v) => v.indexOf(id) >= 0 ? v.filter((x) => x !== id) : v.concat([id]));
+    setResultado(null);
+    setConfirmando(false);
+  }
+
+  function todasOninguna() {
+    setElegidas(elegidasVivas.length === elegiblesVisibles.length
+      ? [] : elegiblesVisibles.map((o) => o.id));
+    setConfirmando(false);
+  }
+
+  /* -------- subir el soporte: un archivo por llamada -------- */
+
+  function pedirArchivo(id) {
+    destino.current = id;
+    archivo.current.value = '';
+    archivo.current.click();
+  }
+
+  async function recibirArchivo(ev) {
+    const f = ev.target.files && ev.target.files[0];
+    const id = destino.current;
+    if (!f || !id) return;
+
+    setSubiendo(id);
+    setFallo('');
+    try {
+      const datosBase64 = await new Promise((ok, mal) => {
+        const lector = new FileReader();
+        lector.onload = () => ok(String(lector.result).split(',')[1]);
+        lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+        lector.readAsDataURL(f);
+      });
+      await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64);
+      await recargar();
+      setResultado({ clase: '', titulo: 'Soporte cargado: ' + f.name, lineas: [] });
+    } catch (e) {
+      setFallo('No se pudo subir ' + f.name + '. ' + (e && e.message ? e.message : e));
+    } finally {
+      setSubiendo('');
+      destino.current = '';
+    }
+  }
+
+  /* -------- enviar -------- */
+
+  async function enviarYa() {
+    setConfirmando(false);
+    setTrabajando('enviando');
+    setFallo('');
+    try {
+      const r = await llamar('apiEnviar', elegidasVivas);
+      const lineas = r.rechazadas.map((x) => {
+        const o = filas.find((f) => f.id === x.id);
+        return (o ? o.municipio + ' ' + o.impuesto + ' ' + o.periodo : x.id) + ': ' + x.motivo;
+      });
+      if (r.pendientes.length) {
+        lineas.push(r.pendientes.length + ' quedaron pendientes por el límite de tiempo' +
+                    ' de Apps Script. Vuelve a seleccionarlas y envíalas.');
+      }
+      setResultado({
+        clase: r.enviadas.length ? '' : 'malo',
+        titulo: r.enviadas.length
+          ? r.enviadas.length + (r.enviadas.length === 1 ? ' correo enviado' : ' correos enviados') +
+            (r.modo === 'PRUEBA' ? ' a tu propia bandeja (modo prueba)' : '')
+          : 'No se envió ninguno',
+        lineas: lineas
+      });
+      setDatos((v) => Object.assign({}, v, { cuota: r.cuota }));
+      await recargar();
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando('');
+    }
+  }
+
+  const modo = (datos.config && datos.config.modo) || 'PRUEBA';
+  const destinatarios = elegidasVivas.reduce((n, id) => {
+    const o = filas.find((f) => f.id === id);
+    return n + (o ? String(o.correo_oficina || '').split(',').filter(Boolean).length : 0);
+  }, 0);
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Enviar</h1>
+        <${Hallazgo} filas=${filas} conteos=${conteosVista} />
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn" onClick=${recargar} disabled=${!!trabajando}>
+          <${Icono} nombre="recargar" />
+          ${trabajando === 'recargando' ? 'Actualizando…' : 'Actualizar'}
+        </button>
+        <button class="btn btn-principal"
+          disabled=${!elegidasVivas.length || !!trabajando}
+          onClick=${() => setConfirmando(true)}>
+          ${trabajando === 'enviando'
+            ? 'Enviando…'
+            : 'Enviar seleccionadas (' + elegidasVivas.length + ')'}
+        </button>
+      </div>
+    </div>
+
+    <${TarjetasConteo} conteos=${conteosVista} filtro=${filtro}
+      alFiltrar=${(f) => { setFiltro(f); setConfirmando(false); }} />
+
+    ${confirmando ? html`<div class="confirmar" role="alert">
+      <p><b>${elegidasVivas.length}</b>
+        ${elegidasVivas.length === 1 ? ' correo' : ' correos'} con su declaración adjunta.
+        ${modo === 'PRUEBA'
+          ? ' En modo prueba llegan a tu bandeja, no a las oficinas.'
+          : ' Van a ' + destinatarios + ' destinatarios en las oficinas.'}</p>
+      <button class="btn btn-principal" onClick=${enviarYa}>Confirmar envío</button>
+      <button class="btn" onClick=${() => setConfirmando(false)}>Cancelar</button>
+    </div>` : null}
+
+    ${resultado ? html`<div class=${'resultado ' + resultado.clase} role="status">
+      <h2>${resultado.titulo}</h2>
+      ${resultado.lineas.length ? html`<ul>
+        ${resultado.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}
+      </ul>` : null}
+    </div>` : null}
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Obligaciones por enviar</h2>
+        <span class="total">${visibles.length} de ${filas.length}</span>
+        <span class="der">
+          ${datos.cuota ? datos.cuota.usada + ' de ' + datos.cuota.tope +
+            ' destinatarios usados hoy' : ''}
+          ${datos.generado ? ' · leído ' + datos.generado.slice(11) : ''}
+        </span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="celda-casilla">
+              <input type="checkbox"
+                checked=${!!elegiblesVisibles.length &&
+                          elegidasVivas.length === elegiblesVisibles.length}
+                disabled=${!elegiblesVisibles.length}
+                aria-label="Seleccionar todas las que se pueden enviar"
+                onChange=${todasOninguna} />
+            </th>
+            <th>Municipio</th>
+            <th>Impuesto</th>
+            <th class="num">Periodo</th>
+            <th class="num der">Vence</th>
+            <th>Evidencia</th>
+            <th>Estado</th>
+            <th class="der">Soporte</th>
+          </tr>
+        </thead>
+
+        ${trabajando === 'recargando' && !filas.length
+          ? html`<${Huesos} filas=${3} />`
+          : html`<tbody>
+              ${visibles.map((o) => html`<${Fila} key=${o.id} o=${o}
+                elegida=${elegidas.indexOf(o.id) >= 0}
+                subiendo=${subiendo === o.id}
+                alElegir=${alternar} alSubir=${pedirArchivo} />`)}
+            </tbody>`}
+      </table>
+
+      ${fallo ? html`<${ErrorBloque} mensaje=${fallo} cuando=${datos.generado
+        ? datos.generado.slice(11) : ''} alReintentar=${recargar} />` : null}
+
+      ${!fallo && !visibles.length ? html`<p class="vacio">
+        ${filas.length
+          ? 'Ninguna obligación cae en este filtro. Las otras ' + filas.length +
+            ' siguen en "Por enviar".'
+          : 'No hay obligaciones con requiere_envio = SI asignadas a ti.'}
+      </p>` : null}
+    </section>
+
+    <input ref=${archivo} type="file" onChange=${recibirArchivo}
+      style=${{ position: 'absolute', width: '1px', height: '1px', opacity: 0,
+                pointerEvents: 'none' }}
+      tabIndex="-1" aria-hidden="true" />
+  </main>`;
+}
+</script>
