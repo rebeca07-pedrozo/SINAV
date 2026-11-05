@@ -1,0 +1,198 @@
+<script>
+/* ===========================================================================
+   SINAV · pestana METRICAS (JEFE y ADMIN).
+   La pregunta de esta pantalla: donde esta parado el periodo y que espera por
+   mi. Elizabeth asigna y da el visto bueno, asi que manda la cola de revision
+   y la carga por persona, no el adorno.
+   =========================================================================== */
+
+/** Una cifra con su nombre escrito. Sin color: el color es de los estados. */
+function Tarjeta({ et, valor, sub, nivel }) {
+  return html`<div class=${'tarjeta' + (nivel ? ' ' + nivel : '')}>
+    <span class="et">${et}</span>
+    <span class="vl">${valor}</span>
+    ${sub ? html`<span class="sub">${sub}</span>` : null}
+  </div>`;
+}
+
+/** Un reparto: nombre, cuantas y una barra proporcional en gris. */
+function Reparto({ titulo, filas, tope, formato }) {
+  const max = tope || filas.reduce((m, f) => Math.max(m, f.cuantas), 0) || 1;
+  if (!filas.length) {
+    return html`<div class="reparto">
+      <h3>${titulo}</h3><p class="vacio">Sin datos.</p></div>`;
+  }
+  return html`<div class="reparto">
+    <h3>${titulo}</h3>
+    <table class="tabla-reparto">
+      <tbody>
+        ${filas.map((f) => html`<tr key=${f.clave}>
+          <td class="rep-et">${formato ? formato(f.clave) : f.clave}</td>
+          <td class="rep-barra">
+            <span class="barra" style=${{ width: Math.round((f.cuantas / max) * 100) + '%' }} />
+          </td>
+          <td class="rep-vl num der">${f.cuantas}</td>
+        </tr>`)}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function Metricas() {
+  const [datos, setDatos] = useState(null);
+  const [periodo, setPeriodo] = useState('');
+  const [fallo, setFallo] = useState('');
+  const [cargando, setCargando] = useState(false);
+
+  const cargar = useCallback(async (p) => {
+    setCargando(true);
+    setFallo('');
+    try {
+      const d = await llamar('apiMetricas', p || '');
+      setDatos(d);
+      setPeriodo(d.periodo || '');
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(''); }, [cargar]);
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Métricas</h1>
+        <p class="hallazgo">${fallo || html`<${Hueso} ancho="360px" />`}</p></div></div>
+      ${fallo ? html`<section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${() => cargar(periodo)} />
+      </section>` : null}
+    </main>`;
+  }
+
+  const m = datos.metricas;
+  const pago = m.pago;
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Métricas</h1>
+        <p class="hallazgo">
+          ${frase([
+            ...(m.esperan_revision
+              ? [m.esperan_revision,
+                 m.esperan_revision === 1
+                   ? ' obligación espera tu visto bueno. '
+                   : ' obligaciones esperan tu visto bueno. ']
+              : ['Nada espera tu visto bueno. ']),
+            ...(m.vencidas
+              ? [m.vencidas,
+                 (m.vencidas === 1 ? ' está vencida' : ' están vencidas') +
+                 (m.peor_vencida
+                   ? ' (la peor: ' + m.peor_vencida.municipio + ' ' +
+                     m.peor_vencida.impuesto + ', ' + textoDias(m.peor_vencida.dias) + ')'
+                   : '') + '. ']
+              : ['Ninguna vencida. ']),
+            'Cadena de evidencia completa en ',
+            m.pct_cadena_completa,
+            '%.'
+          ])}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <label class="campo campo-linea">
+          <span>Periodo</span>
+          <select value=${periodo} disabled=${cargando}
+            onChange=${(e) => cargar(e.target.value)}>
+            <option value="">Todos los periodos</option>
+            ${datos.periodos.map((p) => html`<option key=${p} value=${p}>${p}</option>`)}
+          </select>
+        </label>
+        <button class="btn" onClick=${() => cargar(periodo)} disabled=${cargando}>
+          <${Icono} nombre="recargar" /> ${cargando ? 'Actualizando…' : 'Actualizar'}
+        </button>
+      </div>
+    </div>
+
+    <div class="tarjetas">
+      <${Tarjeta} et="Obligaciones" valor=${m.total}
+        sub=${periodo ? 'en ' + periodo : 'en todos los periodos'} />
+      <${Tarjeta} et="Esperan visto bueno" valor=${m.esperan_revision}
+        sub="en estado Respondida" nivel=${m.esperan_revision ? 'porvencer' : ''} />
+      <${Tarjeta} et="Vencidas" valor=${m.vencidas}
+        sub="el vencimiento no se reinicia" nivel=${m.vencidas ? 'vencido' : ''} />
+      <${Tarjeta} et="Vencen en ≤4 días" valor=${m.por_vencer}
+        nivel=${m.por_vencer ? 'porvencer' : ''} />
+      <${Tarjeta} et="Evidencia completa" valor=${m.pct_cadena_completa + '%'}
+        sub=${m.cadena_completa + ' de ' + m.total}
+        nivel=${m.pct_cadena_completa >= 80 ? 'aldia'
+          : (m.pct_cadena_completa >= 40 ? 'porvencer' : 'vencido')} />
+      <${Tarjeta} et="Sin soporte" valor=${m.sin_soporte}
+        sub="no se pueden enviar" nivel=${m.sin_soporte ? 'porvencer' : ''} />
+      <${Tarjeta} et="Sin valor liquidado" valor=${m.sin_valor}
+        sub="falta digitalizar" />
+      <${Tarjeta} et="Valor liquidado" valor=${pesos(m.valor_total) || '$0'}
+        sub="suma de lo ya liquidado" />
+    </div>
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Dónde se paga</h2>
+        <span class="total">${pago.oficina.cuantas + pago.pagaduria.cuantas} con pagador definido</span>
+      </div>
+      <p class="hallazgo hallazgo-form">
+        Quién paga y con qué se paga son dos datos distintos. El primero viene
+        del calendario; el segundo lo escriben los profesionales a mano cuando
+        saben cómo se pagó, así que un "sin dato" aquí es trabajo pendiente, no
+        un error.
+      </p>
+      <div class="dos-columnas">
+        <div class="bloque-pago">
+          <h3>En las oficinas</h3>
+          <p class="cifra-pago">${pago.oficina.cuantas}
+            <span class="sub">${pesos(pago.oficina.valor) || '$0'}</span></p>
+          <${Reparto} titulo="Forma de pago" filas=${pago.oficina.por_forma}
+            formato=${bonito} />
+        </div>
+        <div class="bloque-pago">
+          <h3>En pagaduría</h3>
+          <p class="cifra-pago">${pago.pagaduria.cuantas}
+            <span class="sub">${pesos(pago.pagaduria.valor) || '$0'}</span></p>
+          <${Reparto} titulo="Forma de pago" filas=${pago.pagaduria.por_forma}
+            formato=${bonito} />
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-cab"><h2>Carga por persona</h2></div>
+      <${Reparto} titulo="Obligaciones por responsable" filas=${m.por_responsable}
+        formato=${(c) => c === '(sin dato)' ? 'Sin responsable asignado' : c} />
+    </section>
+
+    <section class="panel">
+      <div class="panel-cab"><h2>Cómo está repartido</h2></div>
+      <div class="dos-columnas">
+        <${Reparto} titulo="Por estado" filas=${m.por_estado}
+          formato=${(c) => ETIQUETA_ESTADO[c] || bonito(c)} />
+        <${Reparto} titulo="Por impuesto" filas=${m.por_impuesto} />
+      </div>
+      <div class="dos-columnas">
+        <${Reparto} titulo="Por municipio" filas=${m.por_municipio.slice(0, 12)} />
+        <${Reparto} titulo="Por periodo" filas=${m.por_periodo} />
+      </div>
+      ${m.por_municipio.length > 12 ? html`<p class="sub">
+        Se muestran los 12 municipios con más obligaciones, de ${m.por_municipio.length}.
+      </p>` : null}
+    </section>
+
+    ${fallo ? html`<section class="panel">
+      <${ErrorBloque} mensaje=${fallo} alReintentar=${() => cargar(periodo)} />
+    </section>` : null}
+
+    <p class="sub pie-lienzo">
+      ${datos.generado ? 'Leído a las ' + datos.generado.slice(11) : ''}
+    </p>
+  </main>`;
+}
+</script>

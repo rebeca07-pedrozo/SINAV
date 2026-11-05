@@ -7,8 +7,12 @@
 
 const VISTAS = [
   { id: 'enviar', et: 'Enviar', icono: 'enviar', grupo: 'trabajo', lista: true },
+  { id: 'carga', et: 'Carga masiva', icono: 'subir', grupo: 'trabajo' },
+  { id: 'campos', et: 'Digitalizar', icono: 'campos', grupo: 'trabajo' },
   { id: 'respuestas', et: 'Respuestas', icono: 'respuestas', grupo: 'trabajo' },
   { id: 'alertas', et: 'Alertas', icono: 'alertas', grupo: 'trabajo' },
+  { id: 'metricas', et: 'Métricas', icono: 'metricas', grupo: 'admin',
+    permiso: 'puedeVerMetricas' },
   { id: 'asignacion', et: 'Asignación', icono: 'asignacion', grupo: 'admin',
     permiso: 'puedeAsignar' },
   { id: 'configuracion', et: 'Configuración', icono: 'configuracion', grupo: 'admin',
@@ -62,7 +66,7 @@ function Lateral({ yo, modo, vista, alCambiar, conteos, logo }) {
 
     <div class="pie-lateral">
       <p class="persona"><b>${yo.nombre}</b>
-        <span>${yo.rol.toLowerCase()}</span>
+        <span>${yo.perfil || yo.rol.toLowerCase()}</span>
         <span class="correo" title=${yo.correo}>${yo.correo}</span></p>
       ${modo === 'PRUEBA' ? html`<p class="aviso-modo">
         <b>Modo prueba</b>Los correos llegan a tu bandeja, no a las oficinas.
@@ -93,6 +97,29 @@ function Pantalla({ error, children }) {
       <div class="error-bloque"><p><b>${error}</b></p>${children}</div>
     </section>
   </main>`;
+}
+
+/** El ruteo. Una entrada por vista: con ocho, la cadena de ternarios ya no se leia. */
+function Vista({ vista, inicio }) {
+  if (vista === 'enviar') return html`<${Enviar} inicio=${inicio} />`;
+  if (vista === 'carga') return html`<${Carga} />`;
+  if (vista === 'campos') return html`<${Campos} />`;
+  if (vista === 'metricas') return html`<${Metricas} />`;
+
+  if (vista === 'respuestas') {
+    return html`<${PorConstruir} et="Respuestas"
+      dice="Las ya enviadas, quién respondió y el sellado que volvió. Arriba, lo que no ha respondido y está por vencerse." />`;
+  }
+  if (vista === 'alertas') {
+    return html`<${PorConstruir} et="Alertas"
+      dice="Qué vence, qué está en rojo y los números: vencen en 4 días o menos, vencidas sin evidencia, porcentaje con evidencia completa." />`;
+  }
+  if (vista === 'asignacion') {
+    return html`<${PorConstruir} et="Asignación"
+      dice="Obligaciones sin responsable y asignación masiva por municipio o impuesto." />`;
+  }
+  return html`<${PorConstruir} et="Configuración"
+    dice="Las hojas CONFIG y USUARIOS desde la aplicación, sin abrir el libro." />`;
 }
 
 function App() {
@@ -135,19 +162,7 @@ function App() {
   return html`<div class="armazon">
     <${Lateral} yo=${inicio.yo} modo=${modo} vista=${vista} alCambiar=${setVista}
       conteos=${inicio.conteos} logo=${logo} />
-    ${vista === 'enviar'
-      ? html`<${Enviar} inicio=${inicio} />`
-      : vista === 'respuestas'
-        ? html`<${PorConstruir} et="Respuestas"
-            dice="Las ya enviadas, quién respondió y el sellado que volvió. Arriba, lo que no ha respondido y está por vencerse." />`
-        : vista === 'alertas'
-          ? html`<${PorConstruir} et="Alertas"
-              dice="Qué vence, qué está en rojo y los números: vencen en 4 días o menos, vencidas sin evidencia, porcentaje con evidencia completa." />`
-          : vista === 'asignacion'
-            ? html`<${PorConstruir} et="Asignación"
-                dice="Obligaciones sin responsable y asignación masiva por municipio o impuesto." />`
-            : html`<${PorConstruir} et="Configuración"
-                dice="Las hojas CONFIG y USUARIOS desde la aplicación, sin abrir el libro." />`}
+    <${Vista} vista=${vista} inicio=${inicio} />
   </div>`;
 }
 

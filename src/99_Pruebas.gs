@@ -24,6 +24,10 @@ function pruebas() {
   pruebasSinSoporte(esIgual);
   pruebasNormalizacionVaria(esIgual);
   pruebasTransiciones(esIgual);
+  pruebasRoles(esIgual);
+  pruebasPago(esIgual);
+  pruebasCargaMasiva(esIgual);
+  pruebasMetricas(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -193,4 +197,221 @@ function pruebasTransiciones(esIgual) {
   esIgual('no se repite el mismo estado',
           validarPaso({ estado: ESTADO.LISTA, soporte_id: '1Ab' },
                       ESTADO.LISTA, {}, ROL.ADMIN).ok, false);
+}
+
+/**
+ * Roles: el rol decide permisos, asi que un valor mal escrito en la hoja no
+ * puede convertirse en un rol valido por accidente.
+ */
+function pruebasRoles(esIgual) {
+  esIgual('rol PROFESIONAL', normalizarRol('PROFESIONAL'), 'PROFESIONAL');
+  esIgual('rol en minusculas', normalizarRol('profesional'), 'PROFESIONAL');
+  esIgual('rol con espacio', normalizarRol(' Jefe '), 'JEFE');
+  esIgual('JEFA tambien es JEFE', normalizarRol('JEFA'), 'JEFE');
+  esIgual('ADMINISTRADOR es ADMIN', normalizarRol('Administrador'), 'ADMIN');
+  esIgual('rol con acento', normalizarRol('Profesiónal'), 'PROFESIONAL');
+  esIgual('rol mal escrito no pasa', normalizarRol('Profecional'), '');
+  esIgual('rol vacio no pasa', normalizarRol(''), '');
+  esIgual('rol nulo no revienta', normalizarRol(null), '');
+  esIgual('un rol inventado no se cuela', normalizarRol('SUPERADMIN'), '');
+
+  esIgual('area MUNICIPALES', normalizarArea('municipales'), 'MUNICIPALES');
+  esIgual('area con acento y espacio', normalizarArea(' Municipáles '), 'MUNICIPALES');
+  esIgual('area que no existe', normalizarArea('NACIONALES'), '');
+
+  esIgual('nivel I', normalizarNivel('I'), 'I');
+  esIgual('nivel en minusculas', normalizarNivel('ii'), 'II');
+  esIgual('nivel como numero', normalizarNivel('3'), 'III');
+  esIgual('nivel desde "Profesional I"', normalizarNivel('Profesional I'), 'I');
+  esIgual('la raya es sin nivel', normalizarNivel('-'), '');
+  esIgual('IV no es un nivel', normalizarNivel('IV'), '');
+
+  // activo: solo un NO explicito bloquea
+  esIgual('activo SI', esActivo('SI'), true);
+  esIgual('activo vacio cuenta como activo', esActivo(''), true);
+  esIgual('activo NO bloquea', esActivo('NO'), false);
+  esIgual('activo no bloquea en minusculas', esActivo('no'), false);
+  esIgual('activo Inactivo bloquea', esActivo('Inactivo'), false);
+
+  esIgual('nombre desde correo', nombreDesdeCorreo('maria.lopez@davivienda.com'),
+          'Maria Lopez');
+  esIgual('perfil del profesional',
+          perfilTexto({ rol: 'PROFESIONAL', nivel: 'I', area: 'MUNICIPALES' }),
+          'Profesional-I de municipales');
+  esIgual('perfil del jefe sin nivel',
+          perfilTexto({ rol: 'JEFE', nivel: '', area: 'MUNICIPALES' }),
+          'Jefe de municipales');
+  esIgual('perfil sin rol', perfilTexto({ rol: '', nivel: '', area: '' }), 'sin rol');
+}
+
+/**
+ * El pago son dos preguntas distintas: QUIEN paga y COMO se paga.
+ * Antes vivian en una sola columna, asi que la migracion tiene que repartir
+ * bien los valores viejos sin inventar ninguno.
+ */
+function pruebasPago(esIgual) {
+  esIgual('paga_quien OFICINA', normPagaQuien('OFICINA'), 'OFICINA');
+  esIgual('paga_quien PAGADURIA con acento', normPagaQuien('Pagaduría'), 'PAGADURIA');
+  esIgual('paga_quien vacio cae a OFICINA', normPagaQuien(''), 'OFICINA');
+  esIgual('PSE no es un pagador', normPagaQuien('PSE'), 'OFICINA');
+
+  esIgual('forma_pago PSE', normFormaPago('PSE'), 'PSE');
+  esIgual('forma_pago transferencia', normFormaPago('transferencia'), 'TRANSFERENCIA');
+  esIgual('forma_pago abreviada', normFormaPago('Transf.'), 'TRANSFERENCIA');
+  esIgual('forma_pago EFECTIVO', normFormaPago('efectivo'), 'EFECTIVO');
+  esIgual('PAGADURIA no es una forma de pago', normFormaPago('PAGADURIA'), '');
+  esIgual('forma_pago vacia se queda vacia', normFormaPago(''), '');
+
+  // una fila vieja con medio_pago = PSE se tiene que repartir en las dos columnas
+  var base = {
+    cod_dane: '76001', municipio: 'Cali', impuesto: 'ICA', periodo: '2026-B5',
+    periodicidad: 'Bimestral', vencimiento: '2026-11-01'
+  };
+  var con = function (extra) {
+    var o = {};
+    Object.keys(base).forEach(function (k) { o[k] = base[k]; });
+    Object.keys(extra).forEach(function (k) { o[k] = extra[k]; });
+    return normObligacion(o).fila;
+  };
+
+  esIgual('medio_pago PSE -> paga_quien OFICINA',
+          con({ medio_pago: 'PSE' }).paga_quien, 'OFICINA');
+  esIgual('medio_pago PSE -> forma_pago PSE',
+          con({ medio_pago: 'PSE' }).forma_pago, 'PSE');
+  esIgual('medio_pago PAGADURIA -> paga_quien PAGADURIA',
+          con({ medio_pago: 'PAGADURIA' }).paga_quien, 'PAGADURIA');
+  esIgual('medio_pago PAGADURIA no inventa forma_pago',
+          con({ medio_pago: 'PAGADURIA' }).forma_pago, '');
+  esIgual('las columnas nuevas mandan sobre la vieja',
+          con({ medio_pago: 'PSE', paga_quien: 'PAGADURIA',
+                forma_pago: 'TRANSFERENCIA' }).paga_quien, 'PAGADURIA');
+  esIgual('forma_pago explicita gana',
+          con({ medio_pago: 'PSE', forma_pago: 'EFECTIVO' }).forma_pago, 'EFECTIVO');
+
+  esIgual('tipo_presentacion VIRTUAL', normTipoPresentacion('virtual'), 'VIRTUAL');
+  esIgual('tipo_presentacion por defecto OFICINA', normTipoPresentacion(''), 'OFICINA');
+
+  // el correo va a las oficinas: no puede decir "undefined" ni "Pagaduria"
+  esIgual('el correo nombra quien paga y con que',
+          textoPago({ paga_quien: 'OFICINA', forma_pago: 'PSE' }), 'Oficina (PSE)');
+  esIgual('sin forma de pago no inventa parentesis',
+          textoPago({ paga_quien: 'PAGADURIA', forma_pago: '' }), 'Pagaduría');
+  esIgual('pagaduria lleva tilde en el correo',
+          textoPago({ paga_quien: 'PAGADURIA' }).indexOf('í') > 0, true);
+  esIgual('una fila sin pago no escribe undefined',
+          textoPago({}), 'sin definir');
+  esIgual('un valor que no esta en el enum no se cuela',
+          textoPago({ paga_quien: 'BASURA' }), 'sin definir');
+}
+
+/**
+ * Carga masiva: emparejar un PDF con la obligacion equivocada es el error mas
+ * caro de todo SINAV, porque se descubre cuando la oficina recibe la
+ * declaracion de otro municipio. Asi que aqui se prueba que cuando hay duda,
+ * NO se elige: se devuelve 'varios' o 'ninguno'.
+ */
+function pruebasCargaMasiva(esIgual) {
+  var leer = leerNombreArchivo;
+
+  esIgual('lee oficina e impuesto',
+          [leer('0742 RETEICA 2026-11.pdf').cod_oficina,
+           leer('0742 RETEICA 2026-11.pdf').impuesto,
+           leer('0742 RETEICA 2026-11.pdf').periodo],
+          ['0742', 'RETEICA', '2026-11']);
+  esIgual('AUTORRET gana sobre RETEICA',
+          leer('Declaracion AUTORRETEICA 0742 2026-11.pdf').impuesto, 'AUTORRETEICA');
+  esIgual('AUTORRETENCION ICA tambien es AUTORRETEICA',
+          leer('MEDELLIN AUTORRETENCION ICA 0742 2026.pdf').impuesto, 'AUTORRETEICA');
+  esIgual('RTEICA abreviado', leer('RTEICA_0851_202611.pdf').impuesto, 'RETEICA');
+  esIgual('periodo pegado sin guion', leer('RTEICA_0851_202611.pdf').periodo, '2026-11');
+  esIgual('ICA sola no se confunde con RETEICA',
+          leer('0304-ICA-2026-B5.pdf').impuesto, 'ICA');
+  esIgual('periodo bimestral', leer('0304-ICA-2026-B5.pdf').periodo, '2026-B5');
+  esIgual('exogena', leer('exogena 1234 2026.pdf').impuesto, 'EXOGENA');
+  esIgual('el anio no se confunde con la oficina',
+          leer('exogena 1234 2026.pdf').cod_oficina, '1234');
+  esIgual('oficina de 3 digitos se rellena a 4',
+          leer('oficina 851 reteica.pdf').cod_oficina, '0851');
+  esIgual('un nombre sin datos no inventa oficina',
+          leer('declaracion firmada.pdf').cod_oficina, '');
+  esIgual('un nombre sin datos no inventa impuesto',
+          leer('declaracion firmada.pdf').impuesto, '');
+
+  var cand = [
+    { id: 'A', cod_oficina: '0742', impuesto: 'RETEICA' },
+    { id: 'B', cod_oficina: '0742', impuesto: 'AUTORRETEICA' },
+    { id: 'C', cod_oficina: '0851', impuesto: 'RETEICA' }
+  ];
+  var par = function (nombre) { return emparejarArchivo(leer(nombre), cand); };
+
+  esIgual('oficina + impuesto da uno solo', par('0742 RETEICA x.pdf').estado, 'listo');
+  esIgual('y es el correcto', par('0742 RETEICA x.pdf').id, 'A');
+  esIgual('solo oficina deja dos: no elige',
+          par('0742 declaracion.pdf').estado, 'varios');
+  esIgual('cuando hay varios no devuelve id',
+          par('0742 declaracion.pdf').id, '');
+  esIgual('pero si ofrece las opciones',
+          par('0742 declaracion.pdf').opciones, ['A', 'B']);
+  esIgual('una oficina que no existe no empareja',
+          par('9999 RETEICA.pdf').estado, 'ninguno');
+  esIgual('un nombre vacio de datos no empareja a ciegas',
+          par('declaracion.pdf').estado, 'varios');
+  esIgual('sin candidatas no hay emparejamiento',
+          emparejarArchivo(leer('0742 RETEICA.pdf'), []).estado, 'ninguno');
+  esIgual('impuesto que no esta entre las candidatas',
+          par('0742 EXOGENA.pdf').estado, 'ninguno');
+}
+
+/** Metricas: una division por cero en un tablero vacio tumba la pantalla. */
+function pruebasMetricas(esIgual) {
+  var fila = function (extra) {
+    var o = { estado: ESTADO.LISTA, impuesto: 'RETEICA', municipio: 'Medellín',
+              responsable: 'a@d.com', periodo: '2026-11', dias: 5, valor: 1000,
+              paga_quien: 'OFICINA', forma_pago: 'PSE',
+              cadena: { soporte: true, envio: false, respuesta: false, sellado: false } };
+    Object.keys(extra || {}).forEach(function (k) { o[k] = extra[k]; });
+    return o;
+  };
+
+  var vacio = agruparMetricas([]);
+  esIgual('metricas vacias: total 0', vacio.total, 0);
+  esIgual('metricas vacias no dividen por cero', vacio.pct_cadena_completa, 0);
+  esIgual('metricas vacias no tienen peor vencida', vacio.peor_vencida, null);
+  esIgual('metricas de null no revientan', agruparMetricas(null).total, 0);
+
+  var tres = [
+    fila({ dias: -6, estado: ESTADO.APROBADA, valor: 2000,
+           cadena: { soporte: true, envio: true, respuesta: true, sellado: true } }),
+    fila({ dias: 2, estado: ESTADO.RESPONDIDA }),
+    fila({ dias: 12, valor: '', paga_quien: 'PAGADURIA', forma_pago: '',
+           cadena: { soporte: false, envio: false, respuesta: false, sellado: false } })
+  ];
+  var r = agruparMetricas(tres);
+  esIgual('cuenta las vencidas', r.vencidas, 1);
+  esIgual('cuenta las que vencen en 4 dias o menos', r.por_vencer, 1);
+  esIgual('una vencida no cuenta tambien como por vencer',
+          r.vencidas + r.por_vencer, 2);
+  esIgual('cuenta las que esperan revision', r.esperan_revision, 1);
+  esIgual('cuenta la cadena completa', r.cadena_completa, 1);
+  esIgual('porcentaje de cadena completa', r.pct_cadena_completa, 33);
+  esIgual('cuenta las que no tienen soporte', r.sin_soporte, 1);
+  esIgual('cuenta las que no tienen valor', r.sin_valor, 1);
+  esIgual('suma el valor saltando los vacios', r.valor_total, 3000);
+  esIgual('un valor vacio no se suma como NaN', isNaN(r.valor_total), false);
+
+  esIgual('separa lo que se paga en oficina', r.pago.oficina.cuantas, 2);
+  esIgual('separa lo que se paga en pagaduria', r.pago.pagaduria.cuantas, 1);
+  esIgual('desglosa la forma de pago de la oficina',
+          r.pago.oficina.por_forma, [{ clave: 'PSE', cuantas: 2 }]);
+  esIgual('una forma de pago vacia se declara sin dato',
+          r.pago.pagaduria.por_forma, [{ clave: '(sin dato)', cuantas: 1 }]);
+  esIgual('la peor vencida es la de mas dias',
+          r.peor_vencida.dias, -6);
+
+  esIgual('contarPor ordena de mayor a menor',
+          contarPor([{ x: 'a' }, { x: 'b' }, { x: 'b' }], 'x'),
+          [{ clave: 'b', cuantas: 2 }, { clave: 'a', cuantas: 1 }]);
+  esIgual('contarPor nombra lo vacio', contarPor([{ x: '' }], 'x'),
+          [{ clave: '(sin dato)', cuantas: 1 }]);
+  esIgual('sumarValor de vacio es 0', sumarValor([]), 0);
 }

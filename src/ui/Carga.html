@@ -1,0 +1,296 @@
+<script>
+/* ===========================================================================
+   SINAV · pestana CARGA MASIVA.
+   La pregunta de esta pantalla: tengo cuarenta PDF, a que obligacion va cada
+   uno. Nada se sube hasta que el emparejamiento este revisado.
+   =========================================================================== */
+
+const ETIQUETA_PAREO = {
+  listo: 'Emparejado',
+  varios: 'Elige cuál',
+  ninguno: 'Sin pareja'
+};
+const NIVEL_PAREO = { listo: 'aldia', varios: 'porvencer', ninguno: 'vencido' };
+
+/** Cada archivo del lote, con la obligacion que le toca. */
+function FilaCarga({ it, candidatas, alAsignar, resultado }) {
+  const opciones = it.opciones && it.opciones.length
+    ? candidatas.filter((c) => it.opciones.indexOf(c.id) >= 0)
+    : candidatas;
+
+  const etiquetaCand = (c) =>
+    c.municipio + ' · ' + c.impuesto + (c.regimen && c.regimen !== 'GENERAL'
+      ? ' ' + c.regimen.toLowerCase() : '') +
+    ' · oficina ' + (c.cod_oficina || '—') +
+    (c.tiene_soporte ? ' (ya tiene soporte)' : '');
+
+  return html`<tr>
+    <td class="celda-mun">
+      <span class="ident">${it.archivo}</span>
+      <span class="sub">
+        ${it.leido.cod_oficina ? 'oficina ' + it.leido.cod_oficina : 'sin oficina en el nombre'}
+        · ${it.leido.impuesto || 'sin impuesto en el nombre'}
+      </span>
+    </td>
+
+    <td class="celda-linea2">
+      <span class=${'pildora ' + (NIVEL_PAREO[it.estado] || '')}>
+        ${ETIQUETA_PAREO[it.estado] || it.estado}</span>
+      ${it.aviso ? html`<span class="sub porvencer">${it.aviso}</span>` : null}
+    </td>
+
+    <td class="celda-ancha">
+      <select value=${it.id || ''} aria-label=${'Obligación para ' + it.archivo}
+        onChange=${(e) => alAsignar(it.archivo, e.target.value)}>
+        <option value="">— no cargar este archivo —</option>
+        ${opciones.map((c) => html`<option key=${c.id} value=${c.id}>
+          ${etiquetaCand(c)}</option>`)}
+      </select>
+      ${it.motivo && !it.id ? html`<span class="sub">${it.motivo}</span>` : null}
+    </td>
+
+    <td class="celda-linea2 der">
+      ${resultado
+        ? html`<span class=${'sub ' + (resultado.ok ? 'aldia' : 'vencido')}>
+            ${resultado.ok ? 'cargado' : resultado.motivo}</span>`
+        : html`<span class="sub">—</span>`}
+    </td>
+  </tr>`;
+}
+
+function Carga() {
+  const [periodos, setPeriodos] = useState(null);
+  const [periodo, setPeriodo] = useState('');
+  const [plan, setPlan] = useState(null);
+  const [asignado, setAsignado] = useState({});
+  const [subiendo, setSubiendo] = useState(false);
+  const [progreso, setProgreso] = useState({ hechos: 0, total: 0, actual: '' });
+  const [resultados, setResultados] = useState({});
+  const [fallo, setFallo] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
+  const archivos = useRef(null);
+  const guardados = useRef({});
+
+  useEffect(() => {
+    llamar('apiPeriodosCarga')
+      .then((ps) => {
+        setPeriodos(ps);
+        if (ps.length) setPeriodo(ps[0].periodo);
+      })
+      .catch((e) => setFallo(String(e && e.message ? e.message : e)));
+  }, []);
+
+  async function recibirArchivos(ev) {
+    const lista = Array.from(ev.target.files || []);
+    if (!lista.length) return;
+
+    guardados.current = {};
+    lista.forEach((f) => { guardados.current[f.name] = f; });
+
+    setFallo('');
+    setResultados({});
+    setConfirmando(false);
+    try {
+      const p = await llamar('apiCargaPlan', periodo, lista.map((f) => f.name));
+      setPlan(p);
+      const inicial = {};
+      p.plan.forEach((it) => { inicial[it.archivo] = it.id || ''; });
+      setAsignado(inicial);
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }
+
+  function pedirArchivos() {
+    if (!periodo) return;
+    archivos.current.value = '';
+    archivos.current.click();
+  }
+
+  const aCargar = plan
+    ? plan.plan.filter((it) => asignado[it.archivo] && guardados.current[it.archivo])
+    : [];
+
+  // dos archivos al mismo destino: lo marcamos antes de subir nada
+  const repetidos = (() => {
+    const vistos = {}, malos = [];
+    aCargar.forEach((it) => {
+      const id = asignado[it.archivo];
+      if (vistos[id]) malos.push(id);
+      vistos[id] = true;
+    });
+    return malos;
+  })();
+
+  async function subirTodo() {
+    setConfirmando(false);
+    setSubiendo(true);
+    setFallo('');
+    const salida = {};
+    setProgreso({ hechos: 0, total: aCargar.length, actual: '' });
+
+    for (let i = 0; i < aCargar.length; i++) {
+      const it = aCargar[i];
+      const f = guardados.current[it.archivo];
+      const id = asignado[it.archivo];
+      setProgreso({ hechos: i, total: aCargar.length, actual: it.archivo });
+      try {
+        const datosBase64 = await new Promise((ok, mal) => {
+          const lector = new FileReader();
+          lector.onload = () => ok(String(lector.result).split(',')[1]);
+          lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+          lector.readAsDataURL(f);
+        });
+        await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64);
+        salida[it.archivo] = { ok: true, motivo: '' };
+      } catch (e) {
+        salida[it.archivo] = { ok: false, motivo: String(e && e.message ? e.message : e) };
+      }
+      setResultados(Object.assign({}, salida));
+    }
+
+    setProgreso({ hechos: aCargar.length, total: aCargar.length, actual: '' });
+    setSubiendo(false);
+
+    // se vuelve a planear para que se vea el estado nuevo de cada obligacion
+    try {
+      const p = await llamar('apiCargaPlan', periodo, Object.keys(guardados.current));
+      setPlan(p);
+    } catch (e) { /* el resultado de la carga ya esta a la vista */ }
+  }
+
+  const hechos = Object.keys(resultados);
+  const buenos = hechos.filter((k) => resultados[k].ok).length;
+  const malos = hechos.length - buenos;
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Carga masiva</h1>
+        <p class="hallazgo">
+          Suelta los PDF de un periodo y SINAV propone a qué obligación va cada
+          uno, leyendo del nombre del archivo el código de oficina y el
+          impuesto. <b>Nada se sube</b> hasta que revises el emparejamiento.
+        </p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="panel-cab"><h2>1 · El periodo</h2></div>
+      <div class="tira-controles">
+        <label class="campo">
+          <span>Periodo que vas a cargar</span>
+          <select value=${periodo} onChange=${(e) => {
+            setPeriodo(e.target.value); setPlan(null); setResultados({});
+          }} disabled=${subiendo}>
+            ${(periodos || []).map((p) => html`<option key=${p.periodo} value=${p.periodo}>
+              ${p.periodo} (${p.cuantas} obligaciones)</option>`)}
+          </select>
+        </label>
+
+        <button class="btn" onClick=${pedirArchivos}
+          disabled=${!periodo || subiendo || !periodos}>
+          <${Icono} nombre="subir" /> Elegir los PDF
+        </button>
+
+        ${periodos && !periodos.length ? html`<span class="sub">
+          No tienes obligaciones asignadas, así que no hay periodo que cargar.
+        </span>` : null}
+      </div>
+      <p class="hallazgo hallazgo-form">
+        El periodo se elige aquí y no se saca del nombre del archivo: código de
+        oficina más impuesto no identifica una obligación, porque la misma
+        oficina y el mismo impuesto vuelven cada periodo.
+      </p>
+    </section>
+
+    ${fallo ? html`<section class="panel">
+      <${ErrorBloque} mensaje=${fallo} alReintentar=${() => setFallo('')} />
+    </section>` : null}
+
+    ${plan ? html`<section class="panel">
+      <div class="panel-cab">
+        <h2>2 · El emparejamiento</h2>
+        <span class="total">${plan.resumen.archivos} archivos ·
+          ${plan.resumen.candidatas} obligaciones en ${plan.periodo}</span>
+        <span class="der">
+          ${plan.resumen.listos} emparejados ·
+          ${plan.resumen.varios} por elegir ·
+          ${plan.resumen.ninguno} sin pareja
+        </span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Pareo</th>
+            <th>Obligación</th>
+            <th class="der">Carga</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${plan.plan.map((it) => html`<${FilaCarga} key=${it.archivo} it=${
+            Object.assign({}, it, { id: asignado[it.archivo] || '' })}
+            candidatas=${plan.candidatas}
+            resultado=${resultados[it.archivo]}
+            alAsignar=${(archivo, id) =>
+              setAsignado((v) => Object.assign({}, v, { [archivo]: id }))} />`)}
+        </tbody>
+      </table>
+
+      ${repetidos.length ? html`<div class="error-bloque">
+        <p><b>Dos archivos apuntan a la misma obligación.</b>
+          Solo quedaría el último, y el otro se perdería sin aviso. Cambia uno
+          de los dos antes de cargar.</p>
+      </div>` : null}
+
+      <div class="pie-form">
+        <button class="btn btn-principal"
+          disabled=${!aCargar.length || subiendo || repetidos.length > 0}
+          onClick=${() => setConfirmando(true)}>
+          ${subiendo
+            ? 'Cargando ' + (progreso.hechos + 1) + ' de ' + progreso.total + '…'
+            : 'Cargar ' + aCargar.length +
+              (aCargar.length === 1 ? ' soporte' : ' soportes')}
+        </button>
+        <span class="sub">
+          ${plan.plan.length - aCargar.length > 0
+            ? (plan.plan.length - aCargar.length) + ' archivos quedan fuera.'
+            : 'Todos los archivos tienen destino.'}
+        </span>
+      </div>
+
+      ${confirmando ? html`<div class="confirmar" role="alert">
+        <p><b>${aCargar.length}</b>
+          ${aCargar.length === 1 ? ' soporte' : ' soportes'} a Drive, en la
+          carpeta de su municipio y su impuesto. Las que estaban en PENDIENTE
+          pasan a LISTA y quedan disponibles para enviar.</p>
+        <button class="btn btn-principal" onClick=${subirTodo}>Confirmar carga</button>
+        <button class="btn" onClick=${() => setConfirmando(false)}>Cancelar</button>
+      </div>` : null}
+
+      ${subiendo && progreso.actual ? html`<p class="hallazgo hallazgo-form">
+        Subiendo <b>${progreso.actual}</b> (${progreso.hechos + 1} de ${progreso.total}).
+        Un archivo por llamada: no cierres la pestaña.
+      </p>` : null}
+
+      ${hechos.length && !subiendo ? html`<div class=${'resultado ' +
+        (malos ? 'malo' : '')} role="status">
+        <h2>${buenos} ${buenos === 1 ? 'soporte cargado' : 'soportes cargados'}${
+          malos ? ' · ' + malos + ' con error' : ''}</h2>
+        ${malos ? html`<ul>
+          ${hechos.filter((k) => !resultados[k].ok).map((k) => html`<li key=${k}>
+            ${k}: ${resultados[k].motivo}</li>`)}
+        </ul>` : null}
+      </div>` : null}
+    </section>` : null}
+
+    <input ref=${archivos} type="file" multiple accept=".pdf,application/pdf"
+      onChange=${recibirArchivos}
+      style=${{ position: 'absolute', width: '1px', height: '1px', opacity: 0,
+                pointerEvents: 'none' }}
+      tabIndex="-1" aria-hidden="true" />
+  </main>`;
+}
+</script>

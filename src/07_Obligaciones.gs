@@ -30,8 +30,14 @@ function decorar(o) {
     correo_oficina: String(o.correo_oficina),
     responsable: String(o.responsable),
     tipo_presentacion: String(o.tipo_presentacion),
-    medio_pago: String(o.medio_pago),
+    paga_quien: String(o.paga_quien || ''),
+    forma_pago: String(o.forma_pago || ''),
     requiere_envio: String(o.requiere_envio),
+    exogena: String(o.exogena || ''),
+    incluye_retencion: String(o.incluye_retencion || ''),
+    presentacion_fecha: fechaTexto(o.presentacion_fecha),
+    revision_fecha: fechaTexto(o.revision_fecha),
+    revision_por: String(o.revision_por || ''),
     estado: String(o.estado),
     valor: o.valor === '' || o.valor === null ? null : Number(o.valor),
     nota: String(o.nota || ''),
@@ -95,12 +101,21 @@ function conteos(lista) {
 
 /** Una sola llamada al abrir la app: quien soy, la configuracion y las filas. */
 function apiInicio() {
+  // alta automatica: el correo que entra por primera vez queda inscrito con el
+  // rol por defecto. El JEFE y el ADMIN se siguen poniendo a mano en USUARIOS.
+  asegurarAlta();
+
   var q = apiYo();
   if (!q.correo) {
     return { error: 'No se pudo identificar tu cuenta. Entra con tu correo corporativo.' };
   }
   if (!q.activo) {
-    return { yo: q, error: 'Tu correo no está activo en la hoja USUARIOS. Pídele a un ADMIN que te inscriba.' };
+    return { yo: q, error: 'Tu correo está en la hoja USUARIOS con activo = NO. ' +
+      'Alguien lo desactivó a propósito; pídele a un ADMIN que lo revise.' };
+  }
+  if (!q.rol) {
+    return { yo: q, error: 'Tu fila en USUARIOS no tiene un rol que SINAV reconozca. ' +
+      'Los valores válidos son PROFESIONAL, JEFE y ADMIN.' };
   }
 
   var lista = listarParaEnviar();
