@@ -1,0 +1,2103 @@
+<!-- AUTOGENERADO por build.js a partir de src/ui/*.html.
+     No editar a mano: edita src/ y corre `npm run build`. -->
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SINAV</title>
+  <base target="_top">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&display=swap">
+  <!-- ===== ui/Estilos.html ===== -->
+<style>
+/* ===========================================================================
+   SINAV · tokens y estilos. Estilo achromatic-ledger (seed 162057062).
+   El cromo no lleva color. El color es de los estados y de los vencimientos.
+   =========================================================================== */
+
+:root {
+  /* cromo, sin color */
+  --fondo:      #f7f5f5;   /* el lienzo: un gris con una pizca de rojo */
+  --superficie: #ffffff;
+  --realce:     #f9f9f9;
+  --activo:     #ededed;
+  --borde:      #e8e8e8;
+  --regla:      #f2f2f2;
+  --control:    #d1d5db;
+  --tinta:      #111111;
+  --apagado:    #5f6368;
+
+  /* marca: solo el boton principal y el logo */
+  --marca:        #e30518;
+  --marca-oscura: #b00510;
+
+  /* estado: a proposito distintos a los de marca */
+  --vencido:   #b00510;
+  --porvencer: #b06c00;
+  --aldia:     #1f7a4d;
+  --neutro:    #7a756b;
+
+  /* los mismos tonos, un paso mas oscuros, para cuando llevan palabras */
+  --vencido-texto:   #b00510;
+  --porvencer-texto: #8a5500;
+  --aldia-texto:     #1f7a4d;
+
+  /* tintes palidos para las pildoras */
+  --vencido-fondo:   #fce9e9;
+  --porvencer-fondo: #fff6e0;
+  --aldia-fondo:     #e6f2eb;
+
+  --r-tarjeta: 8px;
+  --r-control: 6px;
+  --r-chip:    4px;
+
+  --gap:        16px;
+  --pad:        20px;
+  --canaleta:   32px;
+  --lateral:    240px;
+  --fila:       48px;
+  --alto-ctrl:  32px;
+  --nav-fila:   34px;
+
+  --fuente: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --fs-titulo: 24px;
+  --fs-seccion: 16px;
+  --fs-cuerpo: 14px;
+  --fs-chico:  13px;
+  --fs-meta:   12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font: 400 var(--fs-cuerpo)/20px var(--fuente);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* las superficies que no dibujamos tambien llevan el diseno */
+::selection { background: #f7d7d9; color: var(--tinta); }
+:focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; border-radius: 3px; }
+::placeholder { color: var(--apagado); opacity: 1; }
+* { scrollbar-color: var(--control) transparent; scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--control); border-radius: 5px;
+  border: 3px solid var(--fondo); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* ---------- el armazon: plano abierto, lateral sobre el propio fondo -------- */
+
+.armazon { display: grid; grid-template-columns: var(--lateral) 1fr; min-height: 100vh; }
+
+.lateral {
+  display: flex; flex-direction: column;
+  padding: var(--canaleta) 0 var(--gap);
+  border-right: 1px solid var(--borde);
+}
+
+.marca-bloque { padding: 0 var(--gap) 0 var(--canaleta); margin-bottom: 28px; }
+.logo { display: block; height: 28px; width: auto; }
+.logo-hueco {
+  height: 28px; width: 132px;
+  border: 1px dashed var(--control); border-radius: var(--r-chip);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--fs-meta); color: var(--apagado); letter-spacing: .04em;
+}
+.producto { margin: 10px 0 0; font-size: var(--fs-seccion); font-weight: 600; }
+.alcance { margin: 1px 0 0; font-size: var(--fs-meta); color: var(--apagado); }
+
+.grupo-nav {
+  margin: 0 0 8px; padding: 0 var(--canaleta);
+  font-size: var(--fs-meta); color: var(--apagado);
+}
+.grupo-nav + .grupo-nav { margin-top: 28px; }
+
+.nav { list-style: none; margin: 0 0 4px; padding: 0 12px; }
+.nav li { margin: 0; }
+.nav button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  height: var(--nav-fila); padding: 0 10px; margin: 0;
+  border: 0; border-radius: var(--r-control);
+  background: none; color: var(--tinta);
+  font: 400 var(--fs-cuerpo)/1 var(--fuente); text-align: left; cursor: pointer;
+}
+.nav button:hover { background: var(--realce); }
+.nav button[aria-current="page"] { background: var(--activo); }
+.nav svg { flex: none; width: 16px; height: 16px; stroke: var(--apagado);
+  stroke-width: 1.5; fill: none; }
+.nav button[aria-current="page"] svg { stroke: var(--tinta); }
+.nav .cuenta {
+  margin-left: auto; font-size: var(--fs-meta); color: var(--apagado);
+  font-variant-numeric: tabular-nums;
+}
+
+.pie-lateral { margin-top: auto; padding: var(--gap) var(--canaleta) 0; }
+.persona { font-size: var(--fs-chico); }
+.persona b { font-weight: 500; }
+.persona span { display: block; color: var(--apagado); font-size: var(--fs-meta); }
+.persona .correo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.aviso-modo {
+  margin: 12px 0 0; padding: 7px 9px;
+  background: var(--porvencer-fondo); border: 1px solid #f3d99a;
+  border-radius: var(--r-chip);
+  font-size: var(--fs-meta); line-height: 16px; color: var(--porvencer-texto);
+}
+.aviso-modo b { display: block; font-weight: 600; }
+
+/* ---------- el lienzo ------------------------------------------------------- */
+
+.lienzo { padding: var(--canaleta); max-width: 1320px; }
+
+.titulo-fila {
+  display: flex; align-items: flex-start; gap: var(--gap);
+  margin: 0 0 var(--canaleta);
+}
+h1 { margin: 0; font-size: var(--fs-titulo); font-weight: 600; letter-spacing: -.01em; }
+.hallazgo { margin: 6px 0 0; font-size: var(--fs-cuerpo); color: var(--apagado); max-width: 70ch; }
+.hallazgo b { color: var(--tinta); font-weight: 500; }
+.acciones-titulo { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* ---------- controles ------------------------------------------------------- */
+
+.btn {
+  height: var(--alto-ctrl); padding: 0 14px;
+  border: 1px solid var(--control); border-radius: var(--r-control);
+  background: var(--superficie); color: var(--tinta);
+  font: 500 var(--fs-chico)/1 var(--fuente); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.btn:hover { background: var(--realce); }
+.btn:active { background: var(--activo); }
+.btn[disabled] { cursor: not-allowed; color: var(--apagado); background: var(--realce);
+  border-color: var(--borde); }
+
+/* el unico relleno de marca de la pantalla */
+.btn-principal {
+  background: var(--marca); border-color: var(--marca); color: #fff;
+  font-weight: 600; padding: 0 16px;
+}
+.btn-principal:hover { background: var(--marca-oscura); border-color: var(--marca-oscura); }
+.btn-principal:active { background: var(--marca-oscura); }
+.btn-principal[disabled] {
+  background: var(--activo); border-color: var(--borde); color: var(--apagado);
+}
+
+.btn-secundario { background: var(--activo); border-color: var(--activo); }
+.btn-secundario:hover { background: #e2e2e2; border-color: #e2e2e2; }
+
+.btn-texto {
+  height: auto; padding: 2px 0; border: 0; background: none;
+  color: var(--tinta); font: 500 var(--fs-chico)/18px var(--fuente);
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: var(--control); cursor: pointer;
+}
+.btn-texto:hover { text-decoration-color: var(--tinta); }
+.btn-texto[disabled] { color: var(--apagado); cursor: not-allowed; text-decoration: none; }
+
+/* ---------- tarjetas de conteo que filtran --------------------------------- */
+
+.conteos {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  margin: 0 0 var(--gap); padding: 0; border: 0;
+}
+.conteos legend { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; }
+
+.conteo {
+  min-height: 61px; padding: 12px; text-align: left;
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--r-tarjeta); cursor: pointer; font-family: var(--fuente);
+  transition: border-color 150ms ease;
+}
+.conteo:hover { border-color: var(--control); }
+.conteo[aria-pressed="true"] { border: 1.5px solid var(--tinta); padding: 11.5px; }
+.conteo .et { display: block; font-size: var(--fs-chico); color: var(--apagado); }
+.conteo .vl {
+  display: block; margin-top: 3px;
+  font-size: var(--fs-seccion); font-weight: 600; color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+.conteo .vl.cero { color: var(--apagado); font-weight: 400; }
+
+/* ---------- la barra de confirmacion --------------------------------------- */
+
+.confirmar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 var(--gap); padding: 12px 14px;
+  background: var(--superficie); border: 1px solid var(--tinta);
+  border-radius: var(--r-tarjeta); font-size: var(--fs-cuerpo);
+}
+.confirmar p { margin: 0; }
+.confirmar .btn:first-of-type { margin-left: auto; }
+
+.resultado {
+  margin: 0 0 var(--gap); padding: 12px 14px;
+  border-radius: var(--r-tarjeta); font-size: var(--fs-cuerpo);
+  background: var(--superficie); border: 1px solid var(--borde);
+}
+.resultado h2 { margin: 0 0 4px; font-size: var(--fs-cuerpo); font-weight: 600; }
+.resultado ul { margin: 6px 0 0; padding-left: 18px; color: var(--apagado); }
+.resultado.malo { border-color: #f3c9c9; }
+
+/* ---------- la tabla ------------------------------------------------------- */
+
+.panel {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--r-tarjeta); overflow: hidden;
+}
+.panel-cab {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 14px var(--pad) 12px;
+}
+.panel-cab h2 { margin: 0; font-size: var(--fs-seccion); font-weight: 600; }
+.panel-cab .total { font-size: var(--fs-meta); color: var(--apagado);
+  font-variant-numeric: tabular-nums; }
+.panel-cab .der { margin-left: auto; font-size: var(--fs-meta); color: var(--apagado); }
+
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  padding: 0 10px 8px; text-align: left; vertical-align: bottom;
+  font-size: var(--fs-meta); font-weight: 400; color: var(--apagado);
+  border-bottom: 1px solid var(--borde); white-space: nowrap;
+}
+thead th:first-child { padding-left: var(--pad); }
+thead th:last-child { padding-right: var(--pad); }
+th.der, td.der { text-align: right; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+tbody td {
+  height: var(--fila); padding: 6px 10px; vertical-align: middle;
+  border-bottom: 1px solid var(--regla);
+}
+tbody td:first-child { padding-left: var(--pad); }
+tbody td:last-child { padding-right: var(--pad); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--realce); }
+tbody tr[data-elegida="si"] { background: var(--activo); }
+tbody tr[data-elegida="si"]:hover { background: var(--activo); }
+
+.celda-casilla { width: 44px; }
+input[type="checkbox"] {
+  width: 16px; height: 16px; margin: 0; accent-color: var(--tinta); cursor: pointer;
+}
+input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
+
+.ident { font-weight: 500; }
+.sub { display: block; margin-top: 2px; font-size: var(--fs-chico); color: var(--apagado);
+  font-variant-numeric: tabular-nums; }
+.sub.vencido { color: var(--vencido-texto); }
+.sub.porvencer { color: var(--porvencer-texto); }
+.sub.aldia { color: var(--aldia-texto); }
+
+.raya { color: var(--apagado); }
+
+/* la pildora de estado: tinte palido, texto oscuro del mismo tono, y la palabra */
+.pildora {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 20px; padding: 0 8px; border-radius: 10px;
+  font-size: var(--fs-meta); font-weight: 500; white-space: nowrap; flex: none;
+  background: var(--realce); color: var(--apagado);
+}
+.pildora::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--neutro); flex: none;
+}
+.pildora.vencido { background: var(--vencido-fondo); color: var(--vencido-texto); }
+.pildora.vencido::before { background: var(--vencido); }
+.pildora.porvencer { background: var(--porvencer-fondo); color: var(--porvencer-texto); }
+.pildora.porvencer::before { background: var(--porvencer); }
+.pildora.aldia { background: var(--aldia-fondo); color: var(--aldia-texto); }
+.pildora.aldia::before { background: var(--aldia); }
+
+/* la cadena de evidencia: los cuatro hitos que SINAV existe para cerrar */
+.cadena { display: inline-flex; gap: 3px; align-items: center; }
+.cadena i {
+  width: 9px; height: 9px; border-radius: 2px;
+  border: 1px solid var(--control); background: transparent; display: block;
+}
+.cadena i.hecho { background: var(--tinta); border-color: var(--tinta); }
+.cadena i.trabada { border-color: var(--vencido); border-width: 1.5px; }
+
+/* ---------- estados vacio, cargando y error -------------------------------- */
+
+.vacio {
+  margin: var(--gap) var(--pad) var(--pad);
+  padding: 14px; border: 1px dashed var(--control); border-radius: var(--r-tarjeta);
+  font-size: var(--fs-cuerpo); color: var(--apagado); text-align: center;
+}
+.hueso { display: block; height: 12px; border-radius: 3px; background: var(--activo); }
+.hueso.alto { height: 16px; }
+.error-bloque { margin: var(--gap) var(--pad) var(--pad); font-size: var(--fs-cuerpo); }
+.error-bloque p { margin: 0 0 8px; }
+.error-bloque b { color: var(--vencido-texto); }
+
+/* ---------- el telefono ---------------------------------------------------- */
+
+.menu-tel { display: none; }
+
+@media (max-width: 860px) {
+  /* align-content: start, o las filas automaticas se estiran y dejan un hueco */
+  .armazon { grid-template-columns: 1fr; align-content: start; }
+
+  .lateral {
+    position: sticky; top: 0; z-index: 10;
+    flex-direction: row; align-items: center; gap: 12px;
+    height: 48px; padding: 0 16px;
+    background: var(--fondo); border-right: 0; border-bottom: 1px solid var(--borde);
+  }
+  .marca-bloque { padding: 0; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .logo, .logo-hueco { height: 22px; }
+  .logo-hueco { width: 100px; }
+  .producto, .alcance { display: none; }
+  .grupo-nav, .pie-lateral { display: none; }
+  .nav { display: none; }
+
+  .menu-tel {
+    display: inline-flex; margin-left: auto;
+    height: 36px; padding: 0 12px; align-items: center;
+    border: 1px solid var(--control); border-radius: var(--r-control);
+    background: var(--superficie); font: 500 var(--fs-chico)/1 var(--fuente);
+    cursor: pointer;
+  }
+
+  .lateral[data-abierto="si"] {
+    position: fixed; inset: 0; height: 100vh; z-index: 30;
+    flex-direction: column; align-items: stretch; padding: 16px;
+    overflow: auto;
+  }
+  .lateral[data-abierto="si"] .nav,
+  .lateral[data-abierto="si"] .grupo-nav,
+  .lateral[data-abierto="si"] .pie-lateral { display: block; }
+  .lateral[data-abierto="si"] .nav { padding: 0; }
+  .lateral[data-abierto="si"] .nav button { height: 44px; }
+  .lateral[data-abierto="si"] .grupo-nav { padding: 0; }
+  .lateral[data-abierto="si"] .pie-lateral { padding: 16px 0 0; }
+  .lateral[data-abierto="si"] .producto { display: block; }
+
+  .lienzo { padding: 20px 16px 32px; }
+
+  .panel-cab { display: block; padding: 14px 16px 10px; }
+  .panel-cab h2 { margin-bottom: 3px; }
+  .panel-cab .total, .panel-cab .der { display: inline; margin: 0; }
+  .panel-cab .total::after { content: " · "; color: var(--control); }
+  .titulo-fila { flex-direction: column; }
+  .acciones-titulo { margin: 4px 0 0; width: 100%; }
+  .acciones-titulo .btn-principal { flex: 1; justify-content: center; }
+
+  .conteos { grid-template-columns: repeat(2, 1fr); }
+
+  /* la tabla se vuelve una lista de filas de dos lineas */
+  thead { display: none; }
+  table, tbody, td { display: block; }
+  tbody tr {
+    display: flex; flex-wrap: wrap; align-items: center; position: relative;
+    padding: 12px 16px; border-bottom: 1px solid var(--regla);
+  }
+  tbody td { height: auto; padding: 0; border: 0; }
+  .celda-mun { flex: 1 1 100%; }
+  td.celda-casilla { position: absolute; top: 14px; right: var(--pad); width: auto; }
+  td.celda-casilla input[type="checkbox"] { width: 22px; height: 22px; }
+  .celda-mun { padding-right: 40px !important; }
+
+  /* los campos bajan a la segunda linea; ninguno se elimina */
+  .celda-linea2 {
+    display: inline-flex !important; align-items: center; gap: 5px;
+    margin: 8px 14px 0 0; font-size: var(--fs-chico);
+    text-align: left !important; white-space: nowrap;
+  }
+  .celda-linea2 .sub { display: inline; margin: 0; }
+  .celda-linea2 .dato-tel { color: var(--apagado); }
+  /* la accion se va al extremo derecho de la linea en la que caiga */
+  .celda-accion { margin: 8px 0 0 auto; }
+  .celda-accion .btn { height: 40px; }
+}
+
+
+/* ===========================================================================
+   Pantallas nuevas: Digitalizar, Carga masiva y Metricas.
+   Mismas reglas: el cromo sin color, un borde o una sombra pero no los dos,
+   cifras tabulares, y cada estado con su palabra escrita al lado.
+   =========================================================================== */
+
+/* ---------- controles de formulario --------------------------------------- */
+
+.campo { display: block; }
+.campo > span {
+  display: block; margin-bottom: 4px;
+  font-size: var(--fs-meta); color: var(--apagado);
+}
+.campo > small {
+  display: block; margin-top: 4px;
+  font-size: var(--fs-meta); color: var(--apagado);
+}
+.campo.ancho { grid-column: 1 / -1; }
+
+.campo-linea { display: flex; align-items: center; gap: 8px; }
+.campo-linea > span { margin: 0; white-space: nowrap; }
+
+select, input[type="text"], input[type="date"], textarea {
+  width: 100%; min-height: var(--alto-ctrl); padding: 0 10px;
+  font: 400 var(--fs-cuerpo)/var(--alto-ctrl) var(--fuente);
+  color: var(--tinta); background: var(--superficie);
+  border: 1px solid var(--control); border-radius: var(--r-control);
+}
+textarea { padding: 7px 10px; line-height: 19px; resize: vertical; }
+input[type="text"].num { font-variant-numeric: tabular-nums; text-align: right; }
+
+select:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--tinta); outline-offset: 1px; border-color: var(--tinta);
+}
+select:disabled, input:disabled, textarea:disabled {
+  background: var(--realce); color: var(--apagado); cursor: not-allowed;
+}
+
+/* ---------- el formulario de digitalizacion -------------------------------- */
+
+.panel-form { margin: 0 0 var(--gap); }
+.hallazgo-form { padding: 0 var(--pad); max-width: 78ch; }
+
+.rejilla-campos {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px; padding: 14px var(--pad);
+}
+
+.pie-form {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 0 var(--pad) 16px;
+}
+.pie-form .sub { margin: 0; }
+
+/* cuantos datos le faltan a una fila: el numero y, al lado, cuales */
+.falta-chip {
+  display: inline-block; min-width: 18px; padding: 0 5px;
+  border-radius: var(--r-chip); text-align: center;
+  font-size: var(--fs-meta); font-weight: 500;
+  background: var(--porvencer-fondo); color: var(--porvencer-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+td.celda-ancha { padding: 8px 10px; min-width: 260px; vertical-align: middle; }
+
+.tira-controles {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  padding: 0 var(--pad) 4px;
+}
+.tira-controles .campo { min-width: 220px; }
+.tira-controles .sub { margin: 0 0 6px; }
+
+/* ---------- metricas ------------------------------------------------------- */
+
+.tarjetas {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px; margin: 0 0 var(--gap);
+}
+.tarjeta {
+  padding: 12px; background: var(--superficie);
+  border: 1px solid var(--borde); border-radius: var(--r-tarjeta);
+}
+.tarjeta .et { display: block; font-size: var(--fs-chico); color: var(--apagado); }
+.tarjeta .vl {
+  display: block; margin-top: 3px;
+  font-size: var(--fs-seccion); font-weight: 600; color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+.tarjeta .sub { margin-top: 2px; }
+/* el nivel tinta el borde izquierdo, no el relleno: el color sigue por debajo
+   del 1% de los pixeles y las alertas de verdad no se diluyen */
+.tarjeta.vencido { border-left: 3px solid var(--vencido); padding-left: 10px; }
+.tarjeta.porvencer { border-left: 3px solid var(--porvencer); padding-left: 10px; }
+.tarjeta.aldia { border-left: 3px solid var(--aldia); padding-left: 10px; }
+
+.dos-columnas {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0 var(--canaleta); padding: 0 var(--pad);
+}
+
+.reparto { padding: 0 0 14px; }
+.reparto h3 {
+  margin: 10px 0 6px; font-size: var(--fs-meta); font-weight: 400;
+  color: var(--apagado);
+}
+.reparto .vacio { padding: 6px 0; }
+
+.tabla-reparto td { padding: 4px 0; border: 0; font-size: var(--fs-cuerpo); }
+.tabla-reparto tr + tr td { border-top: 1px solid var(--regla); }
+.rep-et { color: var(--tinta); }
+.rep-barra { width: 45%; padding: 4px 10px !important; }
+.rep-vl { width: 48px; font-variant-numeric: tabular-nums; color: var(--tinta); }
+
+.barra {
+  display: block; height: 6px; min-width: 2px;
+  background: var(--activo); border-radius: var(--r-chip);
+}
+
+.bloque-pago { padding: 0 0 6px; }
+.bloque-pago h3 {
+  margin: 10px 0 2px; font-size: var(--fs-cuerpo); font-weight: 600;
+  color: var(--tinta);
+}
+.cifra-pago {
+  margin: 0; font-size: var(--fs-titulo); font-weight: 600; color: var(--tinta);
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.cifra-pago .sub { font-size: var(--fs-chico); font-weight: 400; }
+
+.pie-lienzo { margin: var(--gap) 0 0; }
+
+@media (max-width: 720px) {
+  .rejilla-campos { grid-template-columns: 1fr; }
+  .dos-columnas { grid-template-columns: 1fr; }
+  .rep-barra { width: 35%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+
+</head>
+<body>
+  <div id="raiz"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+
+  <!-- ===== ui/Comun.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · lo compartido: el puente al servidor, formatos y piezas de interfaz.
+   React 18 + htm desde CDN. Sin paso de compilacion, sin Babel en el navegador.
+   =========================================================================== */
+
+const { createElement, useState, useEffect, useMemo, useRef, useCallback } = React;
+const html = htm.bind(createElement);
+
+/** google.script.run es por callbacks: aqui queda como promesa. */
+function llamar(fn, ...args) {
+  return new Promise((ok, mal) => {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn](...args);
+  });
+}
+
+/* ---------- formatos ------------------------------------------------------- */
+
+/** Cuanto falta, siempre diciendo contra que. Nunca un "+4" solo. */
+function textoDias(dias) {
+  if (dias === null || dias === undefined) return 'sin fecha';
+  if (dias === 0) return 'vence hoy';
+  if (dias === 1) return 'en 1 día';
+  if (dias > 1) return 'en ' + dias + ' días';
+  if (dias === -1) return 'hace 1 día';
+  return 'hace ' + Math.abs(dias) + ' días';
+}
+
+function pesos(v) {
+  if (v === null || v === undefined || v === '') return null;
+  return '$' + Number(v).toLocaleString('es-CO', {
+    minimumFractionDigits: 0, maximumFractionDigits: 0
+  });
+}
+
+const ETIQUETA_ESTADO = {
+  PENDIENTE: 'Pendiente',
+  LISTA: 'Lista',
+  ENVIADA: 'Enviada',
+  RESPONDIDA: 'Respondida',
+  REVISADA: 'Revisada',
+  APROBADA: 'Aprobada',
+  DEVUELTA: 'Devuelta',
+  SIN_EVIDENCIA: 'Sin evidencia',
+  REBOTADO: 'Rebotado'
+};
+
+/**
+ * Como se escribe cada valor del enum en pantalla. Las siglas se quedan en
+ * mayuscula (PSE no es "Pse") y las palabras llevan su tilde, que el valor
+ * guardado va sin acentos a proposito.
+ */
+const ETIQUETA_VALOR = {
+  OFICINA: 'Oficina', PAGADURIA: 'Pagaduría', VIRTUAL: 'Virtual',
+  PSE: 'PSE', TRANSFERENCIA: 'Transferencia', EFECTIVO: 'Efectivo', OTRO: 'Otro',
+  MENSUAL: 'Mensual', BIMESTRAL: 'Bimestral', TRIMESTRAL: 'Trimestral',
+  CUATRIMESTRAL: 'Cuatrimestral', ANUAL: 'Anual',
+  SI: 'Sí', NO: 'No', REVISAR: 'Por revisar',
+  RETEICA: 'RETEICA', AUTORRETEICA: 'AUTORRETEICA', ICA: 'ICA', EXOGENA: 'EXÓGENA',
+  '(sin dato)': 'Sin dato'
+};
+
+/** El valor tal como se lee. Un dato que falta es una raya, no una cadena vacia. */
+function bonito(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  if (!s) return '—';
+  if (ETIQUETA_VALOR[s]) return ETIQUETA_VALOR[s];
+  return s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
+}
+
+/**
+ * Arma una frase mezclando cifras en negrilla y texto, sin que htm se coma los
+ * espacios entre pedazos. Es el mismo truco de la pestana ENVIAR: si se
+ * interpola directo en la plantilla, el salto de linea de la indentacion
+ * desaparece y queda "les faltaun dato".
+ */
+function frase(partes) {
+  return partes.map((x, i) =>
+    typeof x === 'number' ? html`<b key=${i}>${x}</b>` : x);
+}
+
+/* ---------- piezas --------------------------------------------------------- */
+
+/** Un solo juego de iconos: trazo de 1.5px, 16px, sin relleno. */
+function Icono({ nombre }) {
+  const trazos = {
+    enviar: 'M3 8.5 13.5 3 10 13.5 8 9.5z',
+    respuestas: 'M13.5 11.5V9A2.5 2.5 0 0 0 11 6.5H3M5.5 4 3 6.5 5.5 9',
+    alertas: 'M8 2.5v1.2M8 2.5a4 4 0 0 1 4 4v3l1.2 2H2.8L4 9.5v-3a4 4 0 0 1 4-4zM6.5 13a1.6 1.6 0 0 0 3 0',
+    asignacion: 'M10.5 13.5v-1a2.5 2.5 0 0 0-2.5-2.5H4.5A2.5 2.5 0 0 0 2 12.5v1M6.25 7.5a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5zM14 13.5v-1a2.5 2.5 0 0 0-1.9-2.4M10.5 3.1a2.25 2.25 0 0 1 0 4.3',
+    configuracion: 'M2.5 5h11M2.5 11h11M6 2.8v4.4M10.5 8.8v4.4',
+    subir: 'M8 11V3M5 6l3-3 3 3M3 12.5h10',
+    recargar: 'M13 8a5 5 0 1 1-1.6-3.7M13 2.5V5h-2.5',
+    campos: 'M3 3.5h10M3 8h10M3 12.5h6M11.5 11.5l1 1 2-2',
+    metricas: 'M2.5 13.5h11M4.5 11V7M8 11V3.5M11.5 11V9'
+  };
+  return html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d=${trazos[nombre]}
+    stroke-linecap="round" stroke-linejoin="round" /></svg>`;
+}
+
+/**
+ * El color de la pildora dice el ESTADO, no la urgencia: la urgencia ya esta
+ * en la fecha de vencimiento. Una marca por significado.
+ */
+const NIVEL_ESTADO = {
+  ENVIADA: 'aldia',
+  RESPONDIDA: 'aldia',
+  REVISADA: 'aldia',
+  APROBADA: 'aldia',
+  DEVUELTA: 'porvencer',
+  SIN_EVIDENCIA: 'vencido',
+  REBOTADO: 'vencido'
+};
+
+/** La identidad nunca va solo por color: la pildora lleva su palabra. */
+function Pildora({ estado }) {
+  return html`<span class=${'pildora ' + (NIVEL_ESTADO[estado] || '')}>
+    ${ETIQUETA_ESTADO[estado] || estado}</span>`;
+}
+
+/**
+ * La cadena de evidencia: soporte, envio, respuesta, sellado.
+ * Es el elemento que solo tiene SINAV, y se lee igual en las tres pestanas.
+ */
+function Cadena({ cadena, trabada }) {
+  const hitos = [
+    ['soporte', 'soporte'],
+    ['envio', 'envío'],
+    ['respuesta', 'respuesta de la oficina'],
+    ['sellado', 'sellado']
+  ];
+  const hechos = hitos.filter(([k]) => cadena[k]).map(([, n]) => n);
+  const faltan = hitos.filter(([k]) => !cadena[k]).map(([, n]) => n);
+  const rotulo = (hechos.length ? 'Ya: ' + hechos.join(', ') + '. ' : '') +
+                 (faltan.length ? 'Falta: ' + faltan.join(', ') + '.' : 'Cadena completa.');
+
+  let primeraVacia = hitos.findIndex(([k]) => !cadena[k]);
+  return html`<span class="cadena" role="img" aria-label=${rotulo} title=${rotulo}>
+    ${hitos.map(([k], i) => html`<i key=${k}
+      class=${cadena[k] ? 'hecho' : (trabada && i === primeraVacia ? 'trabada' : '')} />`)}
+  </span>`;
+}
+
+/** Una barra gris del tamano real del dato que va a llegar. */
+function Hueso({ ancho, alto, alDerecha }) {
+  const estilo = { width: ancho };
+  if (alto) estilo.height = alto;
+  if (alDerecha) estilo.marginLeft = 'auto';
+  return html`<span class=${'hueso' + (alto ? ' alto' : '')} style=${estilo} />`;
+}
+
+/** Cargando: el mismo armazon, sin que la pagina se mueva cuando llegue el dato. */
+function Huesos({ filas = 3 }) {
+  return html`<tbody>
+    ${Array.from({ length: filas }).map((_, i) => html`<tr key=${i}>
+      <td class="celda-casilla"><${Hueso} ancho="16px" alto="16px" /></td>
+      <td class="celda-mun">
+        <${Hueso} ancho="140px" alto="16px" />
+        <span class="sub"><${Hueso} ancho="90px" /></span></td>
+      <td class="celda-linea2"><${Hueso} ancho="80px" /></td>
+      <td class="celda-linea2"><${Hueso} ancho="60px" /></td>
+      <td class="celda-linea2 der"><${Hueso} ancho="76px" alDerecha=${true} /></td>
+      <td class="celda-linea2"><${Hueso} ancho="48px" /></td>
+      <td class="celda-linea2"><${Hueso} ancho="70px" alto="20px" /></td>
+      <td class="celda-accion der"><${Hueso} ancho="112px" alto="32px" alDerecha=${true} /></td>
+    </tr>`)}
+  </tbody>`;
+}
+
+/** El error va dentro del bloque que fallo, nunca como banda de pantalla completa. */
+function ErrorBloque({ mensaje, cuando, alReintentar }) {
+  return html`<div class="error-bloque">
+    <p><b>No se pudo cargar la lista.</b> ${mensaje}</p>
+    ${cuando ? html`<p class="sub">Lo último que se leyó bien fue a las ${cuando}.</p>` : null}
+    <button class="btn-texto" onClick=${alReintentar}>Intentar de nuevo</button>
+  </div>`;
+}
+</script>
+
+  <!-- ===== ui/Enviar.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · pestana ENVIAR.
+   La pregunta de esta pantalla: que puedo mandar hoy, y que me lo esta trabando.
+   =========================================================================== */
+
+const FILTROS = [
+  { id: 'todas', et: 'Por enviar', clave: 'todas' },
+  { id: 'sin_soporte', et: 'Sin soporte', clave: 'sin_soporte' },
+  { id: 'por_vencer', et: 'Vence en 4 días o menos', clave: 'por_vencer' },
+  { id: 'vencidas', et: 'Vencidas', clave: 'vencidas' }
+];
+
+function aplicaFiltro(o, filtro) {
+  if (filtro === 'sin_soporte') return !o.cadena.soporte;
+  if (filtro === 'por_vencer') return o.dias !== null && o.dias >= 0 && o.dias <= 4;
+  if (filtro === 'vencidas') return o.dias !== null && o.dias < 0;
+  return true;
+}
+
+/**
+ * El hallazgo del dia: lo que mas necesita atencion, no un resumen.
+ * Se arma como texto plano con las cifras en negrilla, para que los espacios
+ * entre pedazos no dependan de como htm corte las lineas.
+ */
+function Hallazgo({ filas, conteos }) {
+  if (!filas.length) {
+    return html`<p class="hallazgo">No tienes obligaciones por enviar.</p>`;
+  }
+  const vencidas = filas.filter((o) => o.dias !== null && o.dias < 0);
+  const trozos = [];
+  const cifra = (n) => html`<b key=${trozos.length}>${n}</b>`;
+
+  trozos.push(cifra(conteos.listas));
+  trozos.push(conteos.listas === 1 ? ' lista para enviar' : ' listas para enviar');
+
+  if (vencidas.length) {
+    const mas = vencidas.slice().sort((a, b) => a.dias - b.dias)[0];
+    trozos.push(', ');
+    trozos.push(cifra(vencidas.length));
+    trozos.push(vencidas.length === 1 ? ' ya vencida (' : ' ya vencidas (');
+    trozos.push(mas.municipio + ' ' + mas.impuesto + ', ' + textoDias(mas.dias) + ')');
+  }
+  trozos.push('. ');
+
+  if (conteos.sin_soporte) {
+    trozos.push(cifra(conteos.sin_soporte));
+    trozos.push(conteos.sin_soporte === 1
+      ? ' no tiene soporte, así que no se puede seleccionar.'
+      : ' no tienen soporte, así que no se pueden seleccionar.');
+  } else {
+    trozos.push('Todas tienen soporte.');
+  }
+  return html`<p class="hallazgo">${trozos}</p>`;
+}
+
+function TarjetasConteo({ conteos, filtro, alFiltrar }) {
+  return html`<fieldset class="conteos">
+    <legend>Filtrar la lista</legend>
+    ${FILTROS.map((f) => {
+      const n = conteos[f.clave] || 0;
+      return html`<button key=${f.id} type="button" class="conteo"
+        aria-pressed=${filtro === f.id}
+        onClick=${() => alFiltrar(f.id)}>
+        <span class="et">${f.et}</span>
+        <span class=${'vl' + (n === 0 ? ' cero' : '')}>${n}</span>
+      </button>`;
+    })}
+  </fieldset>`;
+}
+
+function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
+  const puedo = o.enviable && o.mia !== false;
+  const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
+
+  return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
+    <td class="celda-casilla">
+      <input type="checkbox" checked=${elegida} disabled=${!puedo}
+        aria-label=${puedo
+          ? 'Seleccionar ' + o.municipio + ' ' + o.impuesto + ' ' + o.periodo
+          : 'No se puede enviar: ' + o.motivo_no_enviable}
+        title=${puedo ? '' : 'No se puede enviar: ' + o.motivo_no_enviable}
+        onChange=${() => alElegir(o.id)} />
+    </td>
+
+    <td class="celda-mun">
+      <span class="ident">${o.municipio}</span>
+      <span class="sub">DANE ${o.cod_dane}${o.cod_oficina ? ' · oficina ' + o.cod_oficina : ''}</span>
+    </td>
+
+    <td class="celda-linea2">
+      <span>${o.impuesto}</span>
+      ${o.regimen && o.regimen !== 'GENERAL'
+        ? html`<span class="sub">${o.regimen.toLowerCase()}</span>` : null}
+    </td>
+
+    <td class="celda-linea2 num">
+      <span>${o.periodo}</span>
+      <span class="sub dato-tel">${o.periodicidad.toLowerCase()}</span>
+    </td>
+
+    <td class="celda-linea2 num der">
+      <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
+      <span class=${'sub ' + nivelVence}>${textoDias(o.dias)}</span>
+    </td>
+
+    <td class="celda-linea2">
+      <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
+    </td>
+
+    <td class="celda-linea2">
+      <${Pildora} estado=${o.estado} />
+    </td>
+
+    <td class="celda-accion der">
+      ${o.cadena.soporte
+        ? html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
+            <${Icono} nombre="subir" /> Reemplazar</button>`
+        : html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
+            <${Icono} nombre="subir" /> ${subiendo ? 'Subiendo…' : 'Subir soporte'}</button>`}
+    </td>
+  </tr>`;
+}
+
+function Enviar({ inicio }) {
+  const [datos, setDatos] = useState(inicio);
+  const [filtro, setFiltro] = useState('todas');
+  const [elegidas, setElegidas] = useState([]);
+  const [confirmando, setConfirmando] = useState(false);
+  const [trabajando, setTrabajando] = useState('');
+  const [subiendo, setSubiendo] = useState('');
+  const [resultado, setResultado] = useState(null);
+  const [fallo, setFallo] = useState('');
+  const archivo = useRef(null);
+  const destino = useRef('');
+
+  const filas = datos.filas || [];
+  const visibles = useMemo(() => filas.filter((o) => aplicaFiltro(o, filtro)),
+                           [filas, filtro]);
+
+  // los conteos se calculan de la vista, y se recalculan en cada cambio
+  const conteosVista = useMemo(() => {
+    const c = { todas: filas.length, sin_soporte: 0, por_vencer: 0, vencidas: 0, listas: 0 };
+    filas.forEach((o) => {
+      if (!o.cadena.soporte) c.sin_soporte++;
+      if (o.dias !== null && o.dias < 0) c.vencidas++;
+      else if (o.dias !== null && o.dias <= 4) c.por_vencer++;
+      if (o.enviable) c.listas++;
+    });
+    return c;
+  }, [filas]);
+
+  const elegiblesVisibles = visibles.filter((o) => o.enviable);
+  const elegidasVivas = elegidas.filter((id) =>
+    elegiblesVisibles.some((o) => o.id === id));
+
+  const recargar = useCallback(async () => {
+    setTrabajando('recargando');
+    setFallo('');
+    try {
+      const d = await llamar('apiListaEnviar');
+      setDatos((v) => Object.assign({}, v, d));
+      setElegidas([]);
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando('');
+    }
+  }, []);
+
+  function alternar(id) {
+    setElegidas((v) => v.indexOf(id) >= 0 ? v.filter((x) => x !== id) : v.concat([id]));
+    setResultado(null);
+    setConfirmando(false);
+  }
+
+  function todasOninguna() {
+    setElegidas(elegidasVivas.length === elegiblesVisibles.length
+      ? [] : elegiblesVisibles.map((o) => o.id));
+    setConfirmando(false);
+  }
+
+  /* -------- subir el soporte: un archivo por llamada -------- */
+
+  function pedirArchivo(id) {
+    destino.current = id;
+    archivo.current.value = '';
+    archivo.current.click();
+  }
+
+  async function recibirArchivo(ev) {
+    const f = ev.target.files && ev.target.files[0];
+    const id = destino.current;
+    if (!f || !id) return;
+
+    setSubiendo(id);
+    setFallo('');
+    try {
+      const datosBase64 = await new Promise((ok, mal) => {
+        const lector = new FileReader();
+        lector.onload = () => ok(String(lector.result).split(',')[1]);
+        lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+        lector.readAsDataURL(f);
+      });
+      await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64);
+      await recargar();
+      setResultado({ clase: '', titulo: 'Soporte cargado: ' + f.name, lineas: [] });
+    } catch (e) {
+      setFallo('No se pudo subir ' + f.name + '. ' + (e && e.message ? e.message : e));
+    } finally {
+      setSubiendo('');
+      destino.current = '';
+    }
+  }
+
+  /* -------- enviar -------- */
+
+  async function enviarYa() {
+    setConfirmando(false);
+    setTrabajando('enviando');
+    setFallo('');
+    try {
+      const r = await llamar('apiEnviar', elegidasVivas);
+      const lineas = r.rechazadas.map((x) => {
+        const o = filas.find((f) => f.id === x.id);
+        return (o ? o.municipio + ' ' + o.impuesto + ' ' + o.periodo : x.id) + ': ' + x.motivo;
+      });
+      if (r.pendientes.length) {
+        lineas.push(r.pendientes.length + ' quedaron pendientes por el límite de tiempo' +
+                    ' de Apps Script. Vuelve a seleccionarlas y envíalas.');
+      }
+      setResultado({
+        clase: r.enviadas.length ? '' : 'malo',
+        titulo: r.enviadas.length
+          ? r.enviadas.length + (r.enviadas.length === 1 ? ' correo enviado' : ' correos enviados') +
+            (r.modo === 'PRUEBA' ? ' a tu propia bandeja (modo prueba)' : '')
+          : 'No se envió ninguno',
+        lineas: lineas
+      });
+      setDatos((v) => Object.assign({}, v, { cuota: r.cuota }));
+      await recargar();
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando('');
+    }
+  }
+
+  const modo = (datos.config && datos.config.modo) || 'PRUEBA';
+  const destinatarios = elegidasVivas.reduce((n, id) => {
+    const o = filas.find((f) => f.id === id);
+    return n + (o ? String(o.correo_oficina || '').split(',').filter(Boolean).length : 0);
+  }, 0);
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Enviar</h1>
+        <${Hallazgo} filas=${filas} conteos=${conteosVista} />
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn" onClick=${recargar} disabled=${!!trabajando}>
+          <${Icono} nombre="recargar" />
+          ${trabajando === 'recargando' ? 'Actualizando…' : 'Actualizar'}
+        </button>
+        <button class="btn btn-principal"
+          disabled=${!elegidasVivas.length || !!trabajando}
+          onClick=${() => setConfirmando(true)}>
+          ${trabajando === 'enviando'
+            ? 'Enviando…'
+            : 'Enviar seleccionadas (' + elegidasVivas.length + ')'}
+        </button>
+      </div>
+    </div>
+
+    <${TarjetasConteo} conteos=${conteosVista} filtro=${filtro}
+      alFiltrar=${(f) => { setFiltro(f); setConfirmando(false); }} />
+
+    ${confirmando ? html`<div class="confirmar" role="alert">
+      <p><b>${elegidasVivas.length}</b>
+        ${elegidasVivas.length === 1 ? ' correo' : ' correos'} con su declaración adjunta.
+        ${modo === 'PRUEBA'
+          ? ' En modo prueba llegan a tu bandeja, no a las oficinas.'
+          : ' Van a ' + destinatarios + ' destinatarios en las oficinas.'}</p>
+      <button class="btn btn-principal" onClick=${enviarYa}>Confirmar envío</button>
+      <button class="btn" onClick=${() => setConfirmando(false)}>Cancelar</button>
+    </div>` : null}
+
+    ${resultado ? html`<div class=${'resultado ' + resultado.clase} role="status">
+      <h2>${resultado.titulo}</h2>
+      ${resultado.lineas.length ? html`<ul>
+        ${resultado.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}
+      </ul>` : null}
+    </div>` : null}
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Obligaciones por enviar</h2>
+        <span class="total">${visibles.length} de ${filas.length}</span>
+        <span class="der">
+          ${datos.cuota ? datos.cuota.usada + ' de ' + datos.cuota.tope +
+            ' destinatarios usados hoy' : ''}
+          ${datos.generado ? ' · leído ' + datos.generado.slice(11) : ''}
+        </span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="celda-casilla">
+              <input type="checkbox"
+                checked=${!!elegiblesVisibles.length &&
+                          elegidasVivas.length === elegiblesVisibles.length}
+                disabled=${!elegiblesVisibles.length}
+                aria-label="Seleccionar todas las que se pueden enviar"
+                onChange=${todasOninguna} />
+            </th>
+            <th>Municipio</th>
+            <th>Impuesto</th>
+            <th class="num">Periodo</th>
+            <th class="num der">Vence</th>
+            <th>Evidencia</th>
+            <th>Estado</th>
+            <th class="der">Soporte</th>
+          </tr>
+        </thead>
+
+        ${trabajando === 'recargando' && !filas.length
+          ? html`<${Huesos} filas=${3} />`
+          : html`<tbody>
+              ${visibles.map((o) => html`<${Fila} key=${o.id} o=${o}
+                elegida=${elegidas.indexOf(o.id) >= 0}
+                subiendo=${subiendo === o.id}
+                alElegir=${alternar} alSubir=${pedirArchivo} />`)}
+            </tbody>`}
+      </table>
+
+      ${fallo ? html`<${ErrorBloque} mensaje=${fallo} cuando=${datos.generado
+        ? datos.generado.slice(11) : ''} alReintentar=${recargar} />` : null}
+
+      ${!fallo && !visibles.length ? html`<p class="vacio">
+        ${filas.length
+          ? 'Ninguna obligación cae en este filtro. Las otras ' + filas.length +
+            ' siguen en "Por enviar".'
+          : 'No hay obligaciones con requiere_envio = SI asignadas a ti.'}
+      </p>` : null}
+    </section>
+
+    <input ref=${archivo} type="file" onChange=${recibirArchivo}
+      style=${{ position: 'absolute', width: '1px', height: '1px', opacity: 0,
+                pointerEvents: 'none' }}
+      tabIndex="-1" aria-hidden="true" />
+  </main>`;
+}
+</script>
+
+  <!-- ===== ui/Carga.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · pestana CARGA MASIVA.
+   La pregunta de esta pantalla: tengo cuarenta PDF, a que obligacion va cada
+   uno. Nada se sube hasta que el emparejamiento este revisado.
+   =========================================================================== */
+
+const ETIQUETA_PAREO = {
+  listo: 'Emparejado',
+  varios: 'Elige cuál',
+  ninguno: 'Sin pareja'
+};
+const NIVEL_PAREO = { listo: 'aldia', varios: 'porvencer', ninguno: 'vencido' };
+
+/** Cada archivo del lote, con la obligacion que le toca. */
+function FilaCarga({ it, candidatas, alAsignar, resultado }) {
+  const opciones = it.opciones && it.opciones.length
+    ? candidatas.filter((c) => it.opciones.indexOf(c.id) >= 0)
+    : candidatas;
+
+  const etiquetaCand = (c) =>
+    c.municipio + ' · ' + c.impuesto + (c.regimen && c.regimen !== 'GENERAL'
+      ? ' ' + c.regimen.toLowerCase() : '') +
+    ' · oficina ' + (c.cod_oficina || '—') +
+    (c.tiene_soporte ? ' (ya tiene soporte)' : '');
+
+  return html`<tr>
+    <td class="celda-mun">
+      <span class="ident">${it.archivo}</span>
+      <span class="sub">
+        ${it.leido.cod_oficina ? 'oficina ' + it.leido.cod_oficina : 'sin oficina en el nombre'}
+        · ${it.leido.impuesto || 'sin impuesto en el nombre'}
+      </span>
+    </td>
+
+    <td class="celda-linea2">
+      <span class=${'pildora ' + (NIVEL_PAREO[it.estado] || '')}>
+        ${ETIQUETA_PAREO[it.estado] || it.estado}</span>
+      ${it.aviso ? html`<span class="sub porvencer">${it.aviso}</span>` : null}
+    </td>
+
+    <td class="celda-ancha">
+      <select value=${it.id || ''} aria-label=${'Obligación para ' + it.archivo}
+        onChange=${(e) => alAsignar(it.archivo, e.target.value)}>
+        <option value="">— no cargar este archivo —</option>
+        ${opciones.map((c) => html`<option key=${c.id} value=${c.id}>
+          ${etiquetaCand(c)}</option>`)}
+      </select>
+      ${it.motivo && !it.id ? html`<span class="sub">${it.motivo}</span>` : null}
+    </td>
+
+    <td class="celda-linea2 der">
+      ${resultado
+        ? html`<span class=${'sub ' + (resultado.ok ? 'aldia' : 'vencido')}>
+            ${resultado.ok ? 'cargado' : resultado.motivo}</span>`
+        : html`<span class="sub">—</span>`}
+    </td>
+  </tr>`;
+}
+
+function Carga() {
+  const [periodos, setPeriodos] = useState(null);
+  const [periodo, setPeriodo] = useState('');
+  const [plan, setPlan] = useState(null);
+  const [asignado, setAsignado] = useState({});
+  const [subiendo, setSubiendo] = useState(false);
+  const [progreso, setProgreso] = useState({ hechos: 0, total: 0, actual: '' });
+  const [resultados, setResultados] = useState({});
+  const [fallo, setFallo] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
+  const archivos = useRef(null);
+  const guardados = useRef({});
+
+  useEffect(() => {
+    llamar('apiPeriodosCarga')
+      .then((ps) => {
+        setPeriodos(ps);
+        if (ps.length) setPeriodo(ps[0].periodo);
+      })
+      .catch((e) => setFallo(String(e && e.message ? e.message : e)));
+  }, []);
+
+  async function recibirArchivos(ev) {
+    const lista = Array.from(ev.target.files || []);
+    if (!lista.length) return;
+
+    guardados.current = {};
+    lista.forEach((f) => { guardados.current[f.name] = f; });
+
+    setFallo('');
+    setResultados({});
+    setConfirmando(false);
+    try {
+      const p = await llamar('apiCargaPlan', periodo, lista.map((f) => f.name));
+      setPlan(p);
+      const inicial = {};
+      p.plan.forEach((it) => { inicial[it.archivo] = it.id || ''; });
+      setAsignado(inicial);
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }
+
+  function pedirArchivos() {
+    if (!periodo) return;
+    archivos.current.value = '';
+    archivos.current.click();
+  }
+
+  const aCargar = plan
+    ? plan.plan.filter((it) => asignado[it.archivo] && guardados.current[it.archivo])
+    : [];
+
+  // dos archivos al mismo destino: lo marcamos antes de subir nada
+  const repetidos = (() => {
+    const vistos = {}, malos = [];
+    aCargar.forEach((it) => {
+      const id = asignado[it.archivo];
+      if (vistos[id]) malos.push(id);
+      vistos[id] = true;
+    });
+    return malos;
+  })();
+
+  async function subirTodo() {
+    setConfirmando(false);
+    setSubiendo(true);
+    setFallo('');
+    const salida = {};
+    setProgreso({ hechos: 0, total: aCargar.length, actual: '' });
+
+    for (let i = 0; i < aCargar.length; i++) {
+      const it = aCargar[i];
+      const f = guardados.current[it.archivo];
+      const id = asignado[it.archivo];
+      setProgreso({ hechos: i, total: aCargar.length, actual: it.archivo });
+      try {
+        const datosBase64 = await new Promise((ok, mal) => {
+          const lector = new FileReader();
+          lector.onload = () => ok(String(lector.result).split(',')[1]);
+          lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+          lector.readAsDataURL(f);
+        });
+        await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64);
+        salida[it.archivo] = { ok: true, motivo: '' };
+      } catch (e) {
+        salida[it.archivo] = { ok: false, motivo: String(e && e.message ? e.message : e) };
+      }
+      setResultados(Object.assign({}, salida));
+    }
+
+    setProgreso({ hechos: aCargar.length, total: aCargar.length, actual: '' });
+    setSubiendo(false);
+
+    // se vuelve a planear para que se vea el estado nuevo de cada obligacion
+    try {
+      const p = await llamar('apiCargaPlan', periodo, Object.keys(guardados.current));
+      setPlan(p);
+    } catch (e) { /* el resultado de la carga ya esta a la vista */ }
+  }
+
+  const hechos = Object.keys(resultados);
+  const buenos = hechos.filter((k) => resultados[k].ok).length;
+  const malos = hechos.length - buenos;
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Carga masiva</h1>
+        <p class="hallazgo">
+          Suelta los PDF de un periodo y SINAV propone a qué obligación va cada
+          uno, leyendo del nombre del archivo el código de oficina y el
+          impuesto. <b>Nada se sube</b> hasta que revises el emparejamiento.
+        </p>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="panel-cab"><h2>1 · El periodo</h2></div>
+      <div class="tira-controles">
+        <label class="campo">
+          <span>Periodo que vas a cargar</span>
+          <select value=${periodo} onChange=${(e) => {
+            setPeriodo(e.target.value); setPlan(null); setResultados({});
+          }} disabled=${subiendo}>
+            ${(periodos || []).map((p) => html`<option key=${p.periodo} value=${p.periodo}>
+              ${p.periodo} (${p.cuantas} obligaciones)</option>`)}
+          </select>
+        </label>
+
+        <button class="btn" onClick=${pedirArchivos}
+          disabled=${!periodo || subiendo || !periodos}>
+          <${Icono} nombre="subir" /> Elegir los PDF
+        </button>
+
+        ${periodos && !periodos.length ? html`<span class="sub">
+          No tienes obligaciones asignadas, así que no hay periodo que cargar.
+        </span>` : null}
+      </div>
+      <p class="hallazgo hallazgo-form">
+        El periodo se elige aquí y no se saca del nombre del archivo: código de
+        oficina más impuesto no identifica una obligación, porque la misma
+        oficina y el mismo impuesto vuelven cada periodo.
+      </p>
+    </section>
+
+    ${fallo ? html`<section class="panel">
+      <${ErrorBloque} mensaje=${fallo} alReintentar=${() => setFallo('')} />
+    </section>` : null}
+
+    ${plan ? html`<section class="panel">
+      <div class="panel-cab">
+        <h2>2 · El emparejamiento</h2>
+        <span class="total">${plan.resumen.archivos} archivos ·
+          ${plan.resumen.candidatas} obligaciones en ${plan.periodo}</span>
+        <span class="der">
+          ${plan.resumen.listos} emparejados ·
+          ${plan.resumen.varios} por elegir ·
+          ${plan.resumen.ninguno} sin pareja
+        </span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Pareo</th>
+            <th>Obligación</th>
+            <th class="der">Carga</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${plan.plan.map((it) => html`<${FilaCarga} key=${it.archivo} it=${
+            Object.assign({}, it, { id: asignado[it.archivo] || '' })}
+            candidatas=${plan.candidatas}
+            resultado=${resultados[it.archivo]}
+            alAsignar=${(archivo, id) =>
+              setAsignado((v) => Object.assign({}, v, { [archivo]: id }))} />`)}
+        </tbody>
+      </table>
+
+      ${repetidos.length ? html`<div class="error-bloque">
+        <p><b>Dos archivos apuntan a la misma obligación.</b>
+          Solo quedaría el último, y el otro se perdería sin aviso. Cambia uno
+          de los dos antes de cargar.</p>
+      </div>` : null}
+
+      <div class="pie-form">
+        <button class="btn btn-principal"
+          disabled=${!aCargar.length || subiendo || repetidos.length > 0}
+          onClick=${() => setConfirmando(true)}>
+          ${subiendo
+            ? 'Cargando ' + (progreso.hechos + 1) + ' de ' + progreso.total + '…'
+            : 'Cargar ' + aCargar.length +
+              (aCargar.length === 1 ? ' soporte' : ' soportes')}
+        </button>
+        <span class="sub">
+          ${plan.plan.length - aCargar.length > 0
+            ? (plan.plan.length - aCargar.length) + ' archivos quedan fuera.'
+            : 'Todos los archivos tienen destino.'}
+        </span>
+      </div>
+
+      ${confirmando ? html`<div class="confirmar" role="alert">
+        <p><b>${aCargar.length}</b>
+          ${aCargar.length === 1 ? ' soporte' : ' soportes'} a Drive, en la
+          carpeta de su municipio y su impuesto. Las que estaban en PENDIENTE
+          pasan a LISTA y quedan disponibles para enviar.</p>
+        <button class="btn btn-principal" onClick=${subirTodo}>Confirmar carga</button>
+        <button class="btn" onClick=${() => setConfirmando(false)}>Cancelar</button>
+      </div>` : null}
+
+      ${subiendo && progreso.actual ? html`<p class="hallazgo hallazgo-form">
+        Subiendo <b>${progreso.actual}</b> (${progreso.hechos + 1} de ${progreso.total}).
+        Un archivo por llamada: no cierres la pestaña.
+      </p>` : null}
+
+      ${hechos.length && !subiendo ? html`<div class=${'resultado ' +
+        (malos ? 'malo' : '')} role="status">
+        <h2>${buenos} ${buenos === 1 ? 'soporte cargado' : 'soportes cargados'}${
+          malos ? ' · ' + malos + ' con error' : ''}</h2>
+        ${malos ? html`<ul>
+          ${hechos.filter((k) => !resultados[k].ok).map((k) => html`<li key=${k}>
+            ${k}: ${resultados[k].motivo}</li>`)}
+        </ul>` : null}
+      </div>` : null}
+    </section>` : null}
+
+    <input ref=${archivos} type="file" multiple accept=".pdf,application/pdf"
+      onChange=${recibirArchivos}
+      style=${{ position: 'absolute', width: '1px', height: '1px', opacity: 0,
+                pointerEvents: 'none' }}
+      tabIndex="-1" aria-hidden="true" />
+  </main>`;
+}
+</script>
+
+  <!-- ===== ui/Campos.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · pestana DIGITALIZAR.
+   La pregunta de esta pantalla: que obligacion le falta un dato que solo yo
+   puedo escribir. Lo incompleto va arriba, no lo mas reciente.
+   =========================================================================== */
+
+const FILTROS_CAMPOS = [
+  { id: 'incompletas', et: 'Les falta un dato', clave: 'incompletas' },
+  { id: 'sin_valor', et: 'Sin valor liquidado', clave: 'sin_valor' },
+  { id: 'por_revisar', et: 'Sin definir si se envía', clave: 'por_revisar' },
+  { id: 'todas', et: 'Todas', clave: 'todas' }
+];
+
+function aplicaFiltroCampos(o, filtro) {
+  if (filtro === 'incompletas') return o.faltan && o.faltan.length > 0;
+  if (filtro === 'sin_valor') return !o.valor;
+  if (filtro === 'por_revisar') return o.requiere_envio === 'REVISAR';
+  return true;
+}
+
+/** Un campo del formulario, pintado segun lo que dijo el servidor. */
+function CampoEdit({ clave, def, valor, alCambiar }) {
+  const id = 'c-' + clave;
+
+  if (def.tipo === 'lista') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <select id=${id} value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)}>
+        ${def.vacio ? html`<option value="">— sin dato —</option>` : null}
+        ${def.valores.map((v) => html`<option key=${v} value=${v}>
+          ${bonito(v)}</option>`)}
+      </select>
+    </label>`;
+  }
+
+  if (def.tipo === 'valor') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="text" inputMode="numeric" class="num"
+        placeholder="0" value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+      <small>Se liquida en pesos. Acepta $ y puntos de mil.</small>
+    </label>`;
+  }
+
+  if (def.tipo === 'fecha') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="date" value=${valor || ''}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+    </label>`;
+  }
+
+  return html`<label class="campo ancho" key=${clave}>
+    <span>${def.et}</span>
+    <textarea id=${id} rows="2" value=${valor == null ? '' : String(valor)}
+      onChange=${(e) => alCambiar(clave, e.target.value)}></textarea>
+  </label>`;
+}
+
+/** El formulario de una obligacion. */
+function Formulario({ o, opciones, alGuardar, alCerrar, guardando, fallo }) {
+  const [borrador, setBorrador] = useState({});
+
+  useEffect(() => { setBorrador({}); }, [o.id]);
+
+  const valorDe = (k) => (k in borrador ? borrador[k] : o[k]);
+  const cambiar = (k, v) => setBorrador((b) => Object.assign({}, b, { [k]: v }));
+  const sucios = Object.keys(borrador).filter((k) => {
+    const a = o[k] == null ? '' : String(o[k]);
+    const b = borrador[k] == null ? '' : String(borrador[k]);
+    return a !== b;
+  });
+
+  // exogena solo aplica a RETEICA, incluye_retencion solo a AUTORRETEICA
+  const claves = Object.keys(opciones).filter((k) => {
+    const d = opciones[k];
+    return !d.solo || d.solo === o.impuesto;
+  });
+
+  return html`<section class="panel panel-form">
+    <div class="panel-cab">
+      <h2>${o.municipio} · ${o.impuesto} · ${o.periodo}</h2>
+      <span class="total">DANE ${o.cod_dane}${o.cod_oficina
+        ? ' · oficina ' + o.cod_oficina : ''}</span>
+      <span class="der"><${Pildora} estado=${o.estado} /></span>
+    </div>
+
+    <p class="hallazgo hallazgo-form">
+      Vence ${o.vencimiento || 'sin fecha'} (${textoDias(o.dias)}).
+      ${o.revision_fecha
+        ? ' Revisada el ' + o.revision_fecha + ' por ' + o.revision_por + '.'
+        : ' Todavía sin visto bueno.'}
+      ${o.faltan && o.faltan.length
+        ? ' Falta: ' + o.faltan.join(', ') + '.'
+        : ' No le falta ningún dato manual.'}
+    </p>
+
+    <div class="rejilla-campos">
+      ${claves.map((k) => html`<${CampoEdit} key=${k} clave=${k}
+        def=${opciones[k]} valor=${valorDe(k)} alCambiar=${cambiar} />`)}
+    </div>
+
+    ${fallo ? html`<div class="error-bloque"><p><b>No se pudo guardar.</b> ${fallo}</p></div>` : null}
+
+    <div class="pie-form">
+      <button class="btn btn-principal" disabled=${!sucios.length || guardando}
+        onClick=${() => alGuardar(o.id, borrador)}>
+        ${guardando ? 'Guardando…'
+          : (sucios.length ? 'Guardar ' + sucios.length +
+             (sucios.length === 1 ? ' cambio' : ' cambios') : 'Sin cambios')}
+      </button>
+      <button class="btn" onClick=${alCerrar} disabled=${guardando}>Cerrar</button>
+      ${sucios.length ? html`<span class="sub">
+        Sin guardar: ${sucios.map((k) => opciones[k].et).join(', ')}.
+      </span>` : null}
+    </div>
+  </section>`;
+}
+
+function Campos() {
+  const [datos, setDatos] = useState(null);
+  const [filtro, setFiltro] = useState('incompletas');
+  const [abierta, setAbierta] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [fallo, setFallo] = useState('');
+  const [falloForm, setFalloForm] = useState('');
+  const [aviso, setAviso] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setFallo('');
+    try {
+      setDatos(await llamar('apiListaCampos'));
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function guardar(id, borrador) {
+    setGuardando(true);
+    setFalloForm('');
+    try {
+      const r = await llamar('apiGuardarCampos', id, borrador);
+      setAviso({ clase: r.cambios ? '' : 'malo',
+                 titulo: r.cambios
+                   ? r.cambios + (r.cambios === 1 ? ' campo guardado' : ' campos guardados')
+                   : 'Nada cambió',
+                 lineas: r.detalle ? [r.detalle] : [] });
+      await cargar();
+    } catch (e) {
+      setFalloForm(String(e && e.message ? e.message : e));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (!datos && fallo) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Digitalizar</h1></div></div>
+      <section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+      </section>
+    </main>`;
+  }
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Digitalizar</h1>
+        <p class="hallazgo"><${Hueso} ancho="380px" /></p></div></div>
+      <section class="panel">
+        <div class="panel-cab"><h2>Obligaciones</h2></div>
+        <table><${Huesos} filas=${3} /></table>
+      </section>
+    </main>`;
+  }
+
+  const filas = datos.filas || [];
+  const r = datos.resumen;
+  const visibles = filas.filter((o) => aplicaFiltroCampos(o, filtro));
+  const elegida = filas.find((o) => o.id === abierta);
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Digitalizar</h1>
+        <p class="hallazgo">
+          ${r.incompletas
+            ? frase([
+                r.incompletas,
+                r.incompletas === 1
+                  ? ' obligación necesita un dato que solo tú puedes escribir'
+                  : ' obligaciones necesitan un dato que solo tú puedes escribir',
+                '. ',
+                ...(r.sin_valor
+                  ? [r.sin_valor, r.sin_valor === 1
+                      ? ' está sin valor liquidado.' : ' están sin valor liquidado.']
+                  : [])
+              ])
+            : 'Ninguna obligación tiene campos manuales pendientes.'}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn" onClick=${cargar}>
+          <${Icono} nombre="recargar" /> Actualizar
+        </button>
+      </div>
+    </div>
+
+    <fieldset class="conteos">
+      <legend>Filtrar la lista</legend>
+      ${FILTROS_CAMPOS.map((f) => {
+        const n = r[f.clave] || 0;
+        return html`<button key=${f.id} type="button" class="conteo"
+          aria-pressed=${filtro === f.id} onClick=${() => setFiltro(f.id)}>
+          <span class="et">${f.et}</span>
+          <span class=${'vl' + (n === 0 ? ' cero' : '')}>${n}</span>
+        </button>`;
+      })}
+    </fieldset>
+
+    ${aviso ? html`<div class=${'resultado ' + aviso.clase} role="status">
+      <h2>${aviso.titulo}</h2>
+      ${aviso.lineas.length ? html`<ul>
+        ${aviso.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}</ul>` : null}
+    </div>` : null}
+
+    ${elegida ? html`<${Formulario} o=${elegida} opciones=${datos.opciones}
+      alGuardar=${guardar} alCerrar=${() => setAbierta('')}
+      guardando=${guardando} fallo=${falloForm} />` : null}
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Obligaciones</h2>
+        <span class="total">${visibles.length} de ${filas.length}</span>
+        <span class="der">${datos.generado ? 'leído ' + datos.generado.slice(11) : ''}</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Municipio</th>
+            <th>Impuesto</th>
+            <th class="num">Periodo</th>
+            <th class="num der">Vence</th>
+            <th class="num der">Valor</th>
+            <th>Pago</th>
+            <th>Le falta</th>
+            <th>Estado</th>
+            <th class="der">Campos</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${visibles.map((o) => html`<tr key=${o.id}
+            data-elegida=${o.id === abierta ? 'si' : 'no'}>
+            <td class="celda-mun">
+              <span class="ident">${o.municipio}</span>
+              <span class="sub">DANE ${o.cod_dane}${o.cod_oficina
+                ? ' · oficina ' + o.cod_oficina : ''}</span>
+            </td>
+            <td class="celda-linea2">
+              <span>${o.impuesto}</span>
+              ${o.regimen && o.regimen !== 'GENERAL'
+                ? html`<span class="sub">${o.regimen.toLowerCase()}</span>` : null}
+            </td>
+            <td class="celda-linea2 num">
+              <span>${o.periodo}</span>
+              <span class="sub">${o.periodicidad
+                ? bonito(o.periodicidad) : '—'}</span>
+            </td>
+            <td class="celda-linea2 num der">
+              <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
+              <span class=${'sub ' + (o.dias === null ? ''
+                : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : '')))}>
+                ${textoDias(o.dias)}</span>
+            </td>
+            <td class="celda-linea2 num der">
+              ${o.valor ? html`<span>${pesos(o.valor)}</span>`
+                : html`<span class="raya">—</span>`}
+            </td>
+            <td class="celda-linea2">
+              <span>${o.paga_quien
+                ? bonito(o.paga_quien) : html`<span class="raya">—</span>`}</span>
+              <span class="sub">${o.forma_pago
+                ? bonito(o.forma_pago) : 'forma sin definir'}</span>
+            </td>
+            <td class="celda-linea2">
+              ${o.faltan && o.faltan.length
+                ? html`<span class="falta-chip">${o.faltan.length}</span>
+                    <span class="sub">${o.faltan.join(', ')}</span>`
+                : html`<span class="sub">completa</span>`}
+            </td>
+            <td class="celda-linea2"><${Pildora} estado=${o.estado} /></td>
+            <td class="celda-accion der">
+              <button class="btn" onClick=${() => {
+                setAbierta(o.id === abierta ? '' : o.id);
+                setFalloForm('');
+                setAviso(null);
+              }}>${o.id === abierta ? 'Cerrar' : 'Digitalizar'}</button>
+            </td>
+          </tr>`)}
+        </tbody>
+      </table>
+
+      ${fallo ? html`<${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />` : null}
+
+      ${!fallo && !visibles.length ? html`<p class="vacio">
+        ${filas.length
+          ? 'Ninguna cae en este filtro. Las otras ' + filas.length + ' están en "Todas".'
+          : 'No tienes obligaciones asignadas, o todas están APROBADAS.'}
+      </p>` : null}
+    </section>
+  </main>`;
+}
+</script>
+
+  <!-- ===== ui/Metricas.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · pestana METRICAS (JEFE y ADMIN).
+   La pregunta de esta pantalla: donde esta parado el periodo y que espera por
+   mi. Elizabeth asigna y da el visto bueno, asi que manda la cola de revision
+   y la carga por persona, no el adorno.
+   =========================================================================== */
+
+/** Una cifra con su nombre escrito. Sin color: el color es de los estados. */
+function Tarjeta({ et, valor, sub, nivel }) {
+  return html`<div class=${'tarjeta' + (nivel ? ' ' + nivel : '')}>
+    <span class="et">${et}</span>
+    <span class="vl">${valor}</span>
+    ${sub ? html`<span class="sub">${sub}</span>` : null}
+  </div>`;
+}
+
+/** Un reparto: nombre, cuantas y una barra proporcional en gris. */
+function Reparto({ titulo, filas, tope, formato }) {
+  const max = tope || filas.reduce((m, f) => Math.max(m, f.cuantas), 0) || 1;
+  if (!filas.length) {
+    return html`<div class="reparto">
+      <h3>${titulo}</h3><p class="vacio">Sin datos.</p></div>`;
+  }
+  return html`<div class="reparto">
+    <h3>${titulo}</h3>
+    <table class="tabla-reparto">
+      <tbody>
+        ${filas.map((f) => html`<tr key=${f.clave}>
+          <td class="rep-et">${formato ? formato(f.clave) : f.clave}</td>
+          <td class="rep-barra">
+            <span class="barra" style=${{ width: Math.round((f.cuantas / max) * 100) + '%' }} />
+          </td>
+          <td class="rep-vl num der">${f.cuantas}</td>
+        </tr>`)}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function Metricas() {
+  const [datos, setDatos] = useState(null);
+  const [periodo, setPeriodo] = useState('');
+  const [fallo, setFallo] = useState('');
+  const [cargando, setCargando] = useState(false);
+
+  const cargar = useCallback(async (p) => {
+    setCargando(true);
+    setFallo('');
+    try {
+      const d = await llamar('apiMetricas', p || '');
+      setDatos(d);
+      setPeriodo(d.periodo || '');
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(''); }, [cargar]);
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Métricas</h1>
+        <p class="hallazgo">${fallo || html`<${Hueso} ancho="360px" />`}</p></div></div>
+      ${fallo ? html`<section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${() => cargar(periodo)} />
+      </section>` : null}
+    </main>`;
+  }
+
+  const m = datos.metricas;
+  const pago = m.pago;
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Métricas</h1>
+        <p class="hallazgo">
+          ${frase([
+            ...(m.esperan_revision
+              ? [m.esperan_revision,
+                 m.esperan_revision === 1
+                   ? ' obligación espera tu visto bueno. '
+                   : ' obligaciones esperan tu visto bueno. ']
+              : ['Nada espera tu visto bueno. ']),
+            ...(m.vencidas
+              ? [m.vencidas,
+                 (m.vencidas === 1 ? ' está vencida' : ' están vencidas') +
+                 (m.peor_vencida
+                   ? ' (la peor: ' + m.peor_vencida.municipio + ' ' +
+                     m.peor_vencida.impuesto + ', ' + textoDias(m.peor_vencida.dias) + ')'
+                   : '') + '. ']
+              : ['Ninguna vencida. ']),
+            'Cadena de evidencia completa en ',
+            m.pct_cadena_completa,
+            '%.'
+          ])}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <label class="campo campo-linea">
+          <span>Periodo</span>
+          <select value=${periodo} disabled=${cargando}
+            onChange=${(e) => cargar(e.target.value)}>
+            <option value="">Todos los periodos</option>
+            ${datos.periodos.map((p) => html`<option key=${p} value=${p}>${p}</option>`)}
+          </select>
+        </label>
+        <button class="btn" onClick=${() => cargar(periodo)} disabled=${cargando}>
+          <${Icono} nombre="recargar" /> ${cargando ? 'Actualizando…' : 'Actualizar'}
+        </button>
+      </div>
+    </div>
+
+    <div class="tarjetas">
+      <${Tarjeta} et="Obligaciones" valor=${m.total}
+        sub=${periodo ? 'en ' + periodo : 'en todos los periodos'} />
+      <${Tarjeta} et="Esperan visto bueno" valor=${m.esperan_revision}
+        sub="en estado Respondida" nivel=${m.esperan_revision ? 'porvencer' : ''} />
+      <${Tarjeta} et="Vencidas" valor=${m.vencidas}
+        sub="el vencimiento no se reinicia" nivel=${m.vencidas ? 'vencido' : ''} />
+      <${Tarjeta} et="Vencen en ≤4 días" valor=${m.por_vencer}
+        nivel=${m.por_vencer ? 'porvencer' : ''} />
+      <${Tarjeta} et="Evidencia completa" valor=${m.pct_cadena_completa + '%'}
+        sub=${m.cadena_completa + ' de ' + m.total}
+        nivel=${m.pct_cadena_completa >= 80 ? 'aldia'
+          : (m.pct_cadena_completa >= 40 ? 'porvencer' : 'vencido')} />
+      <${Tarjeta} et="Sin soporte" valor=${m.sin_soporte}
+        sub="no se pueden enviar" nivel=${m.sin_soporte ? 'porvencer' : ''} />
+      <${Tarjeta} et="Sin valor liquidado" valor=${m.sin_valor}
+        sub="falta digitalizar" />
+      <${Tarjeta} et="Valor liquidado" valor=${pesos(m.valor_total) || '$0'}
+        sub="suma de lo ya liquidado" />
+    </div>
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Dónde se paga</h2>
+        <span class="total">${pago.oficina.cuantas + pago.pagaduria.cuantas} con pagador definido</span>
+      </div>
+      <p class="hallazgo hallazgo-form">
+        Quién paga y con qué se paga son dos datos distintos. El primero viene
+        del calendario; el segundo lo escriben los profesionales a mano cuando
+        saben cómo se pagó, así que un "sin dato" aquí es trabajo pendiente, no
+        un error.
+      </p>
+      <div class="dos-columnas">
+        <div class="bloque-pago">
+          <h3>En las oficinas</h3>
+          <p class="cifra-pago">${pago.oficina.cuantas}
+            <span class="sub">${pesos(pago.oficina.valor) || '$0'}</span></p>
+          <${Reparto} titulo="Forma de pago" filas=${pago.oficina.por_forma}
+            formato=${bonito} />
+        </div>
+        <div class="bloque-pago">
+          <h3>En pagaduría</h3>
+          <p class="cifra-pago">${pago.pagaduria.cuantas}
+            <span class="sub">${pesos(pago.pagaduria.valor) || '$0'}</span></p>
+          <${Reparto} titulo="Forma de pago" filas=${pago.pagaduria.por_forma}
+            formato=${bonito} />
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-cab"><h2>Carga por persona</h2></div>
+      <${Reparto} titulo="Obligaciones por responsable" filas=${m.por_responsable}
+        formato=${(c) => c === '(sin dato)' ? 'Sin responsable asignado' : c} />
+    </section>
+
+    <section class="panel">
+      <div class="panel-cab"><h2>Cómo está repartido</h2></div>
+      <div class="dos-columnas">
+        <${Reparto} titulo="Por estado" filas=${m.por_estado}
+          formato=${(c) => ETIQUETA_ESTADO[c] || bonito(c)} />
+        <${Reparto} titulo="Por impuesto" filas=${m.por_impuesto} />
+      </div>
+      <div class="dos-columnas">
+        <${Reparto} titulo="Por municipio" filas=${m.por_municipio.slice(0, 12)} />
+        <${Reparto} titulo="Por periodo" filas=${m.por_periodo} />
+      </div>
+      ${m.por_municipio.length > 12 ? html`<p class="sub">
+        Se muestran los 12 municipios con más obligaciones, de ${m.por_municipio.length}.
+      </p>` : null}
+    </section>
+
+    ${fallo ? html`<section class="panel">
+      <${ErrorBloque} mensaje=${fallo} alReintentar=${() => cargar(periodo)} />
+    </section>` : null}
+
+    <p class="sub pie-lienzo">
+      ${datos.generado ? 'Leído a las ' + datos.generado.slice(11) : ''}
+    </p>
+  </main>`;
+}
+</script>
+
+  <!-- ===== ui/App.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · el armazon y el arranque.
+   Shell plano abierto: barra lateral etiquetada sobre el propio fondo,
+   sin barra superior.
+   =========================================================================== */
+
+const VISTAS = [
+  { id: 'enviar', et: 'Enviar', icono: 'enviar', grupo: 'trabajo', lista: true },
+  { id: 'carga', et: 'Carga masiva', icono: 'subir', grupo: 'trabajo' },
+  { id: 'campos', et: 'Digitalizar', icono: 'campos', grupo: 'trabajo' },
+  { id: 'respuestas', et: 'Respuestas', icono: 'respuestas', grupo: 'trabajo' },
+  { id: 'alertas', et: 'Alertas', icono: 'alertas', grupo: 'trabajo' },
+  { id: 'metricas', et: 'Métricas', icono: 'metricas', grupo: 'admin',
+    permiso: 'puedeVerMetricas' },
+  { id: 'asignacion', et: 'Asignación', icono: 'asignacion', grupo: 'admin',
+    permiso: 'puedeAsignar' },
+  { id: 'configuracion', et: 'Configuración', icono: 'configuracion', grupo: 'admin',
+    permiso: 'puedeConfigurar' }
+];
+
+function Logo({ fuente }) {
+  if (typeof fuente === 'string' && fuente) {
+    return html`<img class="logo" src=${fuente} alt="Banco Davivienda" />`;
+  }
+  // el archivo oficial todavia no esta: espacio reservado del tamano correcto
+  return html`<span class="logo-hueco" role="img"
+    aria-label="Espacio reservado para el logo de Banco Davivienda">logo</span>`;
+}
+
+function Lateral({ yo, modo, vista, alCambiar, conteos, logo }) {
+  const [abierto, setAbierto] = useState(false);
+  const visibles = VISTAS.filter((v) => !v.permiso || yo[v.permiso]);
+
+  const items = (grupo) => visibles.filter((v) => v.grupo === grupo).map((v) => html`
+    <li key=${v.id}>
+      <button aria-current=${vista === v.id ? 'page' : null}
+        onClick=${() => { alCambiar(v.id); setAbierto(false); }}>
+        <${Icono} nombre=${v.icono} />
+        ${v.et}
+        ${v.lista && conteos && conteos.listas
+          ? html`<span class="cuenta">${conteos.listas}</span>` : null}
+      </button>
+    </li>`);
+
+  return html`<nav class="lateral" data-abierto=${abierto ? 'si' : 'no'}
+      aria-label="Secciones de SINAV">
+    <div class="marca-bloque">
+      <${Logo} fuente=${logo} />
+      <p class="producto">SINAV</p>
+      <p class="alcance">Impuestos territoriales</p>
+    </div>
+
+    <button class="menu-tel" aria-expanded=${abierto}
+      onClick=${() => setAbierto(!abierto)}>
+      ${abierto ? 'Cerrar' : 'Secciones'}
+    </button>
+
+    <p class="grupo-nav" id="g-trabajo">Trabajo</p>
+    <ul class="nav" aria-labelledby="g-trabajo">${items('trabajo')}</ul>
+
+    ${visibles.some((v) => v.grupo === 'admin') ? html`<${React.Fragment}>
+      <p class="grupo-nav" id="g-admin">Administración</p>
+      <ul class="nav" aria-labelledby="g-admin">${items('admin')}</ul>
+    </>` : null}
+
+    <div class="pie-lateral">
+      <p class="persona"><b>${yo.nombre}</b>
+        <span>${yo.perfil || yo.rol.toLowerCase()}</span>
+        <span class="correo" title=${yo.correo}>${yo.correo}</span></p>
+      ${modo === 'PRUEBA' ? html`<p class="aviso-modo">
+        <b>Modo prueba</b>Los correos llegan a tu bandeja, no a las oficinas.
+      </p>` : null}
+    </div>
+  </nav>`;
+}
+
+/** Las pestanas que todavia no estan. El marco y el titulo se quedan. */
+function PorConstruir({ et, dice }) {
+  return html`<main class="lienzo">
+    <div class="titulo-fila"><div>
+      <h1>${et}</h1>
+      <p class="hallazgo">${dice}</p>
+    </div></div>
+    <section class="panel">
+      <div class="panel-cab"><h2>${et}</h2></div>
+      <p class="vacio">Se construye después de que ENVIAR esté en producción.</p>
+    </section>
+  </main>`;
+}
+
+function Pantalla({ error, children }) {
+  return html`<main class="lienzo">
+    <div class="titulo-fila"><div><h1>SINAV</h1></div></div>
+    <section class="panel">
+      <div class="panel-cab"><h2>No se pudo abrir</h2></div>
+      <div class="error-bloque"><p><b>${error}</b></p>${children}</div>
+    </section>
+  </main>`;
+}
+
+/** El ruteo. Una entrada por vista: con ocho, la cadena de ternarios ya no se leia. */
+function Vista({ vista, inicio }) {
+  if (vista === 'enviar') return html`<${Enviar} inicio=${inicio} />`;
+  if (vista === 'carga') return html`<${Carga} />`;
+  if (vista === 'campos') return html`<${Campos} />`;
+  if (vista === 'metricas') return html`<${Metricas} />`;
+
+  if (vista === 'respuestas') {
+    return html`<${PorConstruir} et="Respuestas"
+      dice="Las ya enviadas, quién respondió y el sellado que volvió. Arriba, lo que no ha respondido y está por vencerse." />`;
+  }
+  if (vista === 'alertas') {
+    return html`<${PorConstruir} et="Alertas"
+      dice="Qué vence, qué está en rojo y los números: vencen en 4 días o menos, vencidas sin evidencia, porcentaje con evidencia completa." />`;
+  }
+  if (vista === 'asignacion') {
+    return html`<${PorConstruir} et="Asignación"
+      dice="Obligaciones sin responsable y asignación masiva por municipio o impuesto." />`;
+  }
+  return html`<${PorConstruir} et="Configuración"
+    dice="Las hojas CONFIG y USUARIOS desde la aplicación, sin abrir el libro." />`;
+}
+
+function App() {
+  const [inicio, setInicio] = useState(null);
+  const [error, setError] = useState('');
+  const [vista, setVista] = useState('enviar');
+  const [logo, setLogo] = useState('');
+
+  useEffect(() => {
+    llamar('apiInicio')
+      .then((d) => { if (d.error) setError(d.error); setInicio(d); })
+      .catch((e) => setError(String(e && e.message ? e.message : e)));
+    llamar('apiLogo').then(setLogo).catch(() => setLogo(''));
+  }, []);
+
+  if (error && (!inicio || !inicio.filas)) {
+    return html`<div class="armazon"><div /><${Pantalla} error=${error} /></div>`;
+  }
+
+  if (!inicio) {
+    return html`<div class="armazon">
+      <div class="lateral"><div class="marca-bloque"><${Logo} fuente=${logo} />
+        <p class="producto">SINAV</p>
+        <p class="alcance">Impuestos territoriales</p></div></div>
+      <main class="lienzo">
+        <div class="titulo-fila"><div>
+          <h1>Enviar</h1>
+          <p class="hallazgo"><${Hueso} ancho="420px" /></p>
+        </div></div>
+        <section class="panel">
+          <div class="panel-cab"><h2>Obligaciones por enviar</h2></div>
+          <table><${Huesos} filas=${3} /></table>
+        </section>
+      </main>
+    </div>`;
+  }
+
+  const modo = (inicio.config && inicio.config.modo) || 'PRUEBA';
+
+  return html`<div class="armazon">
+    <${Lateral} yo=${inicio.yo} modo=${modo} vista=${vista} alCambiar=${setVista}
+      conteos=${inicio.conteos} logo=${logo} />
+    <${Vista} vista=${vista} inicio=${inicio} />
+  </div>`;
+}
+
+ReactDOM.createRoot(document.getElementById('raiz')).render(html`<${App} />`);
+</script>
+
+</body>
+</html>

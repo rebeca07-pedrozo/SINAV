@@ -13,11 +13,17 @@ Contexto de producto en [PRODUCT.md](PRODUCT.md). Decisiones visuales en
 Son **tres**, y las tres viven en el menú **SINAV** que aparece dentro del
 Sheets. No hace falta abrir el editor de Apps Script para el día a día.
 
-| Función | En qué archivo vive | Cómo se corre | Cuándo |
-|---|---|---|---|
-| `instalar()` | `01_Instalar` | Menú **SINAV → Instalar / verificar** | La primera vez, y **cada vez que actualices el código** |
-| `migrar()` | `01_Instalar` | Menú **SINAV → Migrar columnas** | Una sola vez, **después** de `instalar()`, si el libro ya tenía filas |
-| `pruebas()` | `99_Pruebas` | Menú **SINAV → Correr pruebas** | Cuando cambies código o algo huela raro |
+| Función | Cómo se corre | Cuándo |
+|---|---|---|
+| `instalar()` | Menú **SINAV → Instalar / verificar** | La primera vez, y **cada vez que actualices el código** |
+| `migrar()` | Menú **SINAV → Migrar columnas** | Una sola vez, **después** de `instalar()`, si el libro ya tenía filas |
+| `pruebas()` | Menú **SINAV → Correr pruebas** | Cuando cambies código o algo huela raro |
+
+En Apps Script las tres viven en **`Codigo`**, porque todo el código va en un
+solo archivo (ver [Qué se pega en Apps Script](#qué-se-pega-en-apps-script)).
+En este repo el código está repartido en `src/` para poder trabajarlo:
+`instalar()` y `migrar()` están en `src/01_Instalar.gs` y `pruebas()` en
+`src/99_Pruebas.gs`.
 
 Las tres son **idempotentes**: correrlas dos veces no duplica ni rompe nada.
 
@@ -61,28 +67,47 @@ funcionar.
 
 ### 2 · Copiar los archivos
 
-En el editor, crea los archivos con estos nombres **exactos** y pega el
-contenido de `src/`. Los `.gs` van sin extensión; los de `ui/` van como HTML y
-el nombre lleva la barra.
+<a id="qué-se-pega-en-apps-script"></a>
 
-| En el editor de Apps Script | En este repo |
-|---|---|
-| `00_Constantes`, `01_Instalar`, `02_Hojas`, `03_Roles`, `04_Normalizar`, `05_Eventos`, `06_Estados`, `07_Obligaciones`, `08_Soportes`, `09_Enviar`, `10_WebApp`, `14_Campos`, `15_Carga`, `16_Metricas`, `99_Pruebas` | `src/*.gs` |
-| `ui/Index`, `ui/Estilos`, `ui/Comun`, `ui/Enviar`, `ui/Carga`, `ui/Campos`, `ui/Metricas`, `ui/App` | `src/ui/*.html` |
-| `appsscript.json` | `appsscript.json` |
+Son **tres archivos**, los de la carpeta `dist/`:
+
+| Archivo que creas en el editor | Qué pegas dentro | Tipo |
+|---|---|---|
+| `Codigo` | `dist/Codigo.gs` | Secuencia de comandos (.gs) |
+| `Index` | `dist/Index.html` | HTML |
+| `appsscript.json` | `dist/appsscript.json` | Manifiesto |
+
+Nada más. **No** hay que crear `00_Constantes`, `01_Instalar`, `ui/App` ni los
+otros veintiuno: `dist/Codigo.gs` ya los trae todos unidos en el orden correcto,
+y `dist/Index.html` trae toda la interfaz.
 
 Para ver `appsscript.json` en el editor hay que activar **Configuración del
 proyecto → Mostrar el archivo de manifiesto "appsscript.json"**.
 
-El orden de los archivos en el editor **no importa**, y eso está garantizado por
-una comprobación: `node tools/pruebas.mjs` carga los quince `.gs` al revés y
-falla si alguno depende del orden.
+> **Por qué así.** Antes había que crear veinticuatro archivos con nombres
+> exactos y en el orden correcto. Si uno quedaba mal nombrado o en otra
+> posición, el proyecto reventaba con `ReferenceError: ESTADO is not defined`,
+> un mensaje que no dice cuál es el archivo culpable. Con tres archivos ese
+> error deja de ser posible.
 
-Esto no es un detalle menor. Si un archivo declarara en su nivel superior algo
-como `var X = [ESTADO.PENDIENTE]`, leyendo una constante de `00_Constantes`, el
-proyecto entero reventaría con `ReferenceError: ESTADO is not defined` en cuanto
-ese archivo quedara antes que `00_Constantes` en la lista. Por eso todo lo que
-lee constantes de otro archivo está dentro de una función, no suelto.
+`dist/` se genera a partir de `src/` con `npm run build`, y está commiteado en
+el repo para que puedas copiarlo directo desde GitHub sin instalar nada.
+
+**`dist/` no se edita a mano.** Se edita `src/` y se corre `npm run build`.
+
+### 2b · Si tu proyecto ya quedó hecho un lío
+
+Si ya pegaste los archivos sueltos y te sale `ReferenceError`, no intentes
+arreglarlo archivo por archivo. Empieza limpio:
+
+1. En el editor, **borra todos los archivos** de Secuencia de comandos y HTML
+   que tengas. Deja solo `appsscript.json`.
+2. Crea `Codigo` y pega `dist/Codigo.gs`.
+3. Crea `Index` (tipo HTML) y pega `dist/Index.html`.
+4. Guarda y vuelve al Sheets.
+
+No pierdes nada: todo el código vive en este repo, y los datos están en el
+Sheets, no en el script.
 
 ### 3 · Correr `instalar()`
 
@@ -90,7 +115,8 @@ Menú **SINAV → Instalar / verificar**. La primera vez Google va a pedirte
 autorizar permisos (Sheets, Drive, Gmail): acepta.
 
 Si todavía no ves el menú SINAV, cierra y vuelve a abrir el Sheets, o corre
-`instalar` desde el editor eligiéndola en el desplegable de funciones.
+`instalar` desde el editor eligiéndola en el desplegable de funciones (está en
+`Codigo`, junto con todas las demás).
 
 Esto deja hecho, en este orden:
 
@@ -273,8 +299,9 @@ Qué cambió y por qué es seguro:
 |---|---|
 | No aparece el menú **SINAV** | Cierra y abre el Sheets. `onOpen()` solo corre al abrir el libro |
 | *"Falta la hoja X. Corre instalar()"* | Eso: menú SINAV → Instalar / verificar |
-| `ReferenceError: ESTADO is not defined` (o `HOJA`, `COLS`, `ROL`…) | Falta `00_Constantes` en el proyecto, está vacío, o tiene un error de sintaxis que impide que cargue. Ábrelo y comprueba que tenga las ~150 líneas |
-| No encuentro la función `instalar` en el desplegable | Falta `01_Instalar` en el proyecto, o tiene un error de sintaxis. El desplegable solo lista funciones de archivos que cargaron bien |
+| `ReferenceError: ESTADO is not defined` (o `HOJA`, `COLS`, `ROL`…) | Tienes los archivos sueltos en vez del paquete. Haz el [paso 2b](#2b--si-tu-proyecto-ya-quedó-hecho-un-lío): borra todo y pega los tres de `dist/` |
+| No encuentro la función `instalar` en el desplegable | `Codigo` no está en el proyecto, está vacío o tiene un error de sintaxis. El desplegable solo lista funciones de archivos que cargaron bien |
+| Tengo `instalar()` en un archivo que no es `Codigo` | Pegaste los archivos sueltos y alguno quedó con el contenido de otro. Paso 2b |
 | *"Tu correo está en la hoja USUARIOS con activo = NO"* | Alguien lo desactivó. Cámbialo a `SI` en USUARIOS |
 | *"Tu fila en USUARIOS no tiene un rol que SINAV reconozca"* | El valor de `rol` está mal escrito. Usa el desplegable: `PROFESIONAL`, `JEFE` o `ADMIN` |
 | *"No se pudo identificar tu cuenta"* | La persona entró con una cuenta que no es la corporativa |
@@ -291,10 +318,35 @@ Qué cambió y por qué es seguro:
 
 ## Desarrollo
 
+Los comandos:
+
+```
+npm run build     # regenera dist/ a partir de src/
+npm test          # corre las pruebas y luego el build
+npm run mock      # arma la interfaz para verla en el navegador
+```
+
+No hay dependencias que instalar: todo usa node a secas.
+
+### El build
+
+```
+npm run build
+```
+
+Une `src/*.gs` en `dist/Codigo.gs` y `src/ui/*.html` en `dist/Index.html`,
+resolviendo los `include()`. Antes de escribir nada comprueba que el resultado
+compile, que no reviente al cargar, que no haya dos funciones con el mismo
+nombre (al unir archivos una pisaría a la otra en silencio) y que `instalar`,
+`migrar`, `pruebas`, `onOpen` y `doGet` estén ahí.
+
+**Corre `npm run build` y commitea `dist/` cada vez que toques `src/`**, o lo
+que se pega en Apps Script queda viejo.
+
 ### Las pruebas
 
 ```
-node tools/pruebas.mjs
+npm test
 ```
 
 178 aserciones sobre las reglas donde un error silencioso se propaga: la
@@ -348,6 +400,19 @@ src/
 
 Los huecos 11, 12 y 13 están reservados a propósito para Respuestas, Alertas y
 Disparadores, que es lo que sigue.
+
+Y alrededor:
+
+```
+build.js          une src/ en dist/
+dist/             lo UNICO que se pega en Apps Script (3 archivos). Autogenerado
+tools/pruebas.mjs las pruebas
+tools/mock.mjs    arma la interfaz para verla sin desplegar
+```
+
+El código vive repartido en `src/` porque así se puede leer y probar por
+partes, pero **Apps Script recibe un solo archivo**: así el orden de carga deja
+de ser un problema y pegar el código es copiar tres cosas, no veinticuatro.
 
 ### Lo que falta (en orden)
 

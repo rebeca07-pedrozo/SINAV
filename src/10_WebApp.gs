@@ -4,8 +4,23 @@
  * salir de su cuenta y la respuesta tiene que volver a su bandeja.
  */
 
+/**
+ * El archivo del HTML se llama 'Index' cuando se pega el paquete de dist/ (un
+ * solo archivo) y 'ui/Index' cuando se trabaja con los archivos sueltos de
+ * src/. Se prueban los dos para que funcione en cualquiera de las dos formas,
+ * sin que el build tenga que reescribir esta linea.
+ */
+function archivoIndex() {
+  try {
+    HtmlService.createTemplateFromFile('Index');
+    return 'Index';
+  } catch (e) {
+    return 'ui/Index';
+  }
+}
+
 function doGet() {
-  var t = HtmlService.createTemplateFromFile('ui/Index');
+  var t = HtmlService.createTemplateFromFile(archivoIndex());
   return t.evaluate()
     .setTitle('SINAV')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
