@@ -6,6 +6,61 @@ function carpeta(clave) {
   return DriveApp.getFolderById(id);
 }
 
+/** Nombre usable como carpeta de Drive. */
+function nombreCarpeta(v) {
+  var s = String(v || '').replace(/[\\/]+/g, '-').replace(/\s+/g, ' ').trim();
+  return s || 'SIN DATO';
+}
+
+/**
+ * La carpeta de un municipio y un impuesto, creandola si no existe:
+ *   SINAV/Soportes/<municipio>/<impuesto>/
+ *
+ * Buscar carpetas en Drive es lo mas lento de una carga, y en un lote de 40
+ * PDF del mismo municipio se repetiria 40 veces. Por eso el id se guarda en
+ * las propiedades del script: la primera vez cuesta, las siguientes no.
+ * Si alguien borra la carpeta a mano, el id cacheado deja de servir y se
+ * vuelve a crear.
+ */
+function carpetaDe(raizClave, municipio, impuesto) {
+  var mun = nombreCarpeta(municipio);
+  var imp = nombreCarpeta(impuesto);
+  var clave = 'carp:' + raizClave + ':' + mun + '|' + imp;
+  var props = PropertiesService.getScriptProperties();
+
+  var guardado = props.getProperty(clave);
+  if (guardado) {
+    try {
+      var c = DriveApp.getFolderById(guardado);
+      if (!c.isTrashed()) return c;
+    } catch (e) { /* la borraron: se recrea abajo */ }
+  }
+
+  var dentroMun = carpetaPorNombre(carpeta(raizClave), mun);
+  var dentroImp = carpetaPorNombre(dentroMun, imp);
+  props.setProperty(clave, dentroImp.getId());
+  return dentroImp;
+}
+
+/** La carpeta donde va el soporte de una obligacion. */
+function carpetaSoporte(municipio, impuesto) {
+  return carpetaDe('carpeta_soportes', municipio, impuesto);
+}
+
+/** La carpeta donde va el sellado que devuelve la oficina. */
+function carpetaSellado(municipio, impuesto) {
+  return carpetaDe('carpeta_sellados', municipio, impuesto);
+}
+
+/** Nombre legible del archivo. El id ya trae municipio, impuesto y periodo. */
+function nombreSoporte(val, ix, nombreOriginal) {
+  var ext = (nombreOriginal || '').indexOf('.') > 0
+    ? nombreOriginal.slice(nombreOriginal.lastIndexOf('.')) : '';
+  var base = String(val[ix.municipio]) + ' ' + String(val[ix.impuesto]) + ' ' +
+             String(val[ix.periodo]);
+  return base.replace(/[\\/:*?"<>|]/g, '-') + ext;
+}
+
 /**
  * Sube el soporte de una obligacion. Cualquier tipo de archivo.
  * El cliente manda base64 porque google.script.run no pasa File.
@@ -26,20 +81,16 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
 
   exigeMia(val[ix.responsable], 'editarAjenas');
 
-  if ([ESTADO.PENDIENTE, ESTADO.LISTA, ESTADO.DEVUELTA, ESTADO.REBOTADO].indexOf(estado) < 0) {
+  if (ESTADOS_ADMITEN_SOPORTE.indexOf(estado) < 0) {
     throw new Error('No se cambia el soporte de una obligación en ' + estado + '.');
   }
 
   // 2. subir a Drive FUERA del cerrojo: es lo lento de todo esto
-  // nombre legible: el id ya trae municipio, impuesto y periodo
-  var ext = (nombre || '').indexOf('.') > 0 ? nombre.slice(nombre.lastIndexOf('.')) : '';
-  var base = String(val[ix.municipio]) + ' ' + String(val[ix.impuesto]) + ' ' +
-             String(val[ix.periodo]);
   var blob = Utilities.newBlob(Utilities.base64Decode(datosBase64),
                                tipo || 'application/octet-stream',
                                nombre || ('soporte-' + id));
-  blob.setName(base.replace(/[\\/:*?"<>|]/g, '-') + ext);
-  var archivo = carpeta('carpeta_soportes').createFile(blob);
+  blob.setName(nombreSoporte(val, ix, nombre));
+  var archivo = carpetaSoporte(val[ix.municipio], val[ix.impuesto]).createFile(blob);
 
   // 3. el cerrojo solo para escribir la hoja
   return conCerrojo(function () {
@@ -55,7 +106,9 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
     }
 
     escribirCampos(HOJA.OBLIGACIONES, f, campos);
-    registrar(id, EVENTO.SOPORTE_CARGADO, archivo.getName() + ' (' + archivo.getId() + ')');
+    registrar(id, EVENTO.SOPORTE_CARGADO,
+              archivo.getName() + ' (' + archivo.getId() + ') en ' +
+              nombreCarpeta(val[ix.municipio]) + '/' + nombreCarpeta(val[ix.impuesto]));
 
     return { id: id, soporte_id: archivo.getId(), nombre: archivo.getName(),
              estado: campos.estado || ahora };

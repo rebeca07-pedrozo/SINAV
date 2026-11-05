@@ -152,6 +152,36 @@ function armarId(codDane, impuesto, regimen, periodo) {
           normPeriodo(periodo)].join('|');
 }
 
+/** OFICINA | VIRTUAL. Por defecto OFICINA, que es el caso comun. */
+function normTipoPresentacion(v) {
+  return limpiar(v) === 'VIRTUAL' ? 'VIRTUAL' : 'OFICINA';
+}
+
+/**
+ * QUIEN paga: OFICINA | PAGADURIA. Por defecto OFICINA.
+ * Antes esta columna se llamaba medio_pago y mezclaba quien paga con como se
+ * paga: un "PSE" guardado ahi es una forma de pago, no un pagador, asi que
+ * cae a OFICINA y el PSE se recupera en normFormaPago.
+ */
+function normPagaQuien(v) {
+  var s = limpiar(v);
+  return PAGA_QUIEN.indexOf(s) >= 0 ? s : 'OFICINA';
+}
+
+/**
+ * COMO se paga: TRANSFERENCIA | PSE | EFECTIVO | OTRO.
+ * Vacio es un dato que falta, no un valor por defecto: lo llena el profesional
+ * a mano cuando sabe como se pago. '' si no reconoce.
+ */
+function normFormaPago(v) {
+  var s = limpiar(v).replace(/[^A-Z]/g, '');
+  if (s === 'PSE') return 'PSE';
+  if (s === 'TRANSFERENCIA' || s === 'TRANSF') return 'TRANSFERENCIA';
+  if (s === 'EFECTIVO' || s === 'CAJA') return 'EFECTIVO';
+  if (s === 'OTRO' || s === 'OTROS') return 'OTRO';
+  return '';
+}
+
 /**
  * Normaliza una obligacion completa en la entrada.
  * Devuelve {fila: {...}, problemas: [...]}. No escribe nada.
@@ -187,9 +217,16 @@ function normObligacion(cruda) {
   o.correo_oficina = normCorreos(cruda.correo_oficina);
   o.responsable = normCorreo(cruda.responsable);
 
-  o.tipo_presentacion = limpiar(cruda.tipo_presentacion) === 'VIRTUAL' ? 'VIRTUAL' : 'OFICINA';
-  var mp = limpiar(cruda.medio_pago);
-  o.medio_pago = (mp === 'PAGADURIA' || mp === 'PSE') ? mp : 'OFICINA';
+  o.tipo_presentacion = normTipoPresentacion(cruda.tipo_presentacion);
+
+  // medio_pago es el nombre viejo de la columna: se acepta como respaldo para
+  // que un origen que todavia lo use no pierda el dato.
+  var pagoCrudo = cruda.paga_quien !== undefined && cruda.paga_quien !== ''
+    ? cruda.paga_quien : cruda.medio_pago;
+  o.paga_quien = normPagaQuien(pagoCrudo);
+  o.forma_pago = normFormaPago(
+    cruda.forma_pago !== undefined && cruda.forma_pago !== ''
+      ? cruda.forma_pago : cruda.medio_pago);
 
   o.requiere_envio = normSiNo(cruda.requiere_envio, true) || 'REVISAR';
   o.exogena = o.impuesto === 'RETEICA' ? (normSiNo(cruda.exogena) || 'NO') : 'NO';

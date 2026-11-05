@@ -11,7 +11,9 @@ function instalar() {
     hecho.push(asegurarHojas());
     hecho.push(asegurarCarpetas());
     hecho.push(asegurarConfig());
+    hecho.push(asegurarRoles());
     hecho.push(asegurarAdmin());
+    hecho.push(asegurarValidaciones());
     hecho.push(asegurarEtiqueta());
     hecho.push(asegurarPruebas());
 
@@ -29,6 +31,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('SINAV')
     .addItem('Instalar / verificar', 'instalar')
+    .addItem('Migrar columnas', 'migrar')
     .addItem('Correr pruebas', 'pruebas')
     .addToUi();
 }
@@ -154,7 +157,8 @@ function asegurarAdmin() {
       return '';
     }
   }
-  agregarFilas(HOJA.USUARIOS, [[correo, correo.split('@')[0], ROL.ADMIN, 'SI']]);
+  agregarFilas(HOJA.USUARIOS, [filaUsuario(correo, nombreDesdeCorreo(correo),
+    ROL.ADMIN, AREA.MUNICIPALES, '')]);
   return 'USUARIOS: ' + correo + ' inscrito como ADMIN';
 }
 
@@ -186,7 +190,8 @@ function asegurarPruebas() {
       impuesto: 'RETEICA', regimen: '', periodo: '2026-11', periodicidad: 'MENSUAL ',
       vencimiento: d(12), nit_municipio: '899999061', valor: 4820350,
       correo_oficina: 'oficina.chapinero@davivienda.com', responsable: yoCorreo,
-      tipo_presentacion: 'OFICINA', medio_pago: 'OFICINA', requiere_envio: 'SI',
+      tipo_presentacion: 'OFICINA', paga_quien: 'OFICINA',
+      forma_pago: 'TRANSFERENCIA', requiere_envio: 'SI',
       exogena: 'SI', incluye_retencion: '', nota: 'Fila de prueba: normal, con soporte.',
       conSoporte: true },
 
@@ -194,8 +199,8 @@ function asegurarPruebas() {
       impuesto: 'AUTORRETEICA', regimen: 'GENERAL', periodo: '2026-11',
       periodicidad: 'Mensual', vencimiento: d(3), nit_municipio: '890905211',
       valor: 1230000, correo_oficina: 'oficina.poblado@davivienda.com',
-      responsable: yoCorreo, tipo_presentacion: 'OFICINA', medio_pago: 'PAGADURIA',
-      requiere_envio: 'SI', exogena: '', incluye_retencion: 'SI',
+      responsable: yoCorreo, tipo_presentacion: 'OFICINA', paga_quien: 'PAGADURIA',
+      forma_pago: '', requiere_envio: 'SI', exogena: '', incluye_retencion: 'SI',
       nota: 'Fila de prueba: SIN soporte a propósito. No se debe poder seleccionar.',
       conSoporte: false },
 
@@ -203,8 +208,8 @@ function asegurarPruebas() {
       impuesto: 'ICA', regimen: 'GENERAL', periodo: '2026-B5',
       periodicidad: 'Bimestral ', vencimiento: d(-6), nit_municipio: '890399011',
       valor: 7905100, correo_oficina: 'oficina.granada@davivienda.com,tesoreria.cali@davivienda.com',
-      responsable: yoCorreo, tipo_presentacion: 'OFICINA', medio_pago: 'PSE',
-      requiere_envio: 'SI', exogena: '', incluye_retencion: '',
+      responsable: yoCorreo, tipo_presentacion: 'VIRTUAL', paga_quien: 'OFICINA',
+      forma_pago: 'PSE', requiere_envio: 'SI', exogena: '', incluye_retencion: '',
       nota: 'Fila de prueba: ya vencida. El vencimiento no se reinicia nunca.',
       conSoporte: true }
   ];
@@ -253,7 +258,7 @@ function asegurarPruebas() {
 /** Un soporte de verdad en Drive, para que el envio de prueba tenga que adjuntar algo. */
 function soportePrueba(o) {
   var nombre = o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' (prueba).txt';
-  var dir = carpeta('carpeta_soportes');
+  var dir = carpetaSoporte(o.municipio, o.impuesto);
   var it = dir.getFilesByName(nombre);
   if (it.hasNext()) return it.next().getId();
 
@@ -271,4 +276,164 @@ function soportePrueba(o) {
   ].join('\n');
 
   return dir.createFile(Utilities.newBlob(texto, 'text/plain', nombre)).getId();
+}
+
+/* ===========================================================================
+   Roles, validaciones y migracion de columnas.
+   =========================================================================== */
+
+/** Arma una fila de USUARIOS por nombre de columna, nunca por posicion. */
+function filaUsuario(correo, nombre, rol, area, nivel) {
+  var v = { correo: correo, nombre: nombre, rol: rol, activo: 'SI',
+            area: area || '', nivel: nivel || '' };
+  return COLS.USUARIOS.map(function (c) {
+    return v[c] === undefined ? '' : v[c];
+  });
+}
+
+/**
+ * La hoja ROLES es referencia para humanos: dice que puede cada rol y quien lo
+ * tiene. Se reescribe en cada instalar() porque la fuente de verdad es
+ * ROLES_DEFINICION en el codigo, no lo que alguien haya editado en la hoja.
+ */
+function asegurarRoles() {
+  var h = hoja(HOJA.ROLES);
+  var ancho = COLS.ROLES.length;
+  var sobran = h.getLastRow() - 1 - ROLES_DEFINICION.length;
+  if (sobran > 0) h.deleteRows(2 + ROLES_DEFINICION.length, sobran);
+  h.getRange(2, 1, ROLES_DEFINICION.length, ancho).setValues(ROLES_DEFINICION);
+  h.getRange(2, 1, ROLES_DEFINICION.length, ancho).setVerticalAlignment('top')
+   .setWrap(true);
+  h.setColumnWidth(1, 120);
+  h.setColumnWidth(2, 280);
+  h.setColumnWidth(3, 520);
+  return 'hoja ROLES: ' + ROLES_DEFINICION.length + ' roles descritos';
+}
+
+/**
+ * Listas desplegables en las columnas que se llenan a mano. No son seguridad
+ * (el servidor vuelve a normalizar todo), son para que nadie escriba
+ * "Profecional" en USUARIOS ni "pce" en forma_pago.
+ */
+function asegurarValidaciones() {
+  var notas = [];
+
+  var poner = function (nombreHoja, columna, valores, permitirVacio) {
+    var h = hoja(nombreHoja);
+    var ix = indices(nombreHoja);          // el encabezado real, no el esperado
+    if (!(columna in ix)) return;
+    var i = ix[columna];
+    var n = h.getMaxRows() - 1;
+    if (n < 1) return;
+    var regla = SpreadsheetApp.newDataValidation()
+      .requireValueInList(valores, true)
+      .setAllowInvalid(!!permitirVacio)
+      .build();
+    h.getRange(2, i + 1, n, 1).setDataValidation(regla);
+    notas.push(nombreHoja + '.' + columna);
+  };
+
+  poner(HOJA.USUARIOS, 'rol', [ROL.PROFESIONAL, ROL.JEFE, ROL.ADMIN], false);
+  poner(HOJA.USUARIOS, 'activo', ['SI', 'NO'], false);
+  poner(HOJA.USUARIOS, 'area', AREAS, true);
+  poner(HOJA.USUARIOS, 'nivel', NIVELES, true);
+
+  poner(HOJA.OBLIGACIONES, 'tipo_presentacion', TIPOS_PRESENTACION, true);
+  poner(HOJA.OBLIGACIONES, 'paga_quien', PAGA_QUIEN, true);
+  poner(HOJA.OBLIGACIONES, 'forma_pago', FORMAS_PAGO, true);
+  poner(HOJA.OBLIGACIONES, 'requiere_envio', ['SI', 'NO', 'REVISAR'], true);
+  poner(HOJA.OBLIGACIONES, 'exogena', ['SI', 'NO'], true);
+  poner(HOJA.OBLIGACIONES, 'incluye_retencion', ['SI', 'NO'], true);
+  poner(HOJA.OBLIGACIONES, 'periodicidad', PERIODICIDADES, true);
+
+  return notas.length ? 'validaciones: ' + notas.join(', ') : '';
+}
+
+/**
+ * migrar() · pasa un libro viejo al esquema nuevo. Idempotente.
+ *
+ * 1. USUARIOS: normaliza el rol y rellena area y nivel vacios con los valores
+ *    por defecto de CONFIG. No reactiva a nadie que tenga activo = NO.
+ * 2. OBLIGACIONES: la columna que antes se llamaba medio_pago ahora se llama
+ *    paga_quien y ocupa el mismo sitio, asi que los valores viejos siguen ahi.
+ *    Un "PSE" guardado ahi era una forma de pago: se mueve a forma_pago y
+ *    paga_quien queda en OFICINA. forma_pago que ya tenga valor no se toca,
+ *    que es lo que hace que correr esto dos veces no borre nada.
+ *
+ * No mueve archivos de Drive: los soportes que ya esten en la carpeta plana se
+ * quedan donde estan y siguen funcionando. Los nuevos van a la carpeta del
+ * municipio.
+ */
+function migrar() {
+  return conCerrojo(function () {
+    var notas = [];
+
+    // ---- USUARIOS ----
+    var hu = hoja(HOJA.USUARIOS);
+    var ixu = indices(HOJA.USUARIOS);
+    var fu = filas(HOJA.USUARIOS);
+    var rolDef = normalizarRol(config('rol_defecto')) || ROL.PROFESIONAL;
+    var areaDef = normalizarArea(config('area_defecto'));
+    var nivelDef = normalizarNivel(config('nivel_defecto'));
+    var tocadas = 0;
+
+    for (var i = 0; i < fu.length; i++) {
+      if (!String(fu[i][ixu.correo]).trim()) continue;
+      var cambios = {};
+
+      var rol = normalizarRol(fu[i][ixu.rol]);
+      if (!rol) { rol = rolDef; cambios.rol = rol; }
+      else if (rol !== String(fu[i][ixu.rol]).trim()) cambios.rol = rol;
+
+      if ('area' in ixu && !normalizarArea(fu[i][ixu.area]) && areaDef) {
+        cambios.area = areaDef;
+      }
+      // el JEFE y el ADMIN no llevan nivel: el nivel es de los profesionales
+      if ('nivel' in ixu && !normalizarNivel(fu[i][ixu.nivel]) &&
+          rol === ROL.PROFESIONAL && nivelDef) {
+        cambios.nivel = nivelDef;
+      }
+
+      if (Object.keys(cambios).length) {
+        escribirCampos(HOJA.USUARIOS, i + 2, cambios);
+        tocadas++;
+      }
+    }
+    if (tocadas) notas.push('USUARIOS: ' + tocadas + ' filas completadas');
+
+    // ---- OBLIGACIONES ----
+    var ixo = indices(HOJA.OBLIGACIONES);
+    if (!('paga_quien' in ixo) || !('forma_pago' in ixo)) {
+      notas.push('OBLIGACIONES: faltan las columnas nuevas. Corre instalar() primero.');
+      return notas.join('\n');
+    }
+
+    var fo = filas(HOJA.OBLIGACIONES);
+    var movidas = 0;
+    for (var j = 0; j < fo.length; j++) {
+      if (!String(fo[j][ixo.id]).trim()) continue;
+
+      var crudo = fo[j][ixo.paga_quien];
+      var pagaNuevo = normPagaQuien(crudo);
+      var formaActual = normFormaPago(fo[j][ixo.forma_pago]);
+      var formaNueva = formaActual || normFormaPago(crudo);
+
+      var c = {};
+      if (String(crudo).trim() !== pagaNuevo) c.paga_quien = pagaNuevo;
+      if (String(fo[j][ixo.forma_pago]).trim() !== formaNueva) c.forma_pago = formaNueva;
+
+      if (Object.keys(c).length) {
+        escribirCampos(HOJA.OBLIGACIONES, j + 2, c);
+        movidas++;
+      }
+    }
+    if (movidas) notas.push('OBLIGACIONES: ' + movidas + ' filas con el pago repartido');
+
+    _cacheConfig = null;
+    _yo = null;
+
+    var resumen = notas.length ? notas.join('\n') : 'Nada que migrar: ya está al día.';
+    Logger.log(resumen);
+    return resumen;
+  });
 }

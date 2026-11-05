@@ -8,7 +8,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
-const archivos = ['00_Constantes.gs', '04_Normalizar.gs', '06_Estados.gs', '99_Pruebas.gs'];
+const archivos = ['00_Constantes.gs', '03_Roles.gs', '04_Normalizar.gs',
+                 '06_Estados.gs', '09_Enviar.gs', '15_Carga.gs',
+                 '16_Metricas.gs', '99_Pruebas.gs'];
 
 const codigo = archivos
   .map((f) => readFileSync(join(raiz, 'src', f), 'utf8'))

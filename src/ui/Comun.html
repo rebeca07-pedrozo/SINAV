@@ -45,6 +45,40 @@ const ETIQUETA_ESTADO = {
   REBOTADO: 'Rebotado'
 };
 
+/**
+ * Como se escribe cada valor del enum en pantalla. Las siglas se quedan en
+ * mayuscula (PSE no es "Pse") y las palabras llevan su tilde, que el valor
+ * guardado va sin acentos a proposito.
+ */
+const ETIQUETA_VALOR = {
+  OFICINA: 'Oficina', PAGADURIA: 'Pagaduría', VIRTUAL: 'Virtual',
+  PSE: 'PSE', TRANSFERENCIA: 'Transferencia', EFECTIVO: 'Efectivo', OTRO: 'Otro',
+  MENSUAL: 'Mensual', BIMESTRAL: 'Bimestral', TRIMESTRAL: 'Trimestral',
+  CUATRIMESTRAL: 'Cuatrimestral', ANUAL: 'Anual',
+  SI: 'Sí', NO: 'No', REVISAR: 'Por revisar',
+  RETEICA: 'RETEICA', AUTORRETEICA: 'AUTORRETEICA', ICA: 'ICA', EXOGENA: 'EXÓGENA',
+  '(sin dato)': 'Sin dato'
+};
+
+/** El valor tal como se lee. Un dato que falta es una raya, no una cadena vacia. */
+function bonito(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  if (!s) return '—';
+  if (ETIQUETA_VALOR[s]) return ETIQUETA_VALOR[s];
+  return s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
+}
+
+/**
+ * Arma una frase mezclando cifras en negrilla y texto, sin que htm se coma los
+ * espacios entre pedazos. Es el mismo truco de la pestana ENVIAR: si se
+ * interpola directo en la plantilla, el salto de linea de la indentacion
+ * desaparece y queda "les faltaun dato".
+ */
+function frase(partes) {
+  return partes.map((x, i) =>
+    typeof x === 'number' ? html`<b key=${i}>${x}</b>` : x);
+}
+
 /* ---------- piezas --------------------------------------------------------- */
 
 /** Un solo juego de iconos: trazo de 1.5px, 16px, sin relleno. */
@@ -56,7 +90,9 @@ function Icono({ nombre }) {
     asignacion: 'M10.5 13.5v-1a2.5 2.5 0 0 0-2.5-2.5H4.5A2.5 2.5 0 0 0 2 12.5v1M6.25 7.5a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5zM14 13.5v-1a2.5 2.5 0 0 0-1.9-2.4M10.5 3.1a2.25 2.25 0 0 1 0 4.3',
     configuracion: 'M2.5 5h11M2.5 11h11M6 2.8v4.4M10.5 8.8v4.4',
     subir: 'M8 11V3M5 6l3-3 3 3M3 12.5h10',
-    recargar: 'M13 8a5 5 0 1 1-1.6-3.7M13 2.5V5h-2.5'
+    recargar: 'M13 8a5 5 0 1 1-1.6-3.7M13 2.5V5h-2.5',
+    campos: 'M3 3.5h10M3 8h10M3 12.5h6M11.5 11.5l1 1 2-2',
+    metricas: 'M2.5 13.5h11M4.5 11V7M8 11V3.5M11.5 11V9'
   };
   return html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d=${trazos[nombre]}
     stroke-linecap="round" stroke-linejoin="round" /></svg>`;

@@ -1,0 +1,318 @@
+<script>
+/* ===========================================================================
+   SINAV · pestana DIGITALIZAR.
+   La pregunta de esta pantalla: que obligacion le falta un dato que solo yo
+   puedo escribir. Lo incompleto va arriba, no lo mas reciente.
+   =========================================================================== */
+
+const FILTROS_CAMPOS = [
+  { id: 'incompletas', et: 'Les falta un dato', clave: 'incompletas' },
+  { id: 'sin_valor', et: 'Sin valor liquidado', clave: 'sin_valor' },
+  { id: 'por_revisar', et: 'Sin definir si se envía', clave: 'por_revisar' },
+  { id: 'todas', et: 'Todas', clave: 'todas' }
+];
+
+function aplicaFiltroCampos(o, filtro) {
+  if (filtro === 'incompletas') return o.faltan && o.faltan.length > 0;
+  if (filtro === 'sin_valor') return !o.valor;
+  if (filtro === 'por_revisar') return o.requiere_envio === 'REVISAR';
+  return true;
+}
+
+/** Un campo del formulario, pintado segun lo que dijo el servidor. */
+function CampoEdit({ clave, def, valor, alCambiar }) {
+  const id = 'c-' + clave;
+
+  if (def.tipo === 'lista') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <select id=${id} value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)}>
+        ${def.vacio ? html`<option value="">— sin dato —</option>` : null}
+        ${def.valores.map((v) => html`<option key=${v} value=${v}>
+          ${bonito(v)}</option>`)}
+      </select>
+    </label>`;
+  }
+
+  if (def.tipo === 'valor') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="text" inputMode="numeric" class="num"
+        placeholder="0" value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+      <small>Se liquida en pesos. Acepta $ y puntos de mil.</small>
+    </label>`;
+  }
+
+  if (def.tipo === 'fecha') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="date" value=${valor || ''}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+    </label>`;
+  }
+
+  return html`<label class="campo ancho" key=${clave}>
+    <span>${def.et}</span>
+    <textarea id=${id} rows="2" value=${valor == null ? '' : String(valor)}
+      onChange=${(e) => alCambiar(clave, e.target.value)}></textarea>
+  </label>`;
+}
+
+/** El formulario de una obligacion. */
+function Formulario({ o, opciones, alGuardar, alCerrar, guardando, fallo }) {
+  const [borrador, setBorrador] = useState({});
+
+  useEffect(() => { setBorrador({}); }, [o.id]);
+
+  const valorDe = (k) => (k in borrador ? borrador[k] : o[k]);
+  const cambiar = (k, v) => setBorrador((b) => Object.assign({}, b, { [k]: v }));
+  const sucios = Object.keys(borrador).filter((k) => {
+    const a = o[k] == null ? '' : String(o[k]);
+    const b = borrador[k] == null ? '' : String(borrador[k]);
+    return a !== b;
+  });
+
+  // exogena solo aplica a RETEICA, incluye_retencion solo a AUTORRETEICA
+  const claves = Object.keys(opciones).filter((k) => {
+    const d = opciones[k];
+    return !d.solo || d.solo === o.impuesto;
+  });
+
+  return html`<section class="panel panel-form">
+    <div class="panel-cab">
+      <h2>${o.municipio} · ${o.impuesto} · ${o.periodo}</h2>
+      <span class="total">DANE ${o.cod_dane}${o.cod_oficina
+        ? ' · oficina ' + o.cod_oficina : ''}</span>
+      <span class="der"><${Pildora} estado=${o.estado} /></span>
+    </div>
+
+    <p class="hallazgo hallazgo-form">
+      Vence ${o.vencimiento || 'sin fecha'} (${textoDias(o.dias)}).
+      ${o.revision_fecha
+        ? ' Revisada el ' + o.revision_fecha + ' por ' + o.revision_por + '.'
+        : ' Todavía sin visto bueno.'}
+      ${o.faltan && o.faltan.length
+        ? ' Falta: ' + o.faltan.join(', ') + '.'
+        : ' No le falta ningún dato manual.'}
+    </p>
+
+    <div class="rejilla-campos">
+      ${claves.map((k) => html`<${CampoEdit} key=${k} clave=${k}
+        def=${opciones[k]} valor=${valorDe(k)} alCambiar=${cambiar} />`)}
+    </div>
+
+    ${fallo ? html`<div class="error-bloque"><p><b>No se pudo guardar.</b> ${fallo}</p></div>` : null}
+
+    <div class="pie-form">
+      <button class="btn btn-principal" disabled=${!sucios.length || guardando}
+        onClick=${() => alGuardar(o.id, borrador)}>
+        ${guardando ? 'Guardando…'
+          : (sucios.length ? 'Guardar ' + sucios.length +
+             (sucios.length === 1 ? ' cambio' : ' cambios') : 'Sin cambios')}
+      </button>
+      <button class="btn" onClick=${alCerrar} disabled=${guardando}>Cerrar</button>
+      ${sucios.length ? html`<span class="sub">
+        Sin guardar: ${sucios.map((k) => opciones[k].et).join(', ')}.
+      </span>` : null}
+    </div>
+  </section>`;
+}
+
+function Campos() {
+  const [datos, setDatos] = useState(null);
+  const [filtro, setFiltro] = useState('incompletas');
+  const [abierta, setAbierta] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [fallo, setFallo] = useState('');
+  const [falloForm, setFalloForm] = useState('');
+  const [aviso, setAviso] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setFallo('');
+    try {
+      setDatos(await llamar('apiListaCampos'));
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function guardar(id, borrador) {
+    setGuardando(true);
+    setFalloForm('');
+    try {
+      const r = await llamar('apiGuardarCampos', id, borrador);
+      setAviso({ clase: r.cambios ? '' : 'malo',
+                 titulo: r.cambios
+                   ? r.cambios + (r.cambios === 1 ? ' campo guardado' : ' campos guardados')
+                   : 'Nada cambió',
+                 lineas: r.detalle ? [r.detalle] : [] });
+      await cargar();
+    } catch (e) {
+      setFalloForm(String(e && e.message ? e.message : e));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (!datos && fallo) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Digitalizar</h1></div></div>
+      <section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+      </section>
+    </main>`;
+  }
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Digitalizar</h1>
+        <p class="hallazgo"><${Hueso} ancho="380px" /></p></div></div>
+      <section class="panel">
+        <div class="panel-cab"><h2>Obligaciones</h2></div>
+        <table><${Huesos} filas=${3} /></table>
+      </section>
+    </main>`;
+  }
+
+  const filas = datos.filas || [];
+  const r = datos.resumen;
+  const visibles = filas.filter((o) => aplicaFiltroCampos(o, filtro));
+  const elegida = filas.find((o) => o.id === abierta);
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Digitalizar</h1>
+        <p class="hallazgo">
+          ${r.incompletas
+            ? frase([
+                r.incompletas,
+                r.incompletas === 1
+                  ? ' obligación necesita un dato que solo tú puedes escribir'
+                  : ' obligaciones necesitan un dato que solo tú puedes escribir',
+                '. ',
+                ...(r.sin_valor
+                  ? [r.sin_valor, r.sin_valor === 1
+                      ? ' está sin valor liquidado.' : ' están sin valor liquidado.']
+                  : [])
+              ])
+            : 'Ninguna obligación tiene campos manuales pendientes.'}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn" onClick=${cargar}>
+          <${Icono} nombre="recargar" /> Actualizar
+        </button>
+      </div>
+    </div>
+
+    <fieldset class="conteos">
+      <legend>Filtrar la lista</legend>
+      ${FILTROS_CAMPOS.map((f) => {
+        const n = r[f.clave] || 0;
+        return html`<button key=${f.id} type="button" class="conteo"
+          aria-pressed=${filtro === f.id} onClick=${() => setFiltro(f.id)}>
+          <span class="et">${f.et}</span>
+          <span class=${'vl' + (n === 0 ? ' cero' : '')}>${n}</span>
+        </button>`;
+      })}
+    </fieldset>
+
+    ${aviso ? html`<div class=${'resultado ' + aviso.clase} role="status">
+      <h2>${aviso.titulo}</h2>
+      ${aviso.lineas.length ? html`<ul>
+        ${aviso.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}</ul>` : null}
+    </div>` : null}
+
+    ${elegida ? html`<${Formulario} o=${elegida} opciones=${datos.opciones}
+      alGuardar=${guardar} alCerrar=${() => setAbierta('')}
+      guardando=${guardando} fallo=${falloForm} />` : null}
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Obligaciones</h2>
+        <span class="total">${visibles.length} de ${filas.length}</span>
+        <span class="der">${datos.generado ? 'leído ' + datos.generado.slice(11) : ''}</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Municipio</th>
+            <th>Impuesto</th>
+            <th class="num">Periodo</th>
+            <th class="num der">Vence</th>
+            <th class="num der">Valor</th>
+            <th>Pago</th>
+            <th>Le falta</th>
+            <th>Estado</th>
+            <th class="der">Campos</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${visibles.map((o) => html`<tr key=${o.id}
+            data-elegida=${o.id === abierta ? 'si' : 'no'}>
+            <td class="celda-mun">
+              <span class="ident">${o.municipio}</span>
+              <span class="sub">DANE ${o.cod_dane}${o.cod_oficina
+                ? ' · oficina ' + o.cod_oficina : ''}</span>
+            </td>
+            <td class="celda-linea2">
+              <span>${o.impuesto}</span>
+              ${o.regimen && o.regimen !== 'GENERAL'
+                ? html`<span class="sub">${o.regimen.toLowerCase()}</span>` : null}
+            </td>
+            <td class="celda-linea2 num">
+              <span>${o.periodo}</span>
+              <span class="sub">${o.periodicidad
+                ? bonito(o.periodicidad) : '—'}</span>
+            </td>
+            <td class="celda-linea2 num der">
+              <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
+              <span class=${'sub ' + (o.dias === null ? ''
+                : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : '')))}>
+                ${textoDias(o.dias)}</span>
+            </td>
+            <td class="celda-linea2 num der">
+              ${o.valor ? html`<span>${pesos(o.valor)}</span>`
+                : html`<span class="raya">—</span>`}
+            </td>
+            <td class="celda-linea2">
+              <span>${o.paga_quien
+                ? bonito(o.paga_quien) : html`<span class="raya">—</span>`}</span>
+              <span class="sub">${o.forma_pago
+                ? bonito(o.forma_pago) : 'forma sin definir'}</span>
+            </td>
+            <td class="celda-linea2">
+              ${o.faltan && o.faltan.length
+                ? html`<span class="falta-chip">${o.faltan.length}</span>
+                    <span class="sub">${o.faltan.join(', ')}</span>`
+                : html`<span class="sub">completa</span>`}
+            </td>
+            <td class="celda-linea2"><${Pildora} estado=${o.estado} /></td>
+            <td class="celda-accion der">
+              <button class="btn" onClick=${() => {
+                setAbierta(o.id === abierta ? '' : o.id);
+                setFalloForm('');
+                setAviso(null);
+              }}>${o.id === abierta ? 'Cerrar' : 'Digitalizar'}</button>
+            </td>
+          </tr>`)}
+        </tbody>
+      </table>
+
+      ${fallo ? html`<${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />` : null}
+
+      ${!fallo && !visibles.length ? html`<p class="vacio">
+        ${filas.length
+          ? 'Ninguna cae en este filtro. Las otras ' + filas.length + ' están en "Todas".'
+          : 'No tienes obligaciones asignadas, o todas están APROBADAS.'}
+      </p>` : null}
+    </section>
+  </main>`;
+}
+</script>

@@ -408,6 +408,144 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
   .celda-accion .btn { height: 40px; }
 }
 
+
+/* ===========================================================================
+   Pantallas nuevas: Digitalizar, Carga masiva y Metricas.
+   Mismas reglas: el cromo sin color, un borde o una sombra pero no los dos,
+   cifras tabulares, y cada estado con su palabra escrita al lado.
+   =========================================================================== */
+
+/* ---------- controles de formulario --------------------------------------- */
+
+.campo { display: block; }
+.campo > span {
+  display: block; margin-bottom: 4px;
+  font-size: var(--fs-meta); color: var(--apagado);
+}
+.campo > small {
+  display: block; margin-top: 4px;
+  font-size: var(--fs-meta); color: var(--apagado);
+}
+.campo.ancho { grid-column: 1 / -1; }
+
+.campo-linea { display: flex; align-items: center; gap: 8px; }
+.campo-linea > span { margin: 0; white-space: nowrap; }
+
+select, input[type="text"], input[type="date"], textarea {
+  width: 100%; min-height: var(--alto-ctrl); padding: 0 10px;
+  font: 400 var(--fs-cuerpo)/var(--alto-ctrl) var(--fuente);
+  color: var(--tinta); background: var(--superficie);
+  border: 1px solid var(--control); border-radius: var(--r-control);
+}
+textarea { padding: 7px 10px; line-height: 19px; resize: vertical; }
+input[type="text"].num { font-variant-numeric: tabular-nums; text-align: right; }
+
+select:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--tinta); outline-offset: 1px; border-color: var(--tinta);
+}
+select:disabled, input:disabled, textarea:disabled {
+  background: var(--realce); color: var(--apagado); cursor: not-allowed;
+}
+
+/* ---------- el formulario de digitalizacion -------------------------------- */
+
+.panel-form { margin: 0 0 var(--gap); }
+.hallazgo-form { padding: 0 var(--pad); max-width: 78ch; }
+
+.rejilla-campos {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px; padding: 14px var(--pad);
+}
+
+.pie-form {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 0 var(--pad) 16px;
+}
+.pie-form .sub { margin: 0; }
+
+/* cuantos datos le faltan a una fila: el numero y, al lado, cuales */
+.falta-chip {
+  display: inline-block; min-width: 18px; padding: 0 5px;
+  border-radius: var(--r-chip); text-align: center;
+  font-size: var(--fs-meta); font-weight: 500;
+  background: var(--porvencer-fondo); color: var(--porvencer-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+td.celda-ancha { padding: 8px 10px; min-width: 260px; vertical-align: middle; }
+
+.tira-controles {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  padding: 0 var(--pad) 4px;
+}
+.tira-controles .campo { min-width: 220px; }
+.tira-controles .sub { margin: 0 0 6px; }
+
+/* ---------- metricas ------------------------------------------------------- */
+
+.tarjetas {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px; margin: 0 0 var(--gap);
+}
+.tarjeta {
+  padding: 12px; background: var(--superficie);
+  border: 1px solid var(--borde); border-radius: var(--r-tarjeta);
+}
+.tarjeta .et { display: block; font-size: var(--fs-chico); color: var(--apagado); }
+.tarjeta .vl {
+  display: block; margin-top: 3px;
+  font-size: var(--fs-seccion); font-weight: 600; color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+.tarjeta .sub { margin-top: 2px; }
+/* el nivel tinta el borde izquierdo, no el relleno: el color sigue por debajo
+   del 1% de los pixeles y las alertas de verdad no se diluyen */
+.tarjeta.vencido { border-left: 3px solid var(--vencido); padding-left: 10px; }
+.tarjeta.porvencer { border-left: 3px solid var(--porvencer); padding-left: 10px; }
+.tarjeta.aldia { border-left: 3px solid var(--aldia); padding-left: 10px; }
+
+.dos-columnas {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0 var(--canaleta); padding: 0 var(--pad);
+}
+
+.reparto { padding: 0 0 14px; }
+.reparto h3 {
+  margin: 10px 0 6px; font-size: var(--fs-meta); font-weight: 400;
+  color: var(--apagado);
+}
+.reparto .vacio { padding: 6px 0; }
+
+.tabla-reparto td { padding: 4px 0; border: 0; font-size: var(--fs-cuerpo); }
+.tabla-reparto tr + tr td { border-top: 1px solid var(--regla); }
+.rep-et { color: var(--tinta); }
+.rep-barra { width: 45%; padding: 4px 10px !important; }
+.rep-vl { width: 48px; font-variant-numeric: tabular-nums; color: var(--tinta); }
+
+.barra {
+  display: block; height: 6px; min-width: 2px;
+  background: var(--activo); border-radius: var(--r-chip);
+}
+
+.bloque-pago { padding: 0 0 6px; }
+.bloque-pago h3 {
+  margin: 10px 0 2px; font-size: var(--fs-cuerpo); font-weight: 600;
+  color: var(--tinta);
+}
+.cifra-pago {
+  margin: 0; font-size: var(--fs-titulo); font-weight: 600; color: var(--tinta);
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.cifra-pago .sub { font-size: var(--fs-chico); font-weight: 400; }
+
+.pie-lienzo { margin: var(--gap) 0 0; }
+
+@media (max-width: 720px) {
+  .rejilla-campos { grid-template-columns: 1fr; }
+  .dos-columnas { grid-template-columns: 1fr; }
+  .rep-barra { width: 35%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

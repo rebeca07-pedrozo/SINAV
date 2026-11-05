@@ -54,7 +54,7 @@ function cuerpoDe(o, modo) {
     'Periodo: ' + o.periodo + ' (' + o.periodicidad + ')',
     'Vence: ' + fechaTexto(o.vencimiento),
     'NIT del municipio: ' + (o.nit_municipio || '-'),
-    'Presentación: ' + o.tipo_presentacion + ' - pago por ' + o.medio_pago,
+    'Presentación: ' + o.tipo_presentacion + ' - paga ' + textoPago(o),
     'Valor: ' + pesos(o.valor),
     '',
     'Por favor RESPONDA SOBRE ESTE MISMO CORREO, no abra uno nuevo, y adjunte el',
@@ -68,6 +68,23 @@ function cuerpoDe(o, modo) {
     lineas.unshift('[MODO PRUEBA] Este correo iba para: ' + (o.correo_oficina || '-'), '');
   }
   return lineas.join('\n');
+}
+
+/**
+ * Como se lee el pago en el correo. Son dos datos: quien paga y con que.
+ * La forma de pago puede estar vacia (todavia no se sabe), y en ese caso no se
+ * escribe nada en vez de un "undefined".
+ */
+var ETIQUETA_PAGO = {
+  OFICINA: 'Oficina', PAGADURIA: 'Pagaduría',
+  PSE: 'PSE', TRANSFERENCIA: 'Transferencia', EFECTIVO: 'Efectivo', OTRO: 'Otro'
+};
+
+function textoPago(o) {
+  var quien = ETIQUETA_PAGO[String(o.paga_quien || '').trim()] || '';
+  var forma = ETIQUETA_PAGO[String(o.forma_pago || '').trim()] || '';
+  if (!quien) return 'sin definir';
+  return forma ? quien + ' (' + forma + ')' : quien;
 }
 
 function cuerpoHtmlDe(o, modo) {
@@ -93,7 +110,7 @@ function cuerpoHtmlDe(o, modo) {
       fila('Periodo', o.periodo + ' (' + o.periodicidad + ')') +
       fila('Vence', fechaTexto(o.vencimiento)) +
       fila('NIT del municipio', o.nit_municipio || '-') +
-      fila('Presentación', o.tipo_presentacion + ' &middot; pago por ' + o.medio_pago) +
+      fila('Presentación', o.tipo_presentacion + ' &middot; paga ' + textoPago(o)) +
       fila('Valor', pesos(o.valor)) +
     '</table>' +
     '<p style="background:#f2f2f2;padding:10px 12px;margin:16px 0">' +
