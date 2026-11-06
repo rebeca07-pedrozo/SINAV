@@ -2749,9 +2749,14 @@ function periodoDeEjemplo(periodicidad) {
  * empezar, corre borrarEjemplo() primero.
  */
 function sembrarEjemplo(correoProfesional) {
-  var correo = normCorreo(correoProfesional);
+  // Sin argumento se asigna a quien la corre. Es lo que pasa al elegirla en el
+  // desplegable del editor, que no permite pasar parametros: antes reventaba
+  // con un error, y lo util es que el ADMIN se las asigne a si mismo para
+  // probar. Desde el menu del Sheets si se pide el correo.
+  var correo = normCorreo(correoProfesional) ||
+               normCorreo(Session.getEffectiveUser().getEmail());
   if (!correo) {
-    throw new Error('Hace falta el correo del profesional. Ejemplo: ' +
+    throw new Error('No se pudo leer ningún correo. Pásalo a mano: ' +
                     'sembrarEjemplo("nombre.apellido@davivienda.com")');
   }
 
@@ -2964,15 +2969,20 @@ function generarObligaciones(cuantas, correoResponsable, semilla) {
   var azar = azarConSemilla(semilla);
   var deUno = function (lista) { return lista[Math.floor(azar() * lista.length)]; };
 
-  // a quien se le asigna
+  // a quien se le asigna. Sin correo y sin profesionales en USUARIOS, se las
+  // queda quien la corre: es lo que hace util correrla desde el editor.
   var fijo = normCorreo(correoResponsable);
   var equipo = fijo ? [fijo] : asignables()
     .filter(function (u) { return u.rol === ROL.PROFESIONAL; })
     .map(function (u) { return u.correo; });
 
   if (!fijo && !equipo.length) {
-    throw new Error('No hay profesionales activos en USUARIOS. ' +
-      'Inscribe al menos uno, o pasa un correo: generarObligaciones(60, "correo@davivienda.com")');
+    var mio = normCorreo(Session.getEffectiveUser().getEmail());
+    if (!mio) {
+      throw new Error('No hay profesionales activos en USUARIOS y no se pudo ' +
+        'leer tu correo. Pasa uno: generarObligaciones(60, "correo@davivienda.com")');
+    }
+    equipo = [mio];
   }
 
   return conCerrojo(function () {
