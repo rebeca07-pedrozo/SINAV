@@ -206,3 +206,215 @@ function sembrarEjemploDesdeMenu() {
     ui.alert('No se pudo', String(e.message || e), ui.ButtonSet.OK);
   }
 }
+
+/* ===========================================================================
+   Generador de volumen.
+   El escenario de arriba son 8 filas para seguir un caso a mano. Esto llena la
+   hoja con decenas, para ver como se comporta la herramienta con trabajo de
+   verdad: filtros, conteos, metricas, carga masiva de un lote entero.
+   =========================================================================== */
+
+/**
+ * Capitales de departamento con su codigo DANE real.
+ * El codigo de oficina y el NIT del municipio son de ejemplo: el calendario
+ * real trae los suyos y hay que tomarlos de ahi.
+ */
+var CATALOGO_MUNICIPIOS = [
+  ['11001', 'Bogotá D.C.',     '0851'], ['05001', 'Medellín',        '0742'],
+  ['76001', 'Cali',            '0304'], ['08001', 'Barranquilla',    '0415'],
+  ['13001', 'Cartagena',       '0519'], ['68001', 'Bucaramanga',     '0628'],
+  ['66001', 'Pereira',         '0733'], ['17001', 'Manizales',       '0260'],
+  ['47001', 'Santa Marta',     '0188'], ['50001', 'Villavicencio',   '0394'],
+  ['73001', 'Ibagué',          '0477'], ['52001', 'Pasto',           '0561'],
+  ['54001', 'Cúcuta',          '0203'], ['63001', 'Armenia',         '0318'],
+  ['23001', 'Montería',        '0682'], ['70001', 'Sincelejo',       '0795'],
+  ['20001', 'Valledupar',      '0837'], ['19001', 'Popayán',         '0146'],
+  ['41001', 'Neiva',           '0252'], ['44001', 'Riohacha',        '0909'],
+  ['81001', 'Arauca',          '0371'], ['85001', 'Yopal',           '0488'],
+  ['18001', 'Florencia',       '0593'], ['27001', 'Quibdó',          '0624'],
+  ['15001', 'Tunja',           '0170'], ['86001', 'Mocoa',           '0745'],
+  ['91001', 'Leticia',         '0812'], ['88001', 'San Andrés',      '0901'],
+  ['94001', 'Inírida',         '0933'], ['95001', 'San José del Guaviare', '0957']
+];
+
+/** Cada impuesto con la periodicidad que le corresponde. */
+var IMPUESTOS_GEN = [
+  { impuesto: 'RETEICA',      periodicidad: 'MENSUAL' },
+  { impuesto: 'AUTORRETEICA', periodicidad: 'MENSUAL' },
+  { impuesto: 'ICA',          periodicidad: 'BIMESTRAL' },
+  { impuesto: 'EXOGENA',      periodicidad: 'ANUAL' }
+];
+
+/**
+ * Numeros pseudoaleatorios con semilla, para que correrlo dos veces con la
+ * misma semilla de el mismo resultado. Con Math.random() no se podria
+ * reproducir un caso raro que salga.
+ */
+function azarConSemilla(semilla) {
+  var s = semilla || 20261106;
+  return function () {
+    s = (s * 1103515245 + 12345) % 2147483648;
+    return s / 2147483648;
+  };
+}
+
+/** El periodo de una periodicidad, n meses hacia atras desde hoy. */
+function periodoAtras(periodicidad, mesesAtras) {
+  var d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - (mesesAtras || 0));
+  var anio = d.getFullYear(), mes = d.getMonth() + 1;
+  if (periodicidad === 'BIMESTRAL') return anio + '-B' + Math.ceil(mes / 2);
+  if (periodicidad === 'TRIMESTRAL') return anio + '-T' + Math.ceil(mes / 3);
+  if (periodicidad === 'CUATRIMESTRAL') return anio + '-C' + Math.ceil(mes / 4);
+  if (periodicidad === 'ANUAL') return String(anio);
+  return anio + '-' + (mes < 10 ? '0' + mes : String(mes));
+}
+
+/**
+ * Llena OBLIGACIONES con datos de prueba variados.
+ *
+ *   generarObligaciones()                         60 filas, repartidas entre
+ *                                                 los profesionales activos
+ *   generarObligaciones(150)                      150 filas
+ *   generarObligaciones(40, "ana@davivienda.com") 40, todas para Ana
+ *
+ * Reparte a proposito: unas vencidas, unas venciendo esta semana, unas con
+ * soporte y unas sin responsable, para que los filtros y las metricas tengan
+ * algo que mostrar.
+ *
+ * Es idempotente por id: correrlo dos veces no duplica. Todo queda marcado
+ * como EJEMPLO, asi que borrarEjemplo() lo limpia.
+ */
+function generarObligaciones(cuantas, correoResponsable, semilla) {
+  var n = Number(cuantas) || 60;
+  if (n < 1 || n > 2000) throw new Error('Pide entre 1 y 2000 filas, no ' + n);
+
+  var azar = azarConSemilla(semilla);
+  var deUno = function (lista) { return lista[Math.floor(azar() * lista.length)]; };
+
+  // a quien se le asigna
+  var fijo = normCorreo(correoResponsable);
+  var equipo = fijo ? [fijo] : asignables()
+    .filter(function (u) { return u.rol === ROL.PROFESIONAL; })
+    .map(function (u) { return u.correo; });
+
+  if (!fijo && !equipo.length) {
+    throw new Error('No hay profesionales activos en USUARIOS. ' +
+      'Inscribe al menos uno, o pasa un correo: generarObligaciones(60, "correo@davivienda.com")');
+  }
+
+  return conCerrojo(function () {
+    var ix = indices(HOJA.OBLIGACIONES);
+    var existentes = {};
+    filas(HOJA.OBLIGACIONES).forEach(function (f) {
+      existentes[String(f[ix.id]).trim()] = true;
+    });
+
+    var nuevas = [], eventos = [], saltadas = 0;
+    var cuenta = { sin_responsable: 0, con_soporte: 0, vencidas: 0, por_vencer: 0 };
+    var intentos = 0, tope = n * 12;
+
+    while (nuevas.length < n && intentos < tope) {
+      intentos++;
+
+      var mun = deUno(CATALOGO_MUNICIPIOS);
+      var imp = deUno(IMPUESTOS_GEN);
+      var atras = Math.floor(azar() * 4);               // hasta 3 meses atras
+      var periodo = periodoAtras(imp.periodicidad, atras);
+
+      // vencimiento: un 20% ya vencido, un 25% esta semana, el resto adelante
+      var r = azar();
+      var dias = r < 0.20 ? -(1 + Math.floor(azar() * 25))
+               : r < 0.45 ? Math.floor(azar() * 5)
+               : 5 + Math.floor(azar() * 40);
+      var vence = new Date();
+      vence.setDate(vence.getDate() + dias);
+
+      var sinDueno = azar() < 0.18;
+      var conSoporte = !sinDueno && azar() < 0.35;
+
+      var norm = normObligacion({
+        cod_dane: mun[0], cod_oficina: mun[2], municipio: mun[1],
+        impuesto: imp.impuesto, regimen: 'GENERAL',
+        periodo: periodo, periodicidad: imp.periodicidad, vencimiento: vence,
+        nit_municipio: '89' + mun[0] + '00' + (1 + Math.floor(azar() * 8)),
+        correo_oficina: 'oficina.' + mun[1].toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z]/g, '') + '@davivienda.com',
+        responsable: sinDueno ? '' : deUno(equipo),
+        tipo_presentacion: azar() < 0.25 ? 'VIRTUAL' : 'OFICINA',
+        paga_quien: azar() < 0.3 ? 'PAGADURIA' : 'OFICINA',
+        forma_pago: azar() < 0.5 ? deUno(FORMAS_PAGO) : '',
+        requiere_envio: azar() < 0.08 ? 'NO' : 'SI',
+        exogena: azar() < 0.3 ? 'SI' : 'NO',
+        incluye_retencion: azar() < 0.3 ? 'SI' : 'NO',
+        valor: azar() < 0.65
+          ? Math.round((200000 + azar() * 9800000) / 50) * 50 : '',
+        nota: MARCA_EJEMPLO + ': generada. Borrar antes de producción.'
+      });
+
+      if (norm.problemas.length) continue;          // combinacion invalida
+      if (existentes[norm.fila.id]) { saltadas++; continue; }
+      existentes[norm.fila.id] = true;
+
+      var o = norm.fila;
+      o.soporte_id = conSoporte ? soportePrueba(o) : '';
+      o.estado = o.soporte_id ? ESTADO.LISTA : ESTADO.PENDIENTE;
+      o.reprocesos = 0;
+
+      nuevas.push(COLS.OBLIGACIONES.map(function (c) {
+        return o[c] === undefined || o[c] === null ? '' : o[c];
+      }));
+      eventos.push({ id: o.id, quePaso: EVENTO.CREADA,
+                     detalle: MARCA_EJEMPLO + ': generada' });
+      if (o.responsable) {
+        eventos.push({ id: o.id, quePaso: EVENTO.ASIGNADA,
+                       detalle: 'asignada a ' + o.responsable });
+      }
+
+      if (!o.responsable) cuenta.sin_responsable++;
+      if (o.soporte_id) cuenta.con_soporte++;
+      if (dias < 0) cuenta.vencidas++;
+      else if (dias <= 4) cuenta.por_vencer++;
+    }
+
+    if (nuevas.length) {
+      agregarFilas(HOJA.OBLIGACIONES, nuevas);
+      registrarVarios(eventos);
+    }
+
+    var resumen = [
+      nuevas.length + ' obligaciones generadas' +
+        (fijo ? ' para ' + fijo : ' repartidas entre ' + equipo.length + ' profesionales'),
+      '  ' + cuenta.vencidas + ' ya vencidas',
+      '  ' + cuenta.por_vencer + ' vencen en 4 días o menos',
+      '  ' + cuenta.sin_responsable + ' sin responsable (para la pestaña Asignación)',
+      '  ' + cuenta.con_soporte + ' con soporte, listas para enviar',
+      saltadas ? '  ' + saltadas + ' combinaciones repetidas que se saltaron' : '',
+      '',
+      'Todas quedan marcadas como ' + MARCA_EJEMPLO + '. Para quitarlas:',
+      'menú SINAV → Datos de ejemplo → Borrar el ejemplo.'
+    ].filter(String).join('\n');
+
+    Logger.log(resumen);
+    return resumen;
+  });
+}
+
+/** Desde el menu: pide cuantas y las genera. */
+function generarObligacionesDesdeMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt('Llenar OBLIGACIONES con datos de prueba',
+    '¿Cuántas filas? (por ejemplo 60)\n\n' +
+    'Se reparten entre los PROFESIONALES activos de la hoja USUARIOS.',
+    ui.ButtonSet.OK_CANCEL);
+
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+
+  try {
+    ui.alert('Listo', generarObligaciones(r.getResponseText()), ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('No se pudo', String(e.message || e), ui.ButtonSet.OK);
+  }
+}
