@@ -36,6 +36,15 @@ var MUNICIPIOS_EJEMPLO = [
  * dias es contra hoy, asi que el escenario siempre esta "fresco".
  */
 var ESCENARIO_EJEMPLO = [
+  // SIN RESPONSABLE: es lo que la jefa ve en Asignación y en Alertas, y lo
+  // que reparte. Hasta que alguien sea el dueño, nadie la ve en su pantalla.
+  { i: 0, impuesto: 'ICA',          dias: 3,   soporte: false, periodicidad: 'BIMESTRAL',
+    sinAsignar: true,
+    que: 'SIN RESPONSABLE y vence en 3 días — para que la jefa la asigne' },
+  { i: 3, impuesto: 'ICA',          dias: 12,  soporte: false, periodicidad: 'BIMESTRAL',
+    sinAsignar: true,
+    que: 'SIN RESPONSABLE, con más tiempo' },
+
   { i: 0, impuesto: 'RETEICA',      dias: 9,   soporte: false, periodicidad: 'MENSUAL',
     que: 'sin soporte, con tiempo' },
   { i: 1, impuesto: 'AUTORRETEICA', dias: 3,   soporte: false, periodicidad: 'MENSUAL',
@@ -99,7 +108,7 @@ function sembrarEjemplo(correoProfesional) {
         correo_oficina: 'oficina.' + m.municipio.toLowerCase()
           .normalize('NFD').replace(/[̀-ͯ]/g, '')
           .replace(/[^a-z]/g, '') + '@davivienda.com',
-        responsable: correo,
+        responsable: caso.sinAsignar ? '' : correo,
         tipo_presentacion: 'OFICINA', paga_quien: 'OFICINA', forma_pago: '',
         requiere_envio: 'SI', exogena: '', incluye_retencion: '',
         valor: '',
@@ -122,14 +131,16 @@ function sembrarEjemplo(correoProfesional) {
       }));
       eventos.push({ id: o.id, quePaso: EVENTO.CREADA,
                      detalle: MARCA_EJEMPLO + ': ' + caso.que });
-      eventos.push({ id: o.id, quePaso: EVENTO.ASIGNADA,
-                     detalle: 'asignada a ' + correo });
+      if (!caso.sinAsignar) {
+        eventos.push({ id: o.id, quePaso: EVENTO.ASIGNADA,
+                       detalle: 'asignada a ' + correo });
+      }
       if (o.soporte_id) {
         eventos.push({ id: o.id, quePaso: EVENTO.SOPORTE_CARGADO,
                        detalle: 'soporte de ejemplo' });
       }
       hechas.push(m.municipio + ' ' + caso.impuesto + ' ' + o.periodo +
-                  ' (' + caso.que + ')');
+                  ' — ' + caso.que);
     });
 
     if (nuevas.length) {
@@ -137,8 +148,15 @@ function sembrarEjemplo(correoProfesional) {
       registrarVarios(eventos);
     }
 
+    var conDueno = ESCENARIO_EJEMPLO.filter(function (c) { return !c.sinAsignar; }).length;
+    var sinDueno = ESCENARIO_EJEMPLO.length - conDueno;
+
     var resumen = [
-      nuevas.length + ' obligaciones de ejemplo asignadas a ' + correo,
+      nuevas.length + ' obligaciones de ejemplo creadas',
+      '  ' + conDueno + ' asignadas a ' + correo,
+      '  ' + sinDueno + ' SIN responsable, para que el JEFE las reparta ' +
+        'desde la pestaña Asignación',
+      '',
       saltadas ? saltadas + ' ya existían y no se duplicaron' : ''
     ].concat(hechas.map(function (h) { return '  · ' + h; }))
      .filter(String).join('\n');

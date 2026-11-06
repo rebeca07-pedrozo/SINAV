@@ -1,0 +1,148 @@
+<script>
+/* ===========================================================================
+   SINAV · pestana ALERTAS.
+   La pregunta de esta pantalla: que se me vence y cuando.
+   Lo que ya se vencio arriba; lo que falta mas tiempo, al final.
+   =========================================================================== */
+
+function FilaAlerta({ o, veTodo }) {
+  const nivelVence = o.dias === null ? ''
+    : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
+
+  return html`<tr>
+    <td class="celda-mun">
+      <span class="ident">${o.municipio}</span>
+      <span class="sub">DANE ${o.cod_dane}${o.cod_oficina
+        ? ' · oficina ' + o.cod_oficina : ''}</span>
+    </td>
+    <td class="celda-linea2">
+      <span>${o.impuesto}</span>
+      <span class="sub">${o.periodo}</span>
+    </td>
+    <td class="celda-linea2 num der">
+      <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
+      <span class=${'sub ' + nivelVence}>${textoDias(o.dias)}</span>
+    </td>
+    <td class="celda-linea2">
+      <${Cadena} cadena=${o.cadena} trabada=${!o.cadena.soporte} />
+    </td>
+    <td class="celda-linea2"><${Pildora} estado=${o.estado} /></td>
+    ${veTodo ? html`<td class="celda-linea2">
+      ${o.responsable
+        ? html`<span class="sub">${o.responsable}</span>`
+        : html`<span class="falta-chip">sin responsable</span>`}
+    </td>` : null}
+  </tr>`;
+}
+
+function Tramo({ t, veTodo }) {
+  return html`<section class="panel">
+    <div class="panel-cab">
+      <h2>${t.et}</h2>
+      <span class="total">${t.cuantas}</span>
+      <span class="der">${t.detalle}</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Municipio</th>
+          <th>Impuesto</th>
+          <th class="num der">Vence</th>
+          <th>Evidencia</th>
+          <th>Estado</th>
+          ${veTodo ? html`<th>Responsable</th>` : null}
+        </tr>
+      </thead>
+      <tbody>
+        ${t.filas.map((o) => html`<${FilaAlerta} key=${o.id} o=${o} veTodo=${veTodo} />`)}
+      </tbody>
+    </table>
+  </section>`;
+}
+
+function Alertas() {
+  const [datos, setDatos] = useState(null);
+  const [fallo, setFallo] = useState('');
+
+  const cargar = useCallback(async () => {
+    setFallo('');
+    try {
+      setDatos(await llamar('apiAlertas'));
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Alertas</h1>
+        <p class="hallazgo">${fallo || html`<${Hueso} ancho="400px" />`}</p></div></div>
+      ${fallo ? html`<section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+      </section>` : null}
+    </main>`;
+  }
+
+  const veTodo = datos.yo && datos.yo.ve_todo;
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Alertas</h1>
+        <p class="hallazgo">
+          ${frase([
+            ...(datos.criticas
+              ? [datos.criticas,
+                 datos.criticas === 1
+                   ? ' obligación está vencida o vence hoy. '
+                   : ' obligaciones están vencidas o vencen hoy. ']
+              : ['Nada vencido ni venciendo hoy. ']),
+            ...(datos.sin_soporte
+              ? [datos.sin_soporte,
+                 datos.sin_soporte === 1
+                   ? ' no tiene soporte, así que no se puede enviar. '
+                   : ' no tienen soporte, así que no se pueden enviar. ']
+              : []),
+            ...(veTodo && datos.sin_responsable
+              ? [datos.sin_responsable,
+                 datos.sin_responsable === 1
+                   ? ' no tiene responsable asignado.'
+                   : ' no tienen responsable asignado.']
+              : [])
+          ])}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn" onClick=${cargar}>
+          <${Icono} nombre="recargar" /> Actualizar
+        </button>
+      </div>
+    </div>
+
+    <p class="hallazgo hallazgo-suelto">
+      Los avisos salen de <b>CONFIG.dias_aviso</b>${datos.cortes.length
+        ? ': ' + datos.cortes.join(', ') + ' días antes del vencimiento'
+        : ', que está vacío'}.
+      ${veTodo
+        ? ' Como eres jefe o administrador, ves las de todo el equipo.'
+        : ' Ves solo las tuyas.'}
+    </p>
+
+    ${datos.tramos.map((t) => html`<${Tramo} key=${t.id} t=${t} veTodo=${veTodo} />`)}
+
+    ${!datos.tramos.length ? html`<section class="panel">
+      <p class="vacio">No hay obligaciones abiertas. Todo está APROBADO o no hay filas.</p>
+    </section>` : null}
+
+    ${fallo ? html`<section class="panel">
+      <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+    </section>` : null}
+
+    <p class="sub pie-lienzo">
+      ${datos.generado ? 'Leído a las ' + datos.generado.slice(11) : ''}
+    </p>
+  </main>`;
+}
+</script>

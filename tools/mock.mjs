@@ -18,12 +18,12 @@ const ui = join(raiz, 'src', 'ui');
 
 /* ---- las funciones puras del servidor, cargadas de verdad ---------------- */
 const puros = ['00_Constantes', '03_Roles', '04_Normalizar', '06_Estados',
-               '14_Campos', '15_Carga', '16_Metricas'];
+               '12_Alertas', '14_Campos', '15_Carga', '16_Metricas'];
 const codigo = puros.map((f) => readFileSync(join(raiz, 'src', f + '.gs'), 'utf8'))
   .join('\n;\n');
 const S = new Function(codigo +
   '\n;return { agruparMetricas, apiCamposOpciones, leerNombreArchivo,' +
-  ' emparejarArchivo, ESTADO, ESTADOS_ADMITEN_SOPORTE };')();
+  ' emparejarArchivo, agruparAlertas, ESTADO, ESTADOS_ADMITEN_SOPORTE };')();
 
 const dia = (n) => {
   const d = new Date();
@@ -79,6 +79,23 @@ const filas = [
     nivel: 'aldia'
   }
 ];
+
+// la que la jefa tiene que repartir: sin responsable y venciendo en 3 dias
+filas.push({
+  id: '08001|ICA|GENERAL|2026-B6', cod_dane: '08001', cod_oficina: '0415',
+  municipio: 'Barranquilla', impuesto: 'ICA', regimen: 'GENERAL', periodo: '2026-B6',
+  periodicidad: 'BIMESTRAL', vencimiento: dia(3), dias: 3, nit_municipio: '890102018',
+  correo_oficina: 'oficina.barranquilla@davivienda.com',
+  responsable: '', tipo_presentacion: 'OFICINA',
+  paga_quien: 'OFICINA', forma_pago: '', requiere_envio: 'SI',
+  exogena: 'NO', incluye_retencion: 'NO', presentacion_fecha: '',
+  revision_fecha: '', revision_por: '',
+  estado: 'PENDIENTE', valor: '',
+  nota: 'EJEMPLO: SIN RESPONSABLE y vence en 3 días', reprocesos: 0,
+  motivo_devuelta: '', fecha_envio: '', fecha_respuesta: '',
+  cadena: { soporte: false, envio: false, respuesta: false, sellado: false },
+  mia: false, enviable: false, motivo_no_enviable: 'sin soporte', nivel: 'porvencer'
+});
 
 const conteos = filas.reduce((c, o) => {
   c.todas++;
@@ -186,6 +203,46 @@ function planDe(periodo, nombres) {
   };
 }
 
+/* ---- alertas y asignacion, con las funciones reales ---------------------- */
+
+const alertas = Object.assign(
+  S.agruparAlertas(filas, [10, 4, 2, 0]),
+  {
+    yo: { correo: yoCorreo, ve_todo: true },
+    sin_responsable: filas.filter((o) => !String(o.responsable || '').trim()).length,
+    generado: ahora
+  }
+);
+
+const paraAsignar = filas
+  .filter((o) => o.estado !== 'APROBADA')
+  .map((o) => Object.assign({}, o,
+    { sin_responsable: !String(o.responsable || '').trim() }))
+  .sort((a, b) => (a.sin_responsable === b.sin_responsable
+    ? (a.dias === null ? 9999 : a.dias) - (b.dias === null ? 9999 : b.dias)
+    : (a.sin_responsable ? -1 : 1)));
+
+const personas = [
+  { correo: 'ana.gomez@davivienda.com', nombre: 'Ana Gómez', rol: 'PROFESIONAL',
+    area: 'MUNICIPALES', nivel: 'I', perfil: 'Profesional-I de municipales', carga: 3 },
+  { correo: 'luis.mora@davivienda.com', nombre: 'Luis Mora', rol: 'PROFESIONAL',
+    area: 'MUNICIPALES', nivel: 'II', perfil: 'Profesional-II de municipales', carga: 1 },
+  { correo: 'elizabeth@davivienda.com', nombre: 'Elizabeth', rol: 'JEFE',
+    area: 'MUNICIPALES', nivel: '', perfil: 'Jefe de municipales', carga: 0 }
+];
+
+const asignacion = {
+  filas: paraAsignar,
+  personas,
+  resumen: {
+    todas: paraAsignar.length,
+    sin_responsable: paraAsignar.filter((o) => o.sin_responsable).length,
+    vencidas: paraAsignar.filter((o) => o.dias !== null && o.dias < 0).length,
+    por_vencer: paraAsignar.filter((o) => o.dias !== null && o.dias >= 0 && o.dias <= 4).length
+  },
+  generado: ahora
+};
+
 const periodos = [...new Set(filas.map((o) => o.periodo))].sort().reverse();
 const metricasPorPeriodo = { '': S.agruparMetricas(filas) };
 periodos.forEach((p) => {
@@ -200,6 +257,8 @@ const datos = {
   PERIODOS_CARGA: periodosCarga,
   PERIODOS: periodos,
   METRICAS: metricasPorPeriodo,
+  ALERTAS: alertas,
+  ASIGNACION: asignacion,
   // un lote de ejemplo, para poder ver la pantalla de carga sin tocar un archivo
   PLAN_EJEMPLO: planDe('2026-11', [
     '0742 AUTORRETEICA 2026-11.pdf',
@@ -234,6 +293,10 @@ window.google = { script: { run: (function () {
     // calcula el servidor y lo cubren las pruebas de leerNombreArchivo y
     // emparejarArchivo en 99_Pruebas.gs.
     apiCargaPlan: () => D.PLAN_EJEMPLO,
+    apiAlertas: () => D.ALERTAS,
+    apiListaAsignacion: () => D.ASIGNACION,
+    apiAsignar: (ids, correo) => ({ asignadas: (ids || []).length, rechazadas: [],
+                                    correo: correo || '', sin_cambio: 0 }),
     apiMetricas: (p) => ({ periodo: p || '', periodos: D.PERIODOS,
                            metricas: D.METRICAS[p || ''] || D.METRICAS[''],
                            generado: D.AHORA })

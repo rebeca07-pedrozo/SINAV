@@ -105,18 +105,12 @@ function Vista({ vista, inicio }) {
   if (vista === 'carga') return html`<${Carga} />`;
   if (vista === 'campos') return html`<${Campos} />`;
   if (vista === 'metricas') return html`<${Metricas} />`;
+  if (vista === 'alertas') return html`<${Alertas} />`;
+  if (vista === 'asignacion') return html`<${Asignacion} />`;
 
   if (vista === 'respuestas') {
     return html`<${PorConstruir} et="Respuestas"
       dice="Las ya enviadas, quién respondió y el sellado que volvió. Arriba, lo que no ha respondido y está por vencerse." />`;
-  }
-  if (vista === 'alertas') {
-    return html`<${PorConstruir} et="Alertas"
-      dice="Qué vence, qué está en rojo y los números: vencen en 4 días o menos, vencidas sin evidencia, porcentaje con evidencia completa." />`;
-  }
-  if (vista === 'asignacion') {
-    return html`<${PorConstruir} et="Asignación"
-      dice="Obligaciones sin responsable y asignación masiva por municipio o impuesto." />`;
   }
   return html`<${PorConstruir} et="Configuración"
     dice="Las hojas CONFIG y USUARIOS desde la aplicación, sin abrir el libro." />`;
