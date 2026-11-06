@@ -35,7 +35,8 @@ function onOpen() {
     .addItem('Correr pruebas', 'pruebas')
     .addSeparator()
     .addSubMenu(SpreadsheetApp.getUi().createMenu('Datos de ejemplo')
-      .addItem('Sembrar escenario de ejemplo', 'sembrarEjemploDesdeMenu')
+      .addItem('Sembrar escenario de ejemplo (8 filas)', 'sembrarEjemploDesdeMenu')
+      .addItem('Llenar OBLIGACIONES con datos de prueba', 'generarObligacionesDesdeMenu')
       .addItem('Borrar el ejemplo', 'borrarEjemplo'))
     .addToUi();
 }
