@@ -201,6 +201,10 @@ function onOpen() {
     .addItem('Instalar / verificar', 'instalar')
     .addItem('Migrar columnas', 'migrar')
     .addItem('Correr pruebas', 'pruebas')
+    .addSeparator()
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Datos de ejemplo')
+      .addItem('Sembrar escenario de ejemplo', 'sembrarEjemploDesdeMenu')
+      .addItem('Borrar el ejemplo', 'borrarEjemplo'))
     .addToUi();
 }
 
@@ -1997,6 +2001,132 @@ function apiLogo() {
 }
 
 
+// ═════ 12_Alertas.gs ═════
+
+/**
+ * SINAV · alertas.
+ *
+ * La pregunta de esta pantalla: que se me vence y cuando.
+ *
+ * Los cortes salen de CONFIG.dias_aviso (por defecto 10,4,2,0), que hasta
+ * ahora era un parametro que nadie leia. Son dias ANTES del vencimiento: a los
+ * 10, a los 4, a los 2 y el mismo dia.
+ *
+ * Una obligacion ya APROBADA no alerta: su cadena de evidencia esta cerrada.
+ * Una vencida alerta siempre, este donde este, porque el vencimiento no se
+ * reinicia nunca.
+ */
+
+/** Los cortes de CONFIG, de mayor a menor y sin basura. */
+function diasDeAviso() {
+  var crudo = config('dias_aviso') || '10,4,2,0';
+  var ds = String(crudo).split(/[,;\s]+/)
+    .map(function (x) { return parseInt(x, 10); })
+    .filter(function (n) { return !isNaN(n) && n >= 0; });
+  if (!ds.length) ds = [10, 4, 2, 0];
+  return ds.sort(function (a, b) { return b - a; });
+}
+
+/**
+ * Reparte las obligaciones en tramos de urgencia. Puro: recibe las filas ya
+ * decoradas y los cortes, no los busca.
+ *
+ * Los tramos salen en el orden en que hay que mirarlos: lo que ya se vencio
+ * primero, lo que falta mas tiempo al final.
+ */
+function agruparAlertas(filas, cortes) {
+  var ds = (cortes && cortes.length ? cortes : [10, 4, 2, 0])
+    .slice()
+    .filter(function (d) { return d > 0; })     // el 0 es "hoy", que va aparte
+    .sort(function (a, b) { return a - b; });   // ascendente: el mas urgente primero
+
+  var vivas = (filas || []).filter(function (o) {
+    return o.estado !== ESTADO.APROBADA;
+  });
+
+  var tramos = [];
+  var puestas = {};
+
+  var meter = function (id, et, detalle, nivel, prueba) {
+    var lista = vivas.filter(function (o) {
+      return !puestas[o.id] && prueba(o);
+    });
+    lista.forEach(function (o) { puestas[o.id] = true; });
+    tramos.push({ id: id, et: et, detalle: detalle, nivel: nivel,
+                  cuantas: lista.length, filas: lista });
+  };
+
+  // 1. vencidas: alertan siempre, esten donde esten
+  meter('vencidas', 'Ya vencidas',
+        'El vencimiento no se reinicia nunca, ni al devolver.', 'vencido',
+        function (o) { return o.dias !== null && o.dias < 0; });
+
+  // 2. hoy es su propio tramo, haya o no un 0 en dias_aviso
+  meter('hoy', 'Vencen hoy', 'Último día para presentar.', 'vencido',
+        function (o) { return o.dias === 0; });
+
+  // 3. un tramo por cada corte, del mas urgente al menos.
+  // Como se va marcando lo ya puesto, cada obligacion cae en el tramo mas
+  // urgente que le corresponde y no se repite mas abajo.
+  ds.forEach(function (d) {
+    meter('en' + d, 'Vencen en ' + d + (d === 1 ? ' día' : ' días') + ' o menos',
+          'Aviso de los ' + d + ' días.',
+          d <= 4 ? 'porvencer' : 'neutro',
+          function (o) { return o.dias !== null && o.dias > 0 && o.dias <= d; });
+  });
+
+  // 4. lo que todavia no entra en ningun aviso
+  meter('despues', 'Más adelante',
+        ds.length ? 'Fuera de los avisos configurados (' + ds.join(', ') + ' días).'
+                  : 'No hay avisos configurados en CONFIG.dias_aviso.',
+        '',
+        function (o) { return o.dias !== null && o.dias > 0; });
+
+  // 5. sin fecha: no se puede avisar de algo que no vence nunca
+  meter('sinfecha', 'Sin fecha de vencimiento',
+        'No se les puede calcular aviso. Hay que revisar el dato.', 'porvencer',
+        function (o) { return o.dias === null; });
+
+  var cuantas = function (id) {
+    var t = tramos.filter(function (x) { return x.id === id; })[0];
+    return t ? t.cuantas : 0;
+  };
+
+  return {
+    cortes: ds,
+    tramos: tramos.filter(function (t) { return t.cuantas > 0; }),
+    total: vivas.length,
+    vencidas: cuantas('vencidas'),
+    hoy: cuantas('hoy'),
+    criticas: cuantas('vencidas') + cuantas('hoy'),
+    sin_soporte: vivas.filter(function (o) {
+      return !(o.cadena && o.cadena.soporte);
+    }).length
+  };
+}
+
+/**
+ * La pantalla de alertas.
+ * El PROFESIONAL ve lo suyo; JEFE y ADMIN ven lo de todos, que es lo que les
+ * permite repartir el trabajo antes de que se venza.
+ */
+function apiAlertas() {
+  var q = yo();
+  if (!q.activo) throw new Error('Tu usuario está inactivo en SINAV.');
+
+  var mias = puede('asignar') ? listarTodas()
+           : listarTodas().filter(function (o) { return o.mia; });
+
+  var r = agruparAlertas(mias, diasDeAviso());
+  r.yo = { correo: q.correo, ve_todo: puede('asignar') };
+  r.sin_responsable = mias.filter(function (o) {
+    return !String(o.responsable || '').trim();
+  }).length;
+  r.generado = fechaHoraTexto(new Date());
+  return r;
+}
+
+
 // ═════ 14_Campos.gs ═════
 
 /**
@@ -2533,6 +2663,363 @@ function apiMetricas(periodo) {
     metricas: agruparMetricas(filas),
     generado: fechaHoraTexto(new Date())
   };
+}
+
+
+// ═════ 17_Ejemplo.gs ═════
+
+/**
+ * SINAV · sembrar un escenario de ejemplo.
+ *
+ * Para probar el flujo completo con gente real sin tener que escribir a mano
+ * treinta y dos columnas por fila, ni calcular el id, que tiene que quedar
+ * exactamente cod_dane|impuesto|regimen|periodo.
+ *
+ * ESTO ES DATO DE PRUEBA. Borra las filas antes de salir a produccion: se
+ * reconocen porque la nota empieza por "EJEMPLO".
+ */
+
+var MARCA_EJEMPLO = 'EJEMPLO';
+
+/**
+ * Municipios reales con su codigo DANE, para que el escenario se parezca al
+ * trabajo de verdad. El codigo de oficina es inventado pero con la forma
+ * correcta: cuatro digitos, texto.
+ */
+/*
+ * A proposito NO se usan Bogota, Medellin ni Cali: esas tres ya las crea
+ * asegurarPruebas() y el id (cod_dane|impuesto|regimen|periodo) chocaria, asi
+ * que la fila se saltaria y el escenario quedaria incompleto.
+ * Los codigos DANE son los reales; los de oficina y los NIT son de ejemplo.
+ */
+var MUNICIPIOS_EJEMPLO = [
+  { dane: '08001', municipio: 'Barranquilla', oficina: '0415', nit: '890102018' },
+  { dane: '68001', municipio: 'Bucaramanga',  oficina: '0628', nit: '890201222' },
+  { dane: '13001', municipio: 'Cartagena',    oficina: '0519', nit: '890480184' },
+  { dane: '66001', municipio: 'Pereira',      oficina: '0733', nit: '891480030' },
+  { dane: '17001', municipio: 'Manizales',    oficina: '0260', nit: '890801053' },
+  { dane: '47001', municipio: 'Santa Marta',  oficina: '0188', nit: '891780009' }
+];
+
+/**
+ * El escenario: seis obligaciones que cubren los casos que hay que ver.
+ * dias es contra hoy, asi que el escenario siempre esta "fresco".
+ */
+var ESCENARIO_EJEMPLO = [
+  // SIN RESPONSABLE: es lo que la jefa ve en Asignación y en Alertas, y lo
+  // que reparte. Hasta que alguien sea el dueño, nadie la ve en su pantalla.
+  { i: 0, impuesto: 'ICA',          dias: 3,   soporte: false, periodicidad: 'BIMESTRAL',
+    sinAsignar: true,
+    que: 'SIN RESPONSABLE y vence en 3 días — para que la jefa la asigne' },
+  { i: 3, impuesto: 'ICA',          dias: 12,  soporte: false, periodicidad: 'BIMESTRAL',
+    sinAsignar: true,
+    que: 'SIN RESPONSABLE, con más tiempo' },
+
+  { i: 0, impuesto: 'RETEICA',      dias: 9,   soporte: false, periodicidad: 'MENSUAL',
+    que: 'sin soporte, con tiempo' },
+  { i: 1, impuesto: 'AUTORRETEICA', dias: 3,   soporte: false, periodicidad: 'MENSUAL',
+    que: 'sin soporte, vence en 3 dias' },
+  { i: 2, impuesto: 'ICA',          dias: 1,   soporte: false, periodicidad: 'BIMESTRAL',
+    que: 'sin soporte, vence manana' },
+  { i: 3, impuesto: 'RETEICA',      dias: -4,  soporte: false, periodicidad: 'MENSUAL',
+    que: 'sin soporte y YA VENCIDA' },
+  { i: 4, impuesto: 'AUTORRETEICA', dias: 15,  soporte: true,  periodicidad: 'MENSUAL',
+    que: 'con soporte, lista para enviar' },
+  { i: 5, impuesto: 'ICA',          dias: 25,  soporte: true,  periodicidad: 'BIMESTRAL',
+    que: 'con soporte, lista para enviar' }
+];
+
+/** El periodo que le toca a una periodicidad, contando desde hoy. */
+function periodoDeEjemplo(periodicidad) {
+  var hoy = new Date();
+  var anio = Number(Utilities.formatDate(hoy, TZ, 'yyyy'));
+  var mes = Number(Utilities.formatDate(hoy, TZ, 'MM'));
+  if (periodicidad === 'BIMESTRAL') return anio + '-B' + Math.ceil(mes / 2);
+  if (periodicidad === 'TRIMESTRAL') return anio + '-T' + Math.ceil(mes / 3);
+  if (periodicidad === 'ANUAL') return String(anio);
+  return anio + '-' + (mes < 10 ? '0' + mes : String(mes));
+}
+
+/**
+ * Siembra el escenario y se lo asigna a un profesional.
+ * Desde el menu pide el correo; desde el editor se le pasa como argumento.
+ *
+ * Es idempotente por id: correrlo dos veces no duplica. Si quieres volver a
+ * empezar, corre borrarEjemplo() primero.
+ */
+function sembrarEjemplo(correoProfesional) {
+  var correo = normCorreo(correoProfesional);
+  if (!correo) {
+    throw new Error('Hace falta el correo del profesional. Ejemplo: ' +
+                    'sembrarEjemplo("nombre.apellido@davivienda.com")');
+  }
+
+  return conCerrojo(function () {
+    var ix = indices(HOJA.OBLIGACIONES);
+    var existentes = {};
+    filas(HOJA.OBLIGACIONES).forEach(function (f) {
+      existentes[String(f[ix.id]).trim()] = true;
+    });
+
+    var nuevas = [], eventos = [], hechas = [], saltadas = 0;
+
+    ESCENARIO_EJEMPLO.forEach(function (caso) {
+      var m = MUNICIPIOS_EJEMPLO[caso.i];
+      var vence = new Date();
+      vence.setDate(vence.getDate() + caso.dias);
+
+      var n = normObligacion({
+        cod_dane: m.dane, cod_oficina: m.oficina, municipio: m.municipio,
+        impuesto: caso.impuesto, regimen: 'GENERAL',
+        periodo: periodoDeEjemplo(caso.periodicidad),
+        periodicidad: caso.periodicidad, vencimiento: vence,
+        nit_municipio: m.nit,
+        // en modo PRUEBA el correo igual llega a quien envia, no a la oficina
+        correo_oficina: 'oficina.' + m.municipio.toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z]/g, '') + '@davivienda.com',
+        responsable: caso.sinAsignar ? '' : correo,
+        tipo_presentacion: 'OFICINA', paga_quien: 'OFICINA', forma_pago: '',
+        requiere_envio: 'SI', exogena: '', incluye_retencion: '',
+        valor: '',
+        nota: MARCA_EJEMPLO + ': ' + caso.que + '. Borrar antes de producción.'
+      });
+
+      if (n.problemas.length) {
+        throw new Error('El escenario de ejemplo esta mal armado (' +
+                        m.municipio + '): ' + n.problemas.join('; '));
+      }
+      if (existentes[n.fila.id]) { saltadas++; return; }
+
+      var o = n.fila;
+      o.soporte_id = caso.soporte ? soportePrueba(o) : '';
+      o.estado = o.soporte_id ? ESTADO.LISTA : ESTADO.PENDIENTE;
+      o.reprocesos = 0;
+
+      nuevas.push(COLS.OBLIGACIONES.map(function (c) {
+        return o[c] === undefined || o[c] === null ? '' : o[c];
+      }));
+      eventos.push({ id: o.id, quePaso: EVENTO.CREADA,
+                     detalle: MARCA_EJEMPLO + ': ' + caso.que });
+      if (!caso.sinAsignar) {
+        eventos.push({ id: o.id, quePaso: EVENTO.ASIGNADA,
+                       detalle: 'asignada a ' + correo });
+      }
+      if (o.soporte_id) {
+        eventos.push({ id: o.id, quePaso: EVENTO.SOPORTE_CARGADO,
+                       detalle: 'soporte de ejemplo' });
+      }
+      hechas.push(m.municipio + ' ' + caso.impuesto + ' ' + o.periodo +
+                  ' — ' + caso.que);
+    });
+
+    if (nuevas.length) {
+      agregarFilas(HOJA.OBLIGACIONES, nuevas);
+      registrarVarios(eventos);
+    }
+
+    var conDueno = ESCENARIO_EJEMPLO.filter(function (c) { return !c.sinAsignar; }).length;
+    var sinDueno = ESCENARIO_EJEMPLO.length - conDueno;
+
+    var resumen = [
+      nuevas.length + ' obligaciones de ejemplo creadas',
+      '  ' + conDueno + ' asignadas a ' + correo,
+      '  ' + sinDueno + ' SIN responsable, para que el JEFE las reparta ' +
+        'desde la pestaña Asignación',
+      '',
+      saltadas ? saltadas + ' ya existían y no se duplicaron' : ''
+    ].concat(hechas.map(function (h) { return '  · ' + h; }))
+     .filter(String).join('\n');
+
+    Logger.log(resumen);
+    return resumen;
+  });
+}
+
+/** Borra todo lo que sembró sembrarEjemplo(). No toca nada más. */
+function borrarEjemplo() {
+  return conCerrojo(function () {
+    var h = hoja(HOJA.OBLIGACIONES);
+    var ix = indices(HOJA.OBLIGACIONES);
+    var f = filas(HOJA.OBLIGACIONES);
+    var borradas = 0;
+
+    // de abajo hacia arriba, para que los indices no se corran al borrar
+    for (var i = f.length - 1; i >= 0; i--) {
+      if (String(f[i][ix.nota] || '').indexOf(MARCA_EJEMPLO) === 0) {
+        h.deleteRow(i + 2);
+        borradas++;
+      }
+    }
+    var resumen = borradas
+      ? borradas + ' filas de ejemplo borradas. Los EVENTOS se quedan: son el log.'
+      : 'No había filas de ejemplo.';
+    Logger.log(resumen);
+    return resumen;
+  });
+}
+
+/** Desde el menu: pide el correo y siembra. */
+function sembrarEjemploDesdeMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt(
+    'Sembrar escenario de ejemplo',
+    'Correo del PROFESIONAL al que se le asignan las obligaciones:\n' +
+    '(tiene que estar en la hoja USUARIOS)',
+    ui.ButtonSet.OK_CANCEL);
+
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+
+  try {
+    ui.alert('Listo', sembrarEjemplo(r.getResponseText()), ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('No se pudo', String(e.message || e), ui.ButtonSet.OK);
+  }
+}
+
+
+// ═════ 18_Asignacion.gs ═════
+
+/**
+ * SINAV · asignacion. Solo JEFE y ADMIN.
+ *
+ * La pregunta de esta pantalla: que no tiene dueño, y a quien se lo doy.
+ *
+ * El responsable es el CORREO CORPORATIVO, nunca una inicial ni un nombre:
+ * en el origen real una letra ya sobrevivio a dos cambios de titular y nadie
+ * supo de quien era el trabajo.
+ */
+
+/** Los profesionales activos a los que se les puede asignar trabajo. */
+function asignables() {
+  var ix = indices(HOJA.USUARIOS);
+  return filas(HOJA.USUARIOS)
+    .map(function (f) {
+      return {
+        correo: String(f[ix.correo]).trim().toLowerCase(),
+        nombre: String(f[ix.nombre]).trim(),
+        rol: normalizarRol(f[ix.rol]),
+        area: 'area' in ix ? normalizarArea(f[ix.area]) : '',
+        nivel: 'nivel' in ix ? normalizarNivel(f[ix.nivel]) : '',
+        activo: esActivo(f[ix.activo])
+      };
+    })
+    .filter(function (u) { return u.correo && u.activo && u.rol; })
+    .map(function (u) {
+      u.nombre = u.nombre || nombreDesdeCorreo(u.correo);
+      u.perfil = perfilTexto(u);
+      return u;
+    })
+    .sort(function (a, b) {
+      // los profesionales primero: son los que hacen el trabajo
+      if ((a.rol === ROL.PROFESIONAL) !== (b.rol === ROL.PROFESIONAL)) {
+        return a.rol === ROL.PROFESIONAL ? -1 : 1;
+      }
+      return a.nombre.localeCompare(b.nombre, 'es');
+    });
+}
+
+/**
+ * La lista de la pantalla: todo lo que todavia se puede repartir.
+ * Lo que no tiene dueño va primero, y dentro de eso lo que antes se vence.
+ */
+function apiListaAsignacion() {
+  exige('asignar');
+
+  var lista = listarTodas()
+    .filter(function (o) { return o.estado !== ESTADO.APROBADA; })
+    .map(function (o) {
+      o.sin_responsable = !String(o.responsable || '').trim();
+      return o;
+    })
+    .sort(function (a, b) {
+      if (a.sin_responsable !== b.sin_responsable) return a.sin_responsable ? -1 : 1;
+      var da = a.dias === null ? 9999 : a.dias;
+      var db = b.dias === null ? 9999 : b.dias;
+      if (da !== db) return da - db;
+      return a.municipio.localeCompare(b.municipio, 'es');
+    });
+
+  // cuanto lleva cada quien, para no cargarle todo al mismo
+  var carga = {};
+  lista.forEach(function (o) {
+    var r = String(o.responsable || '').trim().toLowerCase();
+    if (r) carga[r] = (carga[r] || 0) + 1;
+  });
+
+  return {
+    filas: lista,
+    personas: asignables().map(function (u) {
+      u.carga = carga[u.correo] || 0;
+      return u;
+    }),
+    resumen: {
+      todas: lista.length,
+      sin_responsable: lista.filter(function (o) { return o.sin_responsable; }).length,
+      vencidas: lista.filter(function (o) { return o.dias !== null && o.dias < 0; }).length,
+      por_vencer: lista.filter(function (o) {
+        return o.dias !== null && o.dias >= 0 && o.dias <= 4;
+      }).length
+    },
+    generado: fechaHoraTexto(new Date())
+  };
+}
+
+/**
+ * Asigna una o varias obligaciones a un correo.
+ * Pasar correo vacio las deja sin responsable, que es como se quita a alguien.
+ */
+function apiAsignar(ids, correo) {
+  exige('asignar');
+
+  var lista = (ids || []).filter(String);
+  if (!lista.length) throw new Error('No llegó ninguna obligación que asignar.');
+
+  var destino = String(correo || '').trim();
+  if (destino) {
+    destino = normCorreo(destino);
+    if (!destino) throw new Error('Ese no es un correo válido: ' + correo);
+
+    var existe = asignables().filter(function (u) { return u.correo === destino; })[0];
+    if (!existe) {
+      throw new Error('«' + destino + '» no está activo en la hoja USUARIOS. ' +
+        'Inscríbelo antes de asignarle trabajo: si no, no va a poder entrar.');
+    }
+  }
+
+  return conCerrojo(function () {
+    var ix = indices(HOJA.OBLIGACIONES);
+    var h = hoja(HOJA.OBLIGACIONES);
+    var hechas = [], rechazadas = [];
+
+    lista.forEach(function (id) {
+      var fila = buscarFila(id);
+      if (!fila) { rechazadas.push({ id: id, motivo: 'no existe' }); return; }
+
+      var val = h.getRange(fila, 1, 1, h.getLastColumn()).getValues()[0];
+      var estado = String(val[ix.estado]).toUpperCase();
+      if (estado === ESTADO.APROBADA) {
+        rechazadas.push({ id: id, motivo: 'está APROBADA: ya es evidencia cerrada' });
+        return;
+      }
+
+      var antes = String(val[ix.responsable] || '').trim().toLowerCase();
+      if (antes === destino) { return; }        // ya estaba asi
+
+      escribirCampos(HOJA.OBLIGACIONES, fila, { responsable: destino });
+      registrar(id, EVENTO.ASIGNADA, destino
+        ? (antes ? 'de ' + antes + ' a ' + destino : 'asignada a ' + destino)
+        : 'se quitó el responsable' + (antes ? ' (' + antes + ')' : ''));
+      hechas.push(id);
+    });
+
+    return {
+      asignadas: hechas.length,
+      rechazadas: rechazadas,
+      correo: destino,
+      sin_cambio: lista.length - hechas.length - rechazadas.length
+    };
+  });
 }
 
 

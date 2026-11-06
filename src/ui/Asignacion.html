@@ -1,0 +1,237 @@
+<script>
+/* ===========================================================================
+   SINAV · pestana ASIGNACION (JEFE y ADMIN).
+   La pregunta de esta pantalla: que no tiene dueño, y a quien se lo doy.
+   Lo sin responsable va arriba, y dentro de eso lo que antes se vence.
+   =========================================================================== */
+
+const FILTROS_ASIG = [
+  { id: 'sin_responsable', et: 'Sin responsable', clave: 'sin_responsable' },
+  { id: 'vencidas', et: 'Vencidas', clave: 'vencidas' },
+  { id: 'por_vencer', et: 'Vence en 4 días o menos', clave: 'por_vencer' },
+  { id: 'todas', et: 'Todas', clave: 'todas' }
+];
+
+function aplicaFiltroAsig(o, filtro) {
+  if (filtro === 'sin_responsable') return o.sin_responsable;
+  if (filtro === 'vencidas') return o.dias !== null && o.dias < 0;
+  if (filtro === 'por_vencer') return o.dias !== null && o.dias >= 0 && o.dias <= 4;
+  return true;
+}
+
+function Asignacion() {
+  const [datos, setDatos] = useState(null);
+  const [filtro, setFiltro] = useState('sin_responsable');
+  const [elegidas, setElegidas] = useState([]);
+  const [destino, setDestino] = useState('');
+  const [trabajando, setTrabajando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [fallo, setFallo] = useState('');
+
+  const cargar = useCallback(async () => {
+    setFallo('');
+    try {
+      const d = await llamar('apiListaAsignacion');
+      setDatos(d);
+      setElegidas([]);
+      if (!destino && d.personas.length) {
+        const prof = d.personas.filter((p) => p.rol === 'PROFESIONAL')[0];
+        setDestino((prof || d.personas[0]).correo);
+      }
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }, [destino]);
+
+  useEffect(() => { cargar(); }, []);
+
+  async function asignar(correo) {
+    setTrabajando(true);
+    setFallo('');
+    try {
+      const r = await llamar('apiAsignar', elegidas, correo);
+      const lineas = r.rechazadas.map((x) => x.id + ': ' + x.motivo);
+      if (r.sin_cambio) lineas.push(r.sin_cambio + ' ya estaban así.');
+      setResultado({
+        clase: r.asignadas ? '' : 'malo',
+        titulo: r.asignadas
+          ? r.asignadas + (r.asignadas === 1 ? ' obligación asignada' : ' obligaciones asignadas') +
+            (r.correo ? ' a ' + r.correo : ' — se les quitó el responsable')
+          : 'No se asignó ninguna',
+        lineas: lineas
+      });
+      await cargar();
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando(false);
+    }
+  }
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Asignación</h1>
+        <p class="hallazgo">${fallo || html`<${Hueso} ancho="400px" />`}</p></div></div>
+      ${fallo ? html`<section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+      </section>` : null}
+    </main>`;
+  }
+
+  const filas = datos.filas || [];
+  const r = datos.resumen;
+  const visibles = filas.filter((o) => aplicaFiltroAsig(o, filtro));
+  const vivas = elegidas.filter((id) => visibles.some((o) => o.id === id));
+  const persona = datos.personas.filter((p) => p.correo === destino)[0];
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Asignación</h1>
+        <p class="hallazgo">
+          ${frase(r.sin_responsable
+            ? [r.sin_responsable,
+               r.sin_responsable === 1
+                 ? ' obligación no tiene responsable. '
+                 : ' obligaciones no tienen responsable. ',
+               'Mientras nadie sea el dueño, nadie las ve en su pantalla de trabajo.']
+            : ['Todas las obligaciones abiertas tienen responsable.'])}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn" onClick=${cargar} disabled=${trabajando}>
+          <${Icono} nombre="recargar" /> Actualizar
+        </button>
+      </div>
+    </div>
+
+    <fieldset class="conteos">
+      <legend>Filtrar la lista</legend>
+      ${FILTROS_ASIG.map((f) => {
+        const n = r[f.clave] || 0;
+        return html`<button key=${f.id} type="button" class="conteo"
+          aria-pressed=${filtro === f.id} onClick=${() => setFiltro(f.id)}>
+          <span class="et">${f.et}</span>
+          <span class=${'vl' + (n === 0 ? ' cero' : '')}>${n}</span>
+        </button>`;
+      })}
+    </fieldset>
+
+    ${resultado ? html`<div class=${'resultado ' + resultado.clase} role="status">
+      <h2>${resultado.titulo}</h2>
+      ${resultado.lineas.length ? html`<ul>
+        ${resultado.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}</ul>` : null}
+    </div>` : null}
+
+    <section class="panel">
+      <div class="panel-cab"><h2>Asignar las seleccionadas</h2></div>
+      <div class="tira-controles">
+        <label class="campo">
+          <span>Responsable</span>
+          <select value=${destino} disabled=${trabajando}
+            onChange=${(e) => setDestino(e.target.value)}>
+            ${datos.personas.map((p) => html`<option key=${p.correo} value=${p.correo}>
+              ${p.nombre} · ${p.perfil} (${p.carga} a cargo)</option>`)}
+          </select>
+        </label>
+
+        <button class="btn btn-principal" disabled=${!vivas.length || !destino || trabajando}
+          onClick=${() => asignar(destino)}>
+          ${trabajando ? 'Asignando…'
+            : 'Asignar ' + vivas.length + (vivas.length === 1 ? ' obligación' : ' obligaciones')}
+        </button>
+
+        <button class="btn" disabled=${!vivas.length || trabajando}
+          onClick=${() => asignar('')}>Quitar responsable</button>
+      </div>
+      <p class="hallazgo hallazgo-form">
+        El responsable es el <b>correo corporativo</b>, nunca una inicial: en el
+        origen real una letra ya sobrevivió a dos cambios de titular y nadie
+        supo de quién era el trabajo.
+        ${persona && persona.rol !== 'PROFESIONAL'
+          ? ' Ojo: ' + persona.nombre + ' es ' + persona.perfil.toLowerCase() +
+            ', no profesional.'
+          : ''}
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Obligaciones</h2>
+        <span class="total">${visibles.length} de ${filas.length}</span>
+        <span class="der">${datos.generado ? 'leído ' + datos.generado.slice(11) : ''}</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="celda-casilla">
+              <input type="checkbox"
+                checked=${!!visibles.length && vivas.length === visibles.length}
+                disabled=${!visibles.length}
+                aria-label="Seleccionar todas las visibles"
+                onChange=${() => setElegidas(
+                  vivas.length === visibles.length ? [] : visibles.map((o) => o.id))} />
+            </th>
+            <th>Municipio</th>
+            <th>Impuesto</th>
+            <th class="num">Periodo</th>
+            <th class="num der">Vence</th>
+            <th>Responsable</th>
+            <th>Evidencia</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${visibles.map((o) => html`<tr key=${o.id}
+            data-elegida=${elegidas.indexOf(o.id) >= 0 ? 'si' : 'no'}>
+            <td class="celda-casilla">
+              <input type="checkbox" checked=${elegidas.indexOf(o.id) >= 0}
+                aria-label=${'Seleccionar ' + o.municipio + ' ' + o.impuesto + ' ' + o.periodo}
+                onChange=${() => setElegidas((v) => v.indexOf(o.id) >= 0
+                  ? v.filter((x) => x !== o.id) : v.concat([o.id]))} />
+            </td>
+            <td class="celda-mun">
+              <span class="ident">${o.municipio}</span>
+              <span class="sub">DANE ${o.cod_dane}${o.cod_oficina
+                ? ' · oficina ' + o.cod_oficina : ''}</span>
+            </td>
+            <td class="celda-linea2">
+              <span>${o.impuesto}</span>
+              ${o.regimen && o.regimen !== 'GENERAL'
+                ? html`<span class="sub">${o.regimen.toLowerCase()}</span>` : null}
+            </td>
+            <td class="celda-linea2 num">
+              <span>${o.periodo}</span>
+              <span class="sub">${o.periodicidad ? bonito(o.periodicidad) : '—'}</span>
+            </td>
+            <td class="celda-linea2 num der">
+              <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
+              <span class=${'sub ' + (o.dias === null ? ''
+                : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : '')))}>
+                ${textoDias(o.dias)}</span>
+            </td>
+            <td class="celda-linea2">
+              ${o.sin_responsable
+                ? html`<span class="falta-chip">sin responsable</span>`
+                : html`<span class="sub">${o.responsable}</span>`}
+            </td>
+            <td class="celda-linea2">
+              <${Cadena} cadena=${o.cadena} trabada=${!o.cadena.soporte} />
+            </td>
+            <td class="celda-linea2"><${Pildora} estado=${o.estado} /></td>
+          </tr>`)}
+        </tbody>
+      </table>
+
+      ${fallo ? html`<${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />` : null}
+
+      ${!fallo && !visibles.length ? html`<p class="vacio">
+        ${filas.length
+          ? 'Ninguna cae en este filtro. Las otras ' + filas.length + ' están en "Todas".'
+          : 'No hay obligaciones abiertas que asignar.'}
+      </p>` : null}
+    </section>
+  </main>`;
+}
+</script>
