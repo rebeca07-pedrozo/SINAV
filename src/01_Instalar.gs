@@ -9,7 +9,7 @@ function instalar() {
     var hecho = [];
 
     hecho.push(asegurarHojas());
-    hecho.push(asegurarCarpetas());
+    hecho.push(asegurarVigencias());
     hecho.push(asegurarConfig());
     hecho.push(asegurarRoles());
     hecho.push(asegurarAdmin());
@@ -99,25 +99,29 @@ function asegurarHojas() {
   return notas.join('\n');
 }
 
-/** Carpetas de Drive. Se buscan por nombre antes de crearlas. */
-function asegurarCarpetas() {
-  var raiz = carpetaPorNombre(DriveApp.getRootFolder(), CARPETA_RAIZ);
-  var soportes = carpetaPorNombre(raiz, 'Soportes');
-  var sellados = carpetaPorNombre(raiz, 'Sellados');
-
-  var notas = [];
-  [['carpeta_soportes', soportes], ['carpeta_sellados', sellados]].forEach(function (par) {
-    var actual = config(par[0]);
-    var viva = false;
-    if (actual) {
-      try { DriveApp.getFolderById(actual); viva = true; } catch (e) { viva = false; }
-    }
-    if (!viva) {
-      ponerConfigSiHace(par[0], par[1].getId(), true);
-      notas.push('CONFIG.' + par[0] + ': ' + par[1].getId());
-    }
+/**
+ * REQ-009. Siembra la hoja VIGENCIAS con los ids REALES que el equipo ya tiene
+ * creados en Drive. No crea ninguna carpeta: las de 2026 ya existen, y crear
+ * otras partiria en dos el archivo del equipo sin que nadie se entere.
+ *
+ * Una vigencia que ya este en la hoja NO se toca, ni para corregirle un id.
+ */
+function asegurarVigencias() {
+  var existentes = {};
+  var ix = indices(HOJA.VIGENCIAS);
+  filas(HOJA.VIGENCIAS).forEach(function (f) {
+    var v = String(f[ix.vigencia] || '').trim();
+    if (v) existentes[v] = true;
   });
-  return notas.join('\n');
+
+  var nuevas = VIGENCIAS_CONOCIDAS.filter(function (v) { return !existentes[v.vigencia]; });
+  if (!nuevas.length) return '';
+
+  agregarFilas(HOJA.VIGENCIAS, nuevas.map(function (v) {
+    return COLS.VIGENCIAS.map(function (c) { return v[c] === undefined ? '' : v[c]; });
+  }));
+  return 'VIGENCIAS: ' + nuevas.map(function (v) { return v.vigencia; }).join(', ') +
+         ' con los ids de Drive que ya existen';
 }
 
 function carpetaPorNombre(padre, nombre) {
@@ -263,7 +267,7 @@ function asegurarPruebas() {
 /** Un soporte de verdad en Drive, para que el envio de prueba tenga que adjuntar algo. */
 function soportePrueba(o) {
   var nombre = o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' (prueba).txt';
-  var dir = carpetaSoporte(o.municipio, o.impuesto);
+  var dir = carpetaSoporte(o.vigencia, o.municipio, o.impuesto);
   var it = dir.getFilesByName(nombre);
   if (it.hasNext()) return it.next().getId();
 
@@ -338,7 +342,7 @@ function asegurarValidaciones() {
     notas.push(nombreHoja + '.' + columna);
   };
 
-  poner(HOJA.USUARIOS, 'rol', [ROL.PROFESIONAL, ROL.JEFE, ROL.ADMIN], false);
+  poner(HOJA.USUARIOS, 'rol', [ROL.PROFESIONAL, ROL.ADMIN], false);
   poner(HOJA.USUARIOS, 'activo', ['SI', 'NO'], false);
   poner(HOJA.USUARIOS, 'area', AREAS, true);
   poner(HOJA.USUARIOS, 'nivel', NIVELES, true);
@@ -386,15 +390,20 @@ function migrar() {
       if (!String(fu[i][ixu.correo]).trim()) continue;
       var cambios = {};
 
+      // REQ-012: JEFE desaparece y se convierte en PROFESIONAL nivel III.
+      // El nivel se fuerza aunque la celda ya traiga otro valor: quien era
+      // JEFE es el cargo de supervision, y si no, pierde permisos sin avisar.
+      var eraJefe = esRolViejoJefe(fu[i][ixu.rol]);
       var rol = normalizarRol(fu[i][ixu.rol]);
       if (!rol) { rol = rolDef; cambios.rol = rol; }
       else if (rol !== String(fu[i][ixu.rol]).trim()) cambios.rol = rol;
+      if (eraJefe && 'nivel' in ixu) cambios.nivel = 'III';
 
       if ('area' in ixu && !normalizarArea(fu[i][ixu.area]) && areaDef) {
         cambios.area = areaDef;
       }
-      // el JEFE y el ADMIN no llevan nivel: el nivel es de los profesionales
-      if ('nivel' in ixu && !normalizarNivel(fu[i][ixu.nivel]) &&
+      // el ADMIN no lleva nivel; los profesionales sin nivel caen al defecto
+      if ('nivel' in ixu && !cambios.nivel && !normalizarNivel(fu[i][ixu.nivel]) &&
           rol === ROL.PROFESIONAL && nivelDef) {
         cambios.nivel = nivelDef;
       }

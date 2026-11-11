@@ -1,11 +1,5 @@
 /** SINAV · el soporte que se adjunta al correo. Sin soporte no hay envio. */
 
-function carpeta(clave) {
-  var id = config(clave);
-  if (!id) throw new Error('CONFIG.' + clave + ' está vacío. Corre instalar().');
-  return DriveApp.getFolderById(id);
-}
-
 /** Nombre usable como carpeta de Drive. */
 function nombreCarpeta(v) {
   var s = String(v || '').replace(/[\\/]+/g, '-').replace(/\s+/g, ' ').trim();
@@ -13,43 +7,18 @@ function nombreCarpeta(v) {
 }
 
 /**
- * La carpeta de un municipio y un impuesto, creandola si no existe:
- *   SINAV/Soportes/<municipio>/<impuesto>/
- *
- * Buscar carpetas en Drive es lo mas lento de una carga, y en un lote de 40
- * PDF del mismo municipio se repetiria 40 veces. Por eso el id se guarda en
- * las propiedades del script: la primera vez cuesta, las siguientes no.
- * Si alguien borra la carpeta a mano, el id cacheado deja de servir y se
- * vuelve a crear.
+ * Donde va el soporte de una obligacion (REQ-009).
+ *   Territoriales/<vigencia>/Declaraciones/Soportes/<municipio>/<impuesto>
+ * Las exogenas van a su propia carpeta del ano, sin bajar por impuesto.
  */
-function carpetaDe(raizClave, municipio, impuesto) {
-  var mun = nombreCarpeta(municipio);
-  var imp = nombreCarpeta(impuesto);
-  var clave = 'carp:' + raizClave + ':' + mun + '|' + imp;
-  var props = PropertiesService.getScriptProperties();
-
-  var guardado = props.getProperty(clave);
-  if (guardado) {
-    try {
-      var c = DriveApp.getFolderById(guardado);
-      if (!c.isTrashed()) return c;
-    } catch (e) { /* la borraron: se recrea abajo */ }
-  }
-
-  var dentroMun = carpetaPorNombre(carpeta(raizClave), mun);
-  var dentroImp = carpetaPorNombre(dentroMun, imp);
-  props.setProperty(clave, dentroImp.getId());
-  return dentroImp;
+function carpetaSoporte(vigencia, municipio, impuesto) {
+  var clase = String(impuesto || '').toUpperCase() === 'EXOGENA' ? 'exogenas' : 'soportes';
+  return carpetaDocumento(clase, vigencia, municipio, impuesto);
 }
 
-/** La carpeta donde va el soporte de una obligacion. */
-function carpetaSoporte(municipio, impuesto) {
-  return carpetaDe('carpeta_soportes', municipio, impuesto);
-}
-
-/** La carpeta donde va el sellado que devuelve la oficina. */
-function carpetaSellado(municipio, impuesto) {
-  return carpetaDe('carpeta_sellados', municipio, impuesto);
+/** Donde va el sellado que devuelve la oficina. */
+function carpetaSellado(vigencia, municipio, impuesto) {
+  return carpetaDocumento('sellados', vigencia, municipio, impuesto);
 }
 
 /** Nombre legible del archivo. El id ya trae municipio, impuesto y periodo. */
@@ -90,7 +59,8 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
                                tipo || 'application/octet-stream',
                                nombre || ('soporte-' + id));
   blob.setName(nombreSoporte(val, ix, nombre));
-  var archivo = carpetaSoporte(val[ix.municipio], val[ix.impuesto]).createFile(blob);
+  var archivo = carpetaSoporte(val[ix.vigencia], val[ix.municipio],
+                               val[ix.impuesto]).createFile(blob);
 
   // 3. el cerrojo solo para escribir la hoja
   return conCerrojo(function () {
@@ -108,6 +78,7 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
     escribirCampos(HOJA.OBLIGACIONES, f, campos);
     registrar(id, EVENTO.SOPORTE_CARGADO,
               archivo.getName() + ' (' + archivo.getId() + ') en ' +
+              'vigencia ' + (val[ix.vigencia] || '?') + ' · ' +
               nombreCarpeta(val[ix.municipio]) + '/' + nombreCarpeta(val[ix.impuesto]));
 
     return { id: id, soporte_id: archivo.getId(), nombre: archivo.getName(),

@@ -107,7 +107,8 @@ function pruebasSinSoporte(esIgual) {
           validarPaso({ estado: ESTADO.PENDIENTE, soporte_id: '1Ab' }, ESTADO.LISTA, {}, ROL.ADMIN).ok,
           true);
   esIgual('DEVUELTA sin soporte no vuelve a LISTA',
-          validarPaso({ estado: ESTADO.DEVUELTA, soporte_id: '  ' }, ESTADO.LISTA, {}, ROL.JEFE).ok,
+          validarPaso({ estado: ESTADO.DEVUELTA, soporte_id: '  ' }, ESTADO.LISTA, {},
+                      PERFIL.PROFESIONAL_III).ok,
           false);
   esIgual('ni un ADMIN puede enviar sin soporte',
           validarPaso(con({ soporte_id: '' }), ESTADO.ENVIADA, {}, ROL.ADMIN).ok, false);
@@ -173,12 +174,16 @@ function pruebasTransiciones(esIgual) {
   esIgual('estado inventado', puedePasar('LO_QUE_SEA', 'LISTA'), false);
   esIgual('estado con espacios se tolera', puedePasar(' lista ', 'ENVIADA'), true);
 
-  // REVISADA y APROBADA solo JEFE o ADMIN
+  // REVISADA y APROBADA solo PROFESIONAL-III o ADMIN (REQ-012)
   var respondida = { estado: ESTADO.RESPONDIDA, soporte_id: '1Ab' };
   esIgual('el PROFESIONAL no marca REVISADA',
           validarPaso(respondida, ESTADO.REVISADA, {}, ROL.PROFESIONAL).ok, false);
-  esIgual('el JEFE si marca REVISADA',
-          validarPaso(respondida, ESTADO.REVISADA, {}, ROL.JEFE).ok, true);
+  esIgual('el PROFESIONAL-III si marca REVISADA',
+          validarPaso(respondida, ESTADO.REVISADA, {}, PERFIL.PROFESIONAL_III).ok, true);
+  esIgual('un PROFESIONAL-I no marca REVISADA',
+          validarPaso(respondida, ESTADO.REVISADA, {}, PERFIL.PROFESIONAL_I).ok, false);
+  esIgual('el ADMIN si marca REVISADA',
+          validarPaso(respondida, ESTADO.REVISADA, {}, PERFIL.ADMIN).ok, true);
   esIgual('el ADMIN si marca REVISADA',
           validarPaso(respondida, ESTADO.REVISADA, {}, ROL.ADMIN).ok, true);
   esIgual('el PROFESIONAL no marca APROBADA',
@@ -187,11 +192,13 @@ function pruebasTransiciones(esIgual) {
 
   // DEVUELTA exige motivo
   esIgual('DEVUELTA sin motivo no pasa',
-          validarPaso(respondida, ESTADO.DEVUELTA, {}, ROL.JEFE).ok, false);
+          validarPaso(respondida, ESTADO.DEVUELTA, {}, PERFIL.PROFESIONAL_III).ok, false);
   esIgual('DEVUELTA con motivo en blanco no pasa',
-          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: '   ' }, ROL.JEFE).ok, false);
+          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: '   ' },
+                      PERFIL.PROFESIONAL_III).ok, false);
   esIgual('DEVUELTA con motivo pasa',
-          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: 'sello ilegible' }, ROL.JEFE).ok,
+          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: 'sello ilegible' },
+                      PERFIL.PROFESIONAL_III).ok,
           true);
 
   esIgual('no se repite el mismo estado',
@@ -206,8 +213,19 @@ function pruebasTransiciones(esIgual) {
 function pruebasRoles(esIgual) {
   esIgual('rol PROFESIONAL', normalizarRol('PROFESIONAL'), 'PROFESIONAL');
   esIgual('rol en minusculas', normalizarRol('profesional'), 'PROFESIONAL');
-  esIgual('rol con espacio', normalizarRol(' Jefe '), 'JEFE');
-  esIgual('JEFA tambien es JEFE', normalizarRol('JEFA'), 'JEFE');
+  // REQ-012: el rol JEFE desaparecio; un libro sin migrar lo lee como
+  // PROFESIONAL, y migrar() le pone nivel III para que no pierda permisos.
+  esIgual('JEFE viejo se lee como PROFESIONAL', normalizarRol(' Jefe '), 'PROFESIONAL');
+  esIgual('JEFA tambien', normalizarRol('JEFA'), 'PROFESIONAL');
+  esIgual('JEFE se reconoce como rol viejo', esRolViejoJefe('Jefe'), true);
+  esIgual('PROFESIONAL no es rol viejo', esRolViejoJefe('PROFESIONAL'), false);
+
+  esIgual('perfil del supervisor',
+          perfilDe({ rol: 'PROFESIONAL', nivel: 'III' }), 'PROFESIONAL-III');
+  esIgual('perfil sin nivel cae al I, nunca de mas',
+          perfilDe({ rol: 'PROFESIONAL', nivel: '' }), 'PROFESIONAL-I');
+  esIgual('el ADMIN no lleva nivel', perfilDe({ rol: 'ADMIN', nivel: 'III' }), 'ADMIN');
+  esIgual('sin rol no hay perfil', perfilDe({ rol: '', nivel: 'III' }), '');
   esIgual('ADMINISTRADOR es ADMIN', normalizarRol('Administrador'), 'ADMIN');
   esIgual('rol con acento', normalizarRol('Profesiónal'), 'PROFESIONAL');
   esIgual('rol mal escrito no pasa', normalizarRol('Profecional'), '');
@@ -239,8 +257,8 @@ function pruebasRoles(esIgual) {
           perfilTexto({ rol: 'PROFESIONAL', nivel: 'I', area: 'MUNICIPALES' }),
           'Profesional-I de municipales');
   esIgual('perfil del jefe sin nivel',
-          perfilTexto({ rol: 'JEFE', nivel: '', area: 'MUNICIPALES' }),
-          'Jefe de municipales');
+          perfilTexto({ rol: 'PROFESIONAL', nivel: 'III', area: 'MUNICIPALES' }),
+          'Profesional-III de municipales');
   esIgual('perfil sin rol', perfilTexto({ rol: '', nivel: '', area: '' }), 'sin rol');
 }
 

@@ -152,6 +152,26 @@ function armarId(codDane, impuesto, regimen, periodo) {
           normPeriodo(periodo)].join('|');
 }
 
+/** Un ano de cuatro digitos. '' si no encaja. */
+function normVigencia(v) {
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  var m = s.match(/(20\d{2})/);
+  return m ? m[1] : '';
+}
+
+/**
+ * La entidad dueña de la obligacion. Vacio significa BANCO DAVIVIENDA S.A,
+ * que es el caso de casi todas; Bogota tiene ademas otras (por ejemplo la
+ * Corporacion Financiera), y por eso hace falta distinguirlas: se declaran por
+ * separado y sus soportes no pueden mezclarse.
+ */
+function normEntidad(v) {
+  var s = limpiar(v);
+  if (!s) return '';
+  if (/^BANCO\s*DAVIVIENDA/.test(s)) return '';
+  return String(v).trim();
+}
+
 /** OFICINA | VIRTUAL. Por defecto OFICINA, que es el caso comun. */
 function normTipoPresentacion(v) {
   return limpiar(v) === 'VIRTUAL' ? 'VIRTUAL' : 'OFICINA';
@@ -232,6 +252,15 @@ function normObligacion(cruda) {
   o.exogena = o.impuesto === 'RETEICA' ? (normSiNo(cruda.exogena) || 'NO') : 'NO';
   o.incluye_retencion = o.impuesto === 'AUTORRETEICA'
     ? (normSiNo(cruda.incluye_retencion) || 'NO') : 'NO';
+
+  // REQ-011. La vigencia fiscal sale del periodo, que es el ano al que
+  // PERTENECE la obligacion, no el ano en que se presenta. Si viene explicita,
+  // manda la explicita: hay obligaciones de 2026 con periodo de enero 2027.
+  o.vigencia = normVigencia(cruda.vigencia) ||
+               (o.periodo ? o.periodo.slice(0, 4) : '');
+
+  // Bogota tiene varias entidades ademas del banco. Vacio = Banco Davivienda.
+  o.entidad = normEntidad(cruda.entidad);
 
   o.valor = normValor(cruda.valor);
   o.nota = String(cruda.nota || '').trim();

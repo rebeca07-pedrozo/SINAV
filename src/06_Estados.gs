@@ -31,9 +31,9 @@ function puedeEnviar(fila) {
 
 /**
  * Valida un cambio de estado contra el grafo y contra los datos de la fila.
- * Pura: recibe el rol y la fila, no los busca. opts: {motivo}
+ * Pura: recibe el perfil y la fila, no los busca. opts: {motivo}
  */
-function validarPaso(fila, a, opts, rol) {
+function validarPaso(fila, a, opts, perfil) {
   var o = opts || {};
   var de = String(fila.estado || '').toUpperCase();
   a = String(a || '').toUpperCase();
@@ -44,9 +44,12 @@ function validarPaso(fila, a, opts, rol) {
   if (a === ESTADO.LISTA && !String(fila.soporte_id || '').trim()) {
     return { ok: false, motivo: 'LISTA exige soporte: sin soporte no hay envío' };
   }
+  // REQ-012: el visto bueno es del cargo de supervision (PROFESIONAL-III),
+  // no de una persona concreta. Se recibe el PERFIL ya resuelto, para que esta
+  // funcion siga siendo pura y se pueda probar sin hojas.
   if ((a === ESTADO.REVISADA || a === ESTADO.APROBADA) &&
-      [ROL.ADMIN, ROL.JEFE].indexOf(rol) < 0) {
-    return { ok: false, motivo: a + ' solo la pone JEFE o ADMIN' };
+      SUPERVISORES.indexOf(perfil) < 0) {
+    return { ok: false, motivo: a + ' solo la pone PROFESIONAL-III o ADMIN' };
   }
   if (a === ESTADO.DEVUELTA && !String(o.motivo || '').trim()) {
     return { ok: false, motivo: 'DEVUELTA exige motivo' };
@@ -90,7 +93,7 @@ function aplicar(id, a, opts) {
 
     exigeMia(actual.responsable, 'editarAjenas');
 
-    var v = validarPaso(actual, a, o, yo().rol);
+    var v = validarPaso(actual, a, o, perfilDe(yo()));
     if (!v.ok) {
       registrar(id, EVENTO.ERROR, 'paso rechazado: ' + v.motivo);
       throw new Error(v.motivo);
