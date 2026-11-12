@@ -120,10 +120,11 @@ Si todavía no ves el menú SINAV, cierra y vuelve a abrir el Sheets, o corre
 
 Esto deja hecho, en este orden:
 
-1. **Las cinco hojas** con sus encabezados, formatos y fila congelada:
-   CONFIG, USUARIOS, ROLES, OBLIGACIONES y EVENTOS.
-2. **Las carpetas de Drive**: `SINAV/Soportes` y `SINAV/Sellados`, y guarda sus
-   ids en CONFIG.
+1. **Las seis hojas** con sus encabezados, formatos y fila congelada:
+   CONFIG, USUARIOS, ROLES, VIGENCIAS, OBLIGACIONES y EVENTOS.
+2. **La hoja VIGENCIAS** con los ids REALES de las carpetas de Drive que el
+   equipo ya tiene creadas. **No crea ninguna carpeta** (ver
+   [Las carpetas de Drive](#las-carpetas-de-drive)).
 3. **Los parámetros base de CONFIG**, con `modo = PRUEBA`.
 4. **La hoja ROLES**, que describe qué puede cada rol.
 5. **Tu correo inscrito como ADMIN** en USUARIOS.
@@ -131,11 +132,13 @@ Esto deja hecho, en este orden:
 7. **La etiqueta `SINAV` de Gmail.**
 8. **Tres filas de prueba** en OBLIGACIONES, con su soporte en Drive.
 
-### 4 · Si el libro ya tenía datos, correr `migrar()`
+### 4 · Correr `migrar()`
 
-Menú **SINAV → Migrar columnas**. Ver [Migrar un libro que ya
-existe](#migrar-un-libro-que-ya-existe). Si acabas de crear el libro de cero,
-sáltate este paso.
+Menú **SINAV → Migrar columnas**. Hace falta siempre que vengas de una versión
+anterior, aunque creas que el libro está limpio: además de repartir columnas,
+convierte el rol `JEFE`, que ya no existe, en `PROFESIONAL` nivel `III`.
+
+Si acabas de crear el libro de cero, sáltatelo.
 
 ### 5 · Desplegar la aplicación web
 
@@ -180,11 +183,22 @@ las oficinas. El código nunca cambia ese valor solo.
 El rol se resuelve **en el servidor**, con `Session.getActiveUser().getEmail()`
 contra la hoja USUARIOS. Nunca se confía en lo que mande el navegador.
 
-| Rol | Quién lo tiene | Qué puede hacer |
+Lo que decide los permisos es el **perfil**: el rol y, para los profesionales,
+también el nivel. El rol `JEFE` ya no existe.
+
+| Perfil | Quién lo tiene | Qué puede hacer |
 |---|---|---|
-| `PROFESIONAL` | Por defecto, cualquier correo nuevo | Sus propias obligaciones: subir soportes (uno o en lote), digitalizar los campos manuales y enviar a las oficinas. Las ajenas las ve, no las toca |
-| `JEFE` | Elizabeth. A mano | Todo lo del profesional sobre **cualquier** obligación, más asignar responsables, dar el visto bueno (REVISADA / APROBADA), devolver con motivo y ver las métricas |
-| `ADMIN` | Quien administra la herramienta. A mano | Todo lo del jefe, más editar CONFIG y USUARIOS |
+| `PROFESIONAL-I` | Por defecto, cualquier correo nuevo | Sus propias obligaciones: subir soportes (uno o en lote), digitalizar los campos manuales y enviar a las oficinas. Las ajenas las ve, no las toca |
+| `PROFESIONAL-II` | A mano | Lo mismo que el I |
+| `PROFESIONAL-III` | El cargo de supervisión del equipo. Hoy Elizabeth. A mano | Todo lo del profesional sobre **cualquier** obligación, más asignar responsables, dar el visto bueno (REVISADA / APROBADA), devolver con motivo, ver las métricas, registrar ausencias y habilitar vigencias |
+| `ADMIN` | Quien administra la herramienta. Uno solo | Todo lo anterior, más editar CONFIG y USUARIOS |
+
+Los permisos están atados al **perfil, nunca al nombre de una persona**: si
+mañana el cargo lo ocupa otra, se le cambia el nivel en USUARIOS y ya.
+
+La validación se hace **en el servidor**, no escondiendo botones: `validarPaso()`
+recibe el perfil ya resuelto, y una llamada directa a la API con otro perfil se
+rechaza igual.
 
 ### La hoja USUARIOS
 
@@ -192,31 +206,32 @@ contra la hoja USUARIOS. Nunca se confía en lo que mande el navegador.
 |---|---|---|
 | `correo` | El corporativo, en minúsculas | Sí |
 | `nombre` | Como se muestra en la interfaz | No (se deduce del correo) |
-| `rol` | `PROFESIONAL`, `JEFE` o `ADMIN` | Sí |
+| `rol` | `PROFESIONAL` o `ADMIN` | Sí |
 | `activo` | `SI` o `NO` | Sí |
 | `area` | `MUNICIPALES` | No |
-| `nivel` | `I`, `II` o `III` | No |
+| `nivel` | `I`, `II` o `III`. Vacío cuenta como `I` | Solo para profesionales |
 
-**Solo `rol` decide permisos.** `area` y `nivel` se guardan y se muestran — el
-pie de la barra lateral dice "Profesional-I de municipales" — pero hoy no
-cambian lo que alguien puede hacer: un `PROFESIONAL-I` y un `PROFESIONAL-II`
-pueden exactamente lo mismo. Si algún día hay que diferenciarlos, la condición
-se agrega en `PERMISO` (en `00_Constantes.gs`) y en ningún otro sitio.
+**El `nivel` sí decide permisos**, desde el REQ-012: `PROFESIONAL-III` es el
+cargo de supervisión. El `I` y el `II` pueden lo mismo entre sí. Un profesional
+**sin nivel cae al `I`**, que es el de menos permisos: ante la duda, nunca de
+más. El `area` se guarda y se muestra, pero no cambia nada.
+
+Todo eso vive en `PERMISO`, en `00_Constantes.gs`, y en ningún otro sitio.
 
 `area` y `nivel` están **al final** de la hoja a propósito. Ver [Migrar un libro
 que ya existe](#migrar-un-libro-que-ya-existe).
 
-### Cómo poner a alguien de JEFE
+### Cómo poner a alguien de PROFESIONAL-III
 
 1. Abre la hoja **USUARIOS**.
 2. Busca la fila de su correo. Si no está, que entre una vez a la aplicación y
    aparece sola.
-3. Cambia la columna `rol` a `JEFE`. La celda es un desplegable.
-4. Deja `nivel` vacío: el nivel es de los profesionales.
-5. Listo. **No hay que correr nada**: el rol se lee en cada entrada. Si la
-   persona tiene la aplicación abierta, que recargue la página.
+3. Deja `rol` en `PROFESIONAL` y pon `nivel` en `III`. Las dos celdas son
+   desplegables.
+4. Listo. **No hay que correr nada**: el perfil se lee en cada entrada. Si la
+   persona tiene la aplicación abierta, que recargue.
 
-Lo mismo para `ADMIN`.
+Para `ADMIN`, cambia `rol` a `ADMIN` y deja `nivel` vacío.
 
 ### El alta automática
 
@@ -257,13 +272,116 @@ no entra, y hay que inscribirlo a mano.
 |---|---|---|
 | **CONFIG** | Parámetros: `modo`, `nombre_remitente`, carpetas, `dias_aviso`, los `*_defecto` | Tú, a mano, o un ADMIN |
 | **USUARIOS** | Correo, nombre, rol, activo, área, nivel | Tú y el alta automática |
-| **ROLES** | Solo referencia: qué puede cada rol. `instalar()` la reescribe | El programa |
+| **ROLES** | Solo referencia: qué puede cada perfil. `instalar()` la reescribe | El programa |
+| **VIGENCIAS** | Una fila por año fiscal, con los ids de sus carpetas de Drive | `instalar()` la siembra; después, a mano o `habilitarVigencia()` |
+| **OBLIGACIONES** · `responsable` | El correo corporativo de quien responde. Vacío = sin asignar, sale en Asignación | El importador y la pestaña Asignación |
 | **OBLIGACIONES** | El maestro. Una fila por obligación y periodo | El programa y la pantalla de digitalización |
 | **EVENTOS** | El log, solo se agrega al final | **Solo** el programa |
 
 **EVENTOS no se edita a mano nunca.** Es la evidencia de qué pasó y cuándo.
 
 ---
+
+## Quién responde por cada obligación
+
+La distribución no se inventa: sale de los archivos que entregó el equipo, con
+reglas explícitas y en este orden. Donde las fuentes se contradicen, **manda la
+regla, no la interpretación**.
+
+### Las tres fuentes
+
+| Fuente | Qué aporta | Clave |
+|---|---|---|
+| Los cuatro archivos individuales | Lo que cada profesional declara como suyo | centro de costo |
+| Hoja `Responsable` del calendario | **Solo las mixtas**: municipios que dos personas se reparten | centro de costo |
+| `CALENDARIO_TRIBUTARIO` | Los municipios y sus vencimientos | código DANE |
+
+La hoja `Responsable` **no es la distribución completa**, es la de las mixtas.
+Tomarla como distribución total dejaba a Helen con cero municipios y a Jesús
+con dos, lo que obviamente no era el reparto real del equipo.
+
+### Las reglas, en orden
+
+1. **Exclusiva.** Si un solo profesional declara un municipio en su archivo, es
+   suyo.
+2. **Mixta.** Si dos lo comparten, la responsabilidad recae **siempre en Andrea
+   o en Liliana**, que es la regla que dio el equipo. Funciona porque ninguna
+   pareja mixta es Andrea + Liliana: siempre hay exactamente una de las dos.
+3. **Hoja oficial.** Lo que la hoja `Responsable` asigna sin conflicto se
+   respeta tal cual.
+
+El resultado son **329 claves con responsable y ninguna sin resolver**: 325
+municipios y 4 entidades.
+
+### El centro de costo es la clave, no el nombre
+
+El `CC` (columna `cod_oficina`) identifica sin ambigüedad: cero conflictos en
+toda la matriz. El **nombre no sirve** como clave — hay municipios homónimos en
+departamentos distintos (Sucre, Armenia, Florencia) y los archivos escriben el
+mismo sitio de varias formas (`PALMIRA`, `PALMIRA F`, `MELGAR - AUTORETENEDOR`).
+
+El archivo de Jesús no traía columna de CC, así que sus municipios se
+resolvieron por nombre contra el calendario. Diez no aparecen ahí y hay que
+revisarlos a mano.
+
+### Las entidades no son municipios
+
+Cuatro de las obligaciones de Bogotá son **entidades**, no municipios:
+Corporación Financiera, Inversiones CFD, Renting Davivienda y VC Investments.
+Van en la columna `entidad`, no en `municipio`, para que sus declaraciones no
+se mezclen con las del banco y se puedan filtrar aparte.
+
+### Cuando entre una obligación nueva
+
+Si llega un municipio, exógena o declaración que todavía no tiene responsable,
+queda **sin dueño** y le aparece al `PROFESIONAL-III` en la pestaña
+**Asignación**, que es donde se reparte a mano. No se adivina un responsable
+por parecido de nombre.
+
+## Las carpetas de Drive
+
+SINAV se cuelga de la estructura que el equipo ya organizó a mano. **No crea
+ninguna carpeta de año**, y nunca reemplaza un id que ya esté guardado.
+
+```
+Territoriales / <vigencia> / Exógenas
+                           / Declaraciones / Soportes / <municipio> / <impuesto>
+                                           / Sellados / Soportes
+```
+
+Los ids viven en la hoja **VIGENCIAS**, una fila por año. `instalar()` siembra
+la de 2026 con los ids reales y después no la vuelve a tocar.
+
+Si una carpeta no responde, SINAV **avisa con el id** en vez de crear otra:
+crear una carpeta nueva partiría en dos el archivo del equipo sin que nadie se
+entere.
+
+### Vigencia fiscal, no año de presentación
+
+El equipo trabaja por año vencido: en 2027 se presentan las obligaciones de la
+vigencia 2026. Son tres cosas distintas:
+
+| | |
+|---|---|
+| **vigencia fiscal** | a qué año pertenece la obligación → **decide la carpeta** |
+| año de presentación | cuándo se presenta |
+| fecha de envío | cuándo SINAV mandó el correo |
+
+La columna `vigencia` de OBLIGACIONES manda. Una declaración de 2026 presentada
+en 2027 se guarda en `Territoriales/2026`.
+
+### Habilitar un año nuevo
+
+`habilitarVigencia("2027")`, que solo puede un `PROFESIONAL-III` o el `ADMIN`.
+Crea la estructura del año bajo Territoriales, guarda sus ids en VIGENCIAS y
+**no toca las vigencias anteriores**. Si el año ya estaba, no hace nada.
+
+### Las entidades
+
+Bogotá tiene más entidades además del banco (la Corporación Financiera, entre
+otras). La columna `entidad` de OBLIGACIONES las distingue: **vacío significa
+BANCO DAVIVIENDA S.A**, que es el caso de casi todas. Así sus declaraciones no
+se mezclan sin tener que duplicar el municipio.
 
 ## Migrar un libro que ya existe
 
@@ -274,6 +392,12 @@ nuevas, y después **Migrar columnas**, que reparte los datos. Al revés no
 funciona, y `migrar()` te lo dice en vez de hacer un desastre.
 
 Qué cambió y por qué es seguro:
+
+- **El rol `JEFE` desapareció (REQ-012).** `migrar()` reescribe esas filas como
+  `PROFESIONAL` con `nivel` `III`, que es el cargo de supervisión. El nivel se
+  fuerza aunque la celda ya traiga otro valor: si no, quien era jefe perdería
+  permisos sin que nadie se diera cuenta. Mientras no migres, una fila que diga
+  `JEFE` se sigue leyendo como `PROFESIONAL-III`, así que nadie queda fuera.
 
 - **USUARIOS gana `area` y `nivel`, al final.** `asegurarHojas()` reescribe la
   fila de encabezados sin mover los datos de abajo, así que una columna nueva
