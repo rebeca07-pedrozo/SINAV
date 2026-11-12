@@ -56,9 +56,9 @@ function leerHilo(o, miCorreo, modo) {
   try {
     hilo = GmailApp.getThreadById(String(o.hilo_id).trim());
   } catch (e) {
-    return { error: 'no se pudo abrir el hilo (' + e.message + ')' };
+    return { error: 'no se pudo abrir el hilo (' + e.message + ')', ajeno: true };
   }
-  if (!hilo) return { error: 'el hilo ya no existe' };
+  if (!hilo) return { error: 'el hilo no está en tu bandeja', ajeno: true };
 
   var mensajes = hilo.getMessages();
   var visto = String(o.ultimo_mensaje || '').trim();
@@ -110,7 +110,12 @@ function revisarRespuestas() {
     if (!String(o.id || '').trim()) return false;
     if (!String(o.hilo_id || '').trim()) return false;
     if (estadosEsperanRespuesta().indexOf(String(o.estado).toUpperCase()) < 0) return false;
-    // cada quien revisa su propia bandeja
+
+    // El hilo esta en la bandeja de QUIEN ENVIO, que no siempre es el
+    // responsable: un PROFESIONAL-III puede enviar las de otro. Por eso el
+    // supervisor mira todas las que tengan hilo, y Gmail se encarga del resto:
+    // un hilo que no este en su bandeja simplemente no aparece.
+    if (puede('enviarAjenas')) return true;
     return String(o.responsable || '').trim().toLowerCase() === q.correo;
   });
 
@@ -125,8 +130,13 @@ function revisarRespuestas() {
     var r = leerHilo(o, q.correo, modo);
 
     if (r.error) {
-      registrar(o.id, EVENTO.ERROR, 'revisión del hilo: ' + r.error);
-      errores.push(o.municipio + ' ' + o.impuesto + ': ' + r.error);
+      // que un hilo no este en MI bandeja es lo normal cuando reviso las de
+      // otro: no es un fallo, solo que no me toca a mi. No se registra ni se
+      // reporta, o el resumen se llenaria de ruido.
+      if (!r.ajeno) {
+        registrar(o.id, EVENTO.ERROR, 'revisión del hilo: ' + r.error);
+        errores.push(o.municipio + ' ' + o.impuesto + ': ' + r.error);
+      }
       continue;
     }
     if (!r.respuestas && r.ultimo === String(o.ultimo_mensaje || '').trim()) continue;
