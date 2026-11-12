@@ -47,6 +47,20 @@ editor. Si el menú no aparece, cierra y vuelve a abrir el libro.
 Hay una cuarta, `onOpen()`, que **nunca se corre a mano**: Google la llama sola
 al abrir el libro y es la que pinta el menú.
 
+### Y dos más, en el menú `SINAV · Carga`
+
+Solo aparecen si pegaste `dist/Carga.gs`, y solo las puede correr el `ADMIN`.
+Se usan cuando entra una vigencia nueva, no en el día a día.
+
+| Función | Cómo se corre | Cuándo |
+|---|---|---|
+| `cargarProgramacion()` | **SINAV · Carga → 1 · Cargar PROGRAMACION** | Una vez. Lee la hoja CALENDARIO y deja las reglas en PROGRAMACION |
+| `generarVigencia()` | **SINAV · Carga → 2 · Generar la vigencia actual** | Después de la anterior. Crea las obligaciones del año |
+
+`generarVigencia()` **se reanuda sola**: son más de seis mil filas y Apps Script
+corta a los 6 minutos. Si te dice que quedaron pendientes, vuelve a darle y
+sigue donde iba. Lo ya escrito no se duplica.
+
 Todas las demás funciones del proyecto empiezan por `api…` (`apiInicio`,
 `apiEnviar`, `apiSubirSoporte`, `apiMetricas`…). Esas **las llama la aplicación
 web**, no tú. Correrlas a mano desde el editor no sirve de nada: esperan
@@ -275,6 +289,8 @@ no entra, y hay que inscribirlo a mano.
 | **ROLES** | Solo referencia: qué puede cada perfil. `instalar()` la reescribe | El programa |
 | **VIGENCIAS** | Una fila por año fiscal, con los ids de sus carpetas de Drive | `instalar()` la siembra; después, a mano o `habilitarVigencia()` |
 | **OBLIGACIONES** · `responsable` | El correo corporativo de quien responde. Vacío = sin asignar, sale en Asignación | El importador y la pestaña Asignación |
+| **CALENDARIO** | Donde se pega la hoja del Excel del equipo. **No la borres**: `generarVigencia()` saca de ahí las fechas | Tú, pegando |
+| **PROGRAMACION** | Quién debe qué y cada cuánto. 1.217 reglas que NO cambian de un año a otro | `cargarProgramacion()` |
 | **OBLIGACIONES** | El maestro. Una fila por obligación y periodo | El programa y la pantalla de digitalización |
 | **EVENTOS** | El log, solo se agrega al final | **Solo** el programa |
 
@@ -337,6 +353,66 @@ Si llega un municipio, exógena o declaración que todavía no tiene responsable
 queda **sin dueño** y le aparece al `PROFESIONAL-III` en la pestaña
 **Asignación**, que es donde se reparte a mano. No se adivina un responsable
 por parecido de nombre.
+
+## Cómo nombrar los PDF
+
+Esto es lo que hay que decirle al equipo. La carga masiva lee el nombre del
+archivo y propone a qué obligación va cada uno.
+
+```
+11001 RETEICA 2026-11.pdf
+05001 AUTORRETEICA 2026-11.pdf
+76001 ICA 2026-B6.pdf
+11001 EXOGENA 2026.pdf
+```
+
+| Parte | Qué va | Obligatorio |
+|---|---|---|
+| **Código DANE** | 5 dígitos. Está en la columna `cod_dane` de OBLIGACIONES | Sí |
+| **Impuesto** | `RETEICA`, `AUTORRETEICA`, `ICA` o `EXOGENA` | Sí |
+| **Periodo** | `2026-11`, `2026-B6`, `2026`. Se elige en pantalla igualmente | No |
+
+**El orden da igual**, y los separadores también: espacios, guiones o guiones
+bajos. El texto de más se ignora. Todos estos funcionan:
+
+```
+11001-RETEICA-2026-11.pdf
+RETEICA 11001.pdf
+Declaracion 05001 AUTORRETEICA MEDELLIN 2026-11.pdf
+```
+
+Se acepta también el **código de oficina** de 3 o 4 dígitos, pero solo algunas
+obligaciones lo tienen: el calendario no trae esa columna. **El DANE lo tienen
+todas**, así que es el que conviene usar.
+
+Si falta el DANE pero el impuesto y el periodo dejan una sola candidata, también
+empareja. **Cuando hay duda no elige**: lo deja en un desplegable para que la
+persona decida. Un soporte en la obligación equivocada se descubre cuando la
+oficina recibe la declaración de otro municipio.
+
+## La ventana de trabajo
+
+El libro tiene el año entero: más de seis mil obligaciones. Decorarlas todas y
+mandarlas al navegador en cada pantalla la ponía lenta, y llenaba la lista de
+vencimientos de hace meses que nadie va a trabajar hoy.
+
+Por eso se filtra **antes** de procesar, y **por defecto se ve el mes en
+curso**: en noviembre, noviembre.
+
+El selector de la pestaña ENVIAR trae el conteo de cada opción al lado, para que
+no se esconda nada en silencio:
+
+| Ventana | Qué muestra |
+|---|---|
+| **Este mes** | Lo que vence en el mes en curso. Por defecto |
+| Este mes y el siguiente | Para ir preparando lo que viene |
+| Vencidas sin cerrar | Lo atrasado que sigue abierto |
+| Todo lo abierto | Todo lo que no está APROBADA |
+| El año entero | Las seis mil. Para cuando de verdad haga falta |
+
+**Alertas** y **Asignación** usan *todo lo abierto* a propósito: una alerta tiene
+que incluir lo ya vencido que sigue sin cerrar, y para repartir hay que ver todo
+lo que no está cerrado. **Métricas** usa el año entero, que son agregados.
 
 ## Las carpetas de Drive
 
