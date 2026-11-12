@@ -274,12 +274,69 @@ no entra, y hay que inscribirlo a mano.
 | **USUARIOS** | Correo, nombre, rol, activo, área, nivel | Tú y el alta automática |
 | **ROLES** | Solo referencia: qué puede cada perfil. `instalar()` la reescribe | El programa |
 | **VIGENCIAS** | Una fila por año fiscal, con los ids de sus carpetas de Drive | `instalar()` la siembra; después, a mano o `habilitarVigencia()` |
+| **OBLIGACIONES** · `responsable` | El correo corporativo de quien responde. Vacío = sin asignar, sale en Asignación | El importador y la pestaña Asignación |
 | **OBLIGACIONES** | El maestro. Una fila por obligación y periodo | El programa y la pantalla de digitalización |
 | **EVENTOS** | El log, solo se agrega al final | **Solo** el programa |
 
 **EVENTOS no se edita a mano nunca.** Es la evidencia de qué pasó y cuándo.
 
 ---
+
+## Quién responde por cada obligación
+
+La distribución no se inventa: sale de los archivos que entregó el equipo, con
+reglas explícitas y en este orden. Donde las fuentes se contradicen, **manda la
+regla, no la interpretación**.
+
+### Las tres fuentes
+
+| Fuente | Qué aporta | Clave |
+|---|---|---|
+| Los cuatro archivos individuales | Lo que cada profesional declara como suyo | centro de costo |
+| Hoja `Responsable` del calendario | **Solo las mixtas**: municipios que dos personas se reparten | centro de costo |
+| `CALENDARIO_TRIBUTARIO` | Los municipios y sus vencimientos | código DANE |
+
+La hoja `Responsable` **no es la distribución completa**, es la de las mixtas.
+Tomarla como distribución total dejaba a Helen con cero municipios y a Jesús
+con dos, lo que obviamente no era el reparto real del equipo.
+
+### Las reglas, en orden
+
+1. **Exclusiva.** Si un solo profesional declara un municipio en su archivo, es
+   suyo.
+2. **Mixta.** Si dos lo comparten, la responsabilidad recae **siempre en Andrea
+   o en Liliana**, que es la regla que dio el equipo. Funciona porque ninguna
+   pareja mixta es Andrea + Liliana: siempre hay exactamente una de las dos.
+3. **Hoja oficial.** Lo que la hoja `Responsable` asigna sin conflicto se
+   respeta tal cual.
+
+El resultado son **329 claves con responsable y ninguna sin resolver**: 325
+municipios y 4 entidades.
+
+### El centro de costo es la clave, no el nombre
+
+El `CC` (columna `cod_oficina`) identifica sin ambigüedad: cero conflictos en
+toda la matriz. El **nombre no sirve** como clave — hay municipios homónimos en
+departamentos distintos (Sucre, Armenia, Florencia) y los archivos escriben el
+mismo sitio de varias formas (`PALMIRA`, `PALMIRA F`, `MELGAR - AUTORETENEDOR`).
+
+El archivo de Jesús no traía columna de CC, así que sus municipios se
+resolvieron por nombre contra el calendario. Diez no aparecen ahí y hay que
+revisarlos a mano.
+
+### Las entidades no son municipios
+
+Cuatro de las obligaciones de Bogotá son **entidades**, no municipios:
+Corporación Financiera, Inversiones CFD, Renting Davivienda y VC Investments.
+Van en la columna `entidad`, no en `municipio`, para que sus declaraciones no
+se mezclen con las del banco y se puedan filtrar aparte.
+
+### Cuando entre una obligación nueva
+
+Si llega un municipio, exógena o declaración que todavía no tiene responsable,
+queda **sin dueño** y le aparece al `PROFESIONAL-III` en la pestaña
+**Asignación**, que es donde se reparte a mano. No se adivina un responsable
+por parecido de nombre.
 
 ## Las carpetas de Drive
 
