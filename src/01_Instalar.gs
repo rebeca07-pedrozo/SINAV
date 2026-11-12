@@ -39,6 +39,12 @@ function onOpen() {
       .addItem('Llenar OBLIGACIONES con datos de prueba', 'generarObligacionesDesdeMenu')
       .addItem('Borrar el ejemplo', 'borrarEjemplo'))
     .addToUi();
+
+  // Carga.gs es opcional: si esta pegado, pone su propio menu. Si no, no pasa
+  // nada. Apps Script solo admite un onOpen, por eso se llama desde aqui.
+  if (typeof menuCarga === 'function') {
+    try { menuCarga(); } catch (e) { /* el menu no es critico */ }
+  }
 }
 
 function asegurarHojas() {

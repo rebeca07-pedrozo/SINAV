@@ -267,6 +267,12 @@ function onOpen() {
       .addItem('Llenar OBLIGACIONES con datos de prueba', 'generarObligacionesDesdeMenu')
       .addItem('Borrar el ejemplo', 'borrarEjemplo'))
     .addToUi();
+
+  // Carga.gs es opcional: si esta pegado, pone su propio menu. Si no, no pasa
+  // nada. Apps Script solo admite un onOpen, por eso se llama desde aqui.
+  if (typeof menuCarga === 'function') {
+    try { menuCarga(); } catch (e) { /* el menu no es critico */ }
+  }
 }
 
 function asegurarHojas() {
@@ -3558,6 +3564,7 @@ function pruebas() {
   pruebasPago(esIgual);
   pruebasCargaMasiva(esIgual);
   pruebasMetricas(esIgual);
+  pruebasCarga(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -3962,4 +3969,73 @@ function pruebasMetricas(esIgual) {
   esIgual('contarPor nombra lo vacio', contarPor([{ x: '' }], 'x'),
           [{ clave: '(sin dato)', cuantas: 1 }]);
   esIgual('sumarValor de vacio es 0', sumarValor([]), 0);
+}
+
+/**
+ * Carga del calendario. Un error aqui no se ve: se traduce en una obligacion
+ * con el periodo equivocado o asignada a quien no es, y se descubre cuando
+ * alguien reclama un vencimiento que nadie trabajo.
+ */
+function pruebasCarga(esIgual) {
+  // el nombre del municipio viene de mil formas en los archivos
+  esIgual('quita el sufijo de autorretenedor',
+          claveMunicipio('MELGAR - AUTORETENEDOR'), 'MELGAR');
+  esIgual('quita la marca de exogena', claveMunicipio('CAICEDONIA -Exogena'), 'CAICEDONIA');
+  esIgual('quita la F suelta', claveMunicipio('PALMIRA F'), 'PALMIRA');
+  esIgual('quita acentos y puntuacion', claveMunicipio('Medellín (Ant.)'), 'MEDELLIN ANT');
+  esIgual('vacio no revienta', claveMunicipio(''), '');
+
+  // el periodo depende de la periodicidad, no del mes a secas
+  esIgual('mensual', periodoDe(2026, 3, 'MENSUAL'), '2026-03');
+  esIgual('mensual rellena el cero', periodoDe(2026, 9, 'MENSUAL'), '2026-09');
+  esIgual('bimestral', periodoDe(2026, 11, 'BIMESTRAL'), '2026-B6');
+  esIgual('bimestral primer bimestre', periodoDe(2026, 1, 'BIMESTRAL'), '2026-B1');
+  esIgual('trimestral', periodoDe(2026, 7, 'TRIMESTRAL'), '2026-T3');
+  esIgual('cuatrimestral', periodoDe(2026, 12, 'CUATRIMESTRAL'), '2026-C3');
+  esIgual('anual es solo el ano', periodoDe(2026, 5, 'ANUAL'), '2026');
+
+  // las ultimas columnas del calendario son del ano siguiente: ano vencido
+  var cab = ['NIT', 'Municipio', 'Impuesto'];
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2].forEach(function (m) {
+    cab.push(new Date(2000, m - 1, 1));
+  });
+  var cols = columnasDePeriodo(cab, '2026');
+  esIgual('detecta las 14 columnas de periodo', cols.length, 14);
+  esIgual('la primera es enero de la vigencia',
+          [cols[0].anio, cols[0].mes], [2026, 1]);
+  esIgual('la doce es diciembre de la vigencia',
+          [cols[11].anio, cols[11].mes], [2026, 12]);
+  esIgual('la trece ya es del ano siguiente',
+          [cols[12].anio, cols[12].mes], [2027, 1]);
+  esIgual('y la catorce tambien',
+          [cols[13].anio, cols[13].mes], [2027, 2]);
+  esIgual('sin columnas de fecha no inventa ninguna',
+          columnasDePeriodo(['NIT', 'Municipio'], '2026').length, 0);
+
+  // el responsable: el DANE manda, la entidad manda sobre el DANE
+  esIgual('resuelve por codigo DANE',
+          responsableDe('05001', '', 'Medellín', '') !== '', true);
+  esIgual('un DANE que no existe no inventa responsable',
+          responsableDe('99999', '', 'Nolandia', ''), '');
+  esIgual('la entidad manda sobre el municipio',
+          responsableDe('11001', '', 'Bogotá', 'CORPORACION FINANCIERA SA'),
+          MATRIZ_ENTIDAD['CORPORACION FINANCIERA SA']);
+  esIgual('BANCO DAVIVIENDA no es una entidad aparte',
+          responsableDe('99999', '', 'Nolandia', 'BANCO DAVIVIENDA S.A'), '');
+
+  // los impuestos que quedaron fuera del alcance
+  esIgual('predial no entra', IMPUESTO_CALENDARIO['IMPUESTO PREDIAL'], undefined);
+  esIgual('alumbrado no entra',
+          IMPUESTO_CALENDARIO['IMPUESTO DE ALUMBRADO PUBLICO'], undefined);
+  esIgual('industria y comercio es ICA',
+          IMPUESTO_CALENDARIO['INDUSTRIA Y COMERCIO'], 'ICA');
+  esIgual('medios magneticos es exogena',
+          IMPUESTO_CALENDARIO['MEDIOS MAGNETICOS'], 'EXOGENA');
+
+  // las filas de descuento no son obligaciones aparte
+  esIgual('la fila sin descuento entra', DESCUENTOS_QUE_ENTRAN.indexOf('') >= 0, true);
+  esIgual('la de fecha limite entra',
+          DESCUENTOS_QUE_ENTRAN.indexOf('FECHA LIMITE') >= 0, true);
+  esIgual('la de descuento no entra',
+          DESCUENTOS_QUE_ENTRAN.indexOf('DESCUENTO 10%') >= 0, false);
 }

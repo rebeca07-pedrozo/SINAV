@@ -22,9 +22,14 @@ const dist = path.join(raiz, 'dist');
 /* ---- el orden de los .gs ------------------------------------------------- */
 // 00_Constantes va primero porque todo lo demas lee sus constantes.
 // 99_Pruebas va al final porque solo se usa a mano.
-const gs = fs.readdirSync(src)
-  .filter((f) => f.endsWith('.gs'))
-  .sort();                                  // 00_, 01_, ... 16_, 99_
+/**
+ * Los .gs sin numero delante salen como archivo PROPIO en dist/, no dentro de
+ * Codigo.gs. Hoy solo Carga.gs: se corre cuando entra una vigencia nueva, no
+ * en el dia a dia, y conviene poder borrarlo del editor sin tocar la app.
+ */
+const todos = fs.readdirSync(src).filter((f) => f.endsWith('.gs'));
+const aparte = todos.filter((f) => !/^\d/.test(f)).sort();
+const gs = todos.filter((f) => /^\d/.test(f)).sort();   // 00_, 01_, ... 99_
 
 if (!gs.length) {
   console.error('No hay archivos .gs en src/');
@@ -95,6 +100,11 @@ fs.writeFileSync(
 
 fs.writeFileSync(path.join(dist, 'Index.html'),
                  avisoHtml('src/ui/*.html') + soloLF(html), 'utf8');
+aparte.forEach((f) => {
+  fs.writeFileSync(path.join(dist, f),
+    aviso('src/' + f) + soloLF(fs.readFileSync(path.join(src, f), 'utf8')), 'utf8');
+});
+
 fs.copyFileSync(path.join(raiz, 'appsscript.json'), path.join(dist, 'appsscript.json'));
 
 /* ---- comprobaciones ------------------------------------------------------ */
@@ -110,7 +120,8 @@ try {
 
 // 2. que no reviente al cargar (el fallo del orden, ya unido)
 try {
-  new Function(codigo)();
+  new Function(codigo + '\n;' + aparte.map((f) =>
+    fs.readFileSync(path.join(src, f), 'utf8')).join('\n;\n'))();
 } catch (e) {
   console.error('dist/Codigo.gs revienta al cargar:', e.message);
   console.error('Hay un `var` en el nivel superior que lee una constante de otro archivo.');
@@ -123,7 +134,7 @@ try {
 // descuido, y es el tipo de error que se descubre en produccion.
 const nombres = {};
 const repetidas = [];
-for (const f of gs) {
+for (const f of gs.concat(aparte)) {
   const texto = fs.readFileSync(path.join(src, f), 'utf8');
   const re = /^function\s+([A-Za-z_$][\w$]*)\s*\(/gm;
   let m;
@@ -152,4 +163,5 @@ const kb = (f) => Math.round(fs.statSync(path.join(dist, f)).size / 1024) + ' KB
 console.log('dist/ listo — esto es lo que se pega en Apps Script:');
 console.log('  Codigo.gs         ' + kb('Codigo.gs') + '   (' + gs.length + ' archivos de src/*.gs)');
 console.log('  Index.html        ' + kb('Index.html') + '   (' + usados.size + ' archivos de src/ui/*.html)');
+aparte.forEach((f) => console.log('  ' + f.padEnd(18) + kb(f) + '   (aparte, se corre una vez por vigencia)'));
 console.log('  appsscript.json   ' + kb('appsscript.json'));
