@@ -111,10 +111,7 @@ function Vista({ vista, inicio }) {
   if (vista === 'asignacion') return html`<${Asignacion} />`;
   if (vista === 'ausencias') return html`<${Ausencias} />`;
 
-  if (vista === 'respuestas') {
-    return html`<${PorConstruir} et="Respuestas"
-      dice="Las ya enviadas, quién respondió y el sellado que volvió. Arriba, lo que no ha respondido y está por vencerse." />`;
-  }
+  if (vista === 'respuestas') return html`<${Respuestas} />`;
   return html`<${PorConstruir} et="Configuración"
     dice="Las hojas CONFIG y USUARIOS desde la aplicación, sin abrir el libro." />`;
 }

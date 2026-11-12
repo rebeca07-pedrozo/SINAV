@@ -54,6 +54,9 @@ var COLS = {
     // devolverle la obligacion cuando termine la ausencia. Vacio = nadie la
     // esta cubriendo. La asignacion ORIGINAL nunca se sobrescribe.
     'titular_original',
+    // El ultimo mensaje del hilo que ya se proceso. Sin esto, cada revision
+    // volveria a guardar el mismo adjunto una y otra vez.
+    'ultimo_mensaje',
     // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
     // Vacio = Banco Davivienda, que es el caso normal.
     'entidad'

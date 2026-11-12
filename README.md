@@ -415,6 +415,46 @@ no se esconda nada en silencio:
 que incluir lo ya vencido que sigue sin cerrar, y para repartir hay que ver todo
 lo que no está cerrado. **Métricas** usa el año entero, que son agregados.
 
+## Las respuestas de las oficinas
+
+Al enviar, SINAV guarda el **`hilo_id`** de Gmail. La pestaña **Respuestas** lee
+**ese hilo y nada más**: si la oficina contesta sobre el mismo correo, se recoge
+lo que respondió y el adjunto que traiga.
+
+**Por qué el hilo y no una búsqueda en la bandeja:** el hilo ya dice a qué
+obligación pertenece la respuesta. Buscar por asunto o por remitente sería
+adivinar, y una declaración sellada archivada en el municipio equivocado es un
+error que se descubre meses después.
+
+### Qué hace el botón «Revisar respuestas ahora»
+
+1. Recorre las obligaciones enviadas que tengan `hilo_id`.
+2. Abre cada hilo y mira **solo los mensajes nuevos** — los que llegaron después
+   del último que ya se procesó. Para eso está la columna `ultimo_mensaje`: sin
+   ella, cada revisión volvería a guardar el mismo adjunto.
+3. Descarta los mensajes propios: una respuesta es de la oficina, no mía.
+4. El adjunto se guarda en **Sellados**, en la carpeta del municipio y el
+   impuesto, y su id queda en `sellado_id`.
+5. La obligación pasa de `ENVIADA` a `RESPONDIDA` y queda el evento.
+
+Los adjuntos de menos de 2 KB se ignoran: son firmas y logos incrustados, no el
+sellado.
+
+Va **por lotes con guardia de tiempo**: cada llamada a Gmail es lenta y Apps
+Script corta a los 6 minutos. Si queda a medias, se vuelve a darle y sigue donde
+iba, sin repetir lo ya procesado.
+
+### Desde la pantalla
+
+Las enviadas salen en tres grupos: **con sellado guardado**, **respondieron sin
+adjunto** y **sin respuesta todavía**. El sellado se abre desde ahí con un
+botón, sin ir a buscarlo a Drive; las que no tienen sellado ofrecen abrir el
+hilo en Gmail.
+
+**Cada quien revisa lo suyo.** El correo está en la bandeja de quien envió, y la
+aplicación corre como el usuario que accede, así que solo se revisan los hilos
+propios.
+
 ## Ausencias y backups
 
 Cuando alguien se va de vacaciones, sus obligaciones pasan temporalmente a su

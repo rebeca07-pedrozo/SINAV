@@ -297,6 +297,30 @@ window.google = { script: { run: (function () {
     // emparejarArchivo en 99_Pruebas.gs.
     apiCargaPlan: () => D.PLAN_EJEMPLO,
     apiAlertas: () => D.ALERTAS,
+    apiRespuestas: () => {
+      const env = D.INICIO.filas.concat(D.ASIGNACION.filas)
+        .filter((o, i, a) => a.findIndex((x) => x.id === o.id) === i)
+        .filter((o) => o.cadena.envio);
+      const t = [
+        { id: 'sellado', et: 'Con sellado guardado',
+          detalle: 'La oficina respondió y el documento ya está en Drive.',
+          nivel: 'aldia', filas: env.filter((o) => o.cadena.sellado) },
+        { id: 'responde_sin_sellado', et: 'Respondieron, pero sin adjunto',
+          detalle: 'Hay respuesta en el hilo y no venía ningún documento.',
+          nivel: 'porvencer',
+          filas: env.filter((o) => !o.cadena.sellado && o.cadena.respuesta) },
+        { id: 'sin_respuesta', et: 'Enviadas, sin respuesta todavía',
+          detalle: 'El correo salió y la oficina no ha contestado.', nivel: '',
+          filas: env.filter((o) => !o.cadena.sellado && !o.cadena.respuesta) }
+      ];
+      return { tramos: t.filter((x) => x.filas.length), total: env.length,
+               con_sellado: t[0].filas.length, sin_respuesta: t[2].filas.length,
+               generado: D.AHORA };
+    },
+    apiRevisarRespuestas: () => ({ revisadas: 3, con_respuesta: 1, con_sellado: 1,
+                                   pendientes: 0, errores: [] }),
+    apiEnlaceSellado: () => 'https://drive.google.com/file/d/EJEMPLO/view',
+    apiEnlaceHilo: () => 'https://mail.google.com/mail/u/0/#inbox/EJEMPLO',
     apiAusencias: () => ({
       personas: [
         { correo: 'andrea@davivienda.com', nombre: 'Andrea Galvis',

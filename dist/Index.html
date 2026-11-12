@@ -2657,6 +2657,205 @@ function Ausencias() {
 }
 </script>
 
+  <!-- ===== ui/Respuestas.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · pestana RESPUESTAS.
+   La pregunta de esta pantalla: quien contesto, que mandaron, y que sigue
+   esperando. El sellado se abre desde aqui, sin ir a buscarlo en Drive.
+   =========================================================================== */
+
+function FilaRespuesta({ o, veTodo, alAbrir, abriendo }) {
+  const nivelVence = o.dias === null ? ''
+    : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
+
+  return html`<tr>
+    <td class="celda-mun">
+      <span class="ident">${o.municipio}</span>
+      <span class="sub">DANE ${o.cod_dane} · ${o.impuesto} · ${o.periodo}</span>
+    </td>
+    <td class="celda-linea2 num der">
+      <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
+      <span class=${'sub ' + nivelVence}>${textoDias(o.dias)}</span>
+    </td>
+    <td class="celda-linea2">
+      ${o.fecha_respuesta
+        ? html`<${React.Fragment}><span>${o.fecha_respuesta.slice(0, 10)}</span>
+            <span class="sub">${o.fecha_respuesta.slice(11)}</span></>`
+        : html`<span class="sub">sin respuesta</span>`}
+    </td>
+    <td class="celda-linea2">
+      <${Cadena} cadena=${o.cadena} trabada=${!o.cadena.sellado} />
+    </td>
+    <td class="celda-linea2"><${Pildora} estado=${o.estado} /></td>
+    ${veTodo ? html`<td class="celda-linea2">
+      <span class="sub">${o.responsable || '—'}</span></td>` : null}
+    <td class="celda-accion der">
+      ${o.cadena.sellado
+        ? html`<button class="btn" disabled=${abriendo === o.id}
+            onClick=${() => alAbrir(o.id, 'sellado')}>
+            ${abriendo === o.id ? 'Abriendo…' : 'Ver sellado'}</button>`
+        : html`<button class="btn" disabled=${abriendo === o.id || !o.cadena.envio}
+            onClick=${() => alAbrir(o.id, 'hilo')}>Ver el hilo</button>`}
+    </td>
+  </tr>`;
+}
+
+function Respuestas() {
+  const [datos, setDatos] = useState(null);
+  const [revisando, setRevisando] = useState(false);
+  const [abriendo, setAbriendo] = useState('');
+  const [fallo, setFallo] = useState('');
+  const [aviso, setAviso] = useState(null);
+  const [enlace, setEnlace] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setFallo('');
+    try {
+      setDatos(await llamar('apiRespuestas'));
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function revisar() {
+    setRevisando(true);
+    setFallo('');
+    setAviso(null);
+    try {
+      const r = await llamar('apiRevisarRespuestas');
+      const lineas = [];
+      if (r.con_sellado) lineas.push(r.con_sellado + ' sellados guardados en Drive.');
+      if (r.pendientes) {
+        lineas.push(r.pendientes + ' hilos quedaron sin revisar por el límite de ' +
+                    'tiempo de Apps Script. Vuelve a darle y sigue donde iba.');
+      }
+      r.errores.forEach((e) => lineas.push(e));
+      setAviso({
+        clase: r.con_respuesta ? '' : 'malo',
+        titulo: r.con_respuesta
+          ? r.con_respuesta + (r.con_respuesta === 1
+              ? ' obligación con respuesta nueva' : ' obligaciones con respuesta nueva')
+          : 'Nadie ha respondido desde la última revisión',
+        lineas: lineas
+      });
+      if (r.lista) setDatos(r.lista);
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setRevisando(false);
+    }
+  }
+
+  async function abrir(id, que) {
+    setAbriendo(id);
+    setFallo('');
+    try {
+      const url = await llamar(que === 'sellado' ? 'apiEnlaceSellado' : 'apiEnlaceHilo', id);
+      setEnlace({ id: id, url: url, que: que });
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setAbriendo('');
+    }
+  }
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Respuestas</h1>
+        <p class="hallazgo">${fallo || html`<${Hueso} ancho="380px" />`}</p></div></div>
+      ${fallo ? html`<section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+      </section>` : null}
+    </main>`;
+  }
+
+  const veTodo = false;
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Respuestas</h1>
+        <p class="hallazgo">
+          ${frase([
+            datos.con_sellado,
+            datos.con_sellado === 1 ? ' sellado guardado' : ' sellados guardados',
+            ' de ', datos.total, ' enviadas. ',
+            ...(datos.sin_respuesta
+              ? [datos.sin_respuesta,
+                 datos.sin_respuesta === 1
+                   ? ' sigue sin respuesta.' : ' siguen sin respuesta.']
+              : ['Todas contestaron.'])
+          ])}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn btn-principal" onClick=${revisar} disabled=${revisando}>
+          ${revisando ? 'Revisando los hilos…' : 'Revisar respuestas ahora'}
+        </button>
+      </div>
+    </div>
+
+    <p class="hallazgo hallazgo-suelto">
+      SINAV lee <b>el hilo que él mismo envió</b>, no la bandeja entera: el hilo
+      ya dice a qué obligación pertenece la respuesta. El adjunto que venga se
+      guarda en <b>Sellados</b>, en la carpeta del municipio y el impuesto, y se
+      abre desde aquí.
+    </p>
+
+    ${aviso ? html`<div class=${'resultado ' + aviso.clase} role="status">
+      <h2>${aviso.titulo}</h2>
+      ${aviso.lineas.length ? html`<ul>
+        ${aviso.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}</ul>` : null}
+    </div>` : null}
+
+    ${enlace ? html`<div class="resultado" role="status">
+      <h2>${enlace.que === 'sellado' ? 'El sellado' : 'El hilo en Gmail'}</h2>
+      <ul><li><a href=${enlace.url} target="_blank" rel="noopener">${enlace.url}</a></li></ul>
+      <button class="btn" onClick=${() => setEnlace(null)}>Cerrar</button>
+    </div>` : null}
+
+    ${fallo ? html`<section class="panel">
+      <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+    </section>` : null}
+
+    ${datos.tramos.map((t) => html`<section class="panel" key=${t.id}>
+      <div class="panel-cab">
+        <h2>${t.et}</h2>
+        <span class="total">${t.filas.length}</span>
+        <span class="der">${t.detalle}</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Municipio</th>
+          <th class="num der">Vence</th>
+          <th>Respondieron</th>
+          <th>Evidencia</th>
+          <th>Estado</th>
+          ${veTodo ? html`<th>Responsable</th>` : null}
+          <th class="der">Documento</th>
+        </tr></thead>
+        <tbody>
+          ${t.filas.map((o) => html`<${FilaRespuesta} key=${o.id} o=${o}
+            veTodo=${veTodo} alAbrir=${abrir} abriendo=${abriendo} />`)}
+        </tbody>
+      </table>
+    </section>`)}
+
+    ${!datos.tramos.length ? html`<section class="panel">
+      <p class="vacio">Todavía no has enviado ninguna obligación, así que no hay
+        hilos que revisar.</p>
+    </section>` : null}
+
+    <p class="sub pie-lienzo">
+      ${datos.generado ? 'Leído a las ' + datos.generado.slice(11) : ''}
+    </p>
+  </main>`;
+}
+</script>
+
   <!-- ===== ui/App.html ===== -->
 <script>
 /* ===========================================================================
@@ -2771,10 +2970,7 @@ function Vista({ vista, inicio }) {
   if (vista === 'asignacion') return html`<${Asignacion} />`;
   if (vista === 'ausencias') return html`<${Ausencias} />`;
 
-  if (vista === 'respuestas') {
-    return html`<${PorConstruir} et="Respuestas"
-      dice="Las ya enviadas, quién respondió y el sellado que volvió. Arriba, lo que no ha respondido y está por vencerse." />`;
-  }
+  if (vista === 'respuestas') return html`<${Respuestas} />`;
   return html`<${PorConstruir} et="Configuración"
     dice="Las hojas CONFIG y USUARIOS desde la aplicación, sin abrir el libro." />`;
 }
