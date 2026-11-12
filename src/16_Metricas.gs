@@ -99,7 +99,8 @@ function agruparMetricas(filas) {
 function apiMetricas(periodo) {
   exige('verMetricas');
 
-  var todas = listarTodas();
+  // las metricas son agregadas: aqui si hace falta el ano entero
+  var todas = listarTodas('todo');
   var p = periodo ? normPeriodo(periodo) : '';
   var filas = p ? todas.filter(function (o) { return o.periodo === p; }) : todas;
 

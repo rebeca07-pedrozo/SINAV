@@ -46,20 +46,23 @@ function leerNombreArchivo(nombre) {
     if (mb) periodo = normPeriodo(mb[1] + '-' + mb[2] + mb[3]);
   }
 
-  // codigo de oficina: un grupo de 3 o 4 digitos que no sea un anio ni el
-  // periodo que acabamos de leer.
-  var oficina = '';
-  var grupos = limpio.match(/\d{3,4}/g) || [];
+  // El codigo del municipio. Se aceptan los dos que existen:
+  //   5 digitos -> codigo DANE, que es lo que trae el calendario y lo que
+  //                tienen TODAS las obligaciones cargadas
+  //   3 o 4     -> codigo de oficina, que solo tienen algunas
+  // Se descartan los anios y el periodo que ya se leyo, para no confundirlos.
+  var dane = '', oficina = '';
+  var grupos = limpio.match(/\d{3,5}/g) || [];
   for (var i = 0; i < grupos.length; i++) {
     var g = grupos[i];
     if (/^(19|20)\d{2}$/.test(g)) continue;              // es un anio
     if (periodo && periodo.indexOf(g) === 0) continue;    // es el periodo
-    oficina = normCodigo(g, 4);
-    break;
+    if (g.length === 5 && !dane) dane = g;
+    else if (g.length <= 4 && !oficina) oficina = normCodigo(g, 4);
   }
 
-  return { cod_oficina: oficina, impuesto: impuesto, periodo: periodo,
-           nombre: s };
+  return { cod_dane: dane, cod_oficina: oficina, impuesto: impuesto,
+           periodo: periodo, nombre: s };
 }
 
 /**
@@ -74,9 +77,18 @@ function leerNombreArchivo(nombre) {
 function emparejarArchivo(leido, candidatas) {
   var cs = candidatas || [];
 
-  var porOficina = leido.cod_oficina
-    ? cs.filter(function (o) { return String(o.cod_oficina) === leido.cod_oficina; })
-    : cs;
+  // El DANE manda: lo tienen todas. El codigo de oficina es el respaldo.
+  var porCodigo = cs;
+  if (leido.cod_dane) {
+    porCodigo = cs.filter(function (o) {
+      return String(o.cod_dane) === leido.cod_dane;
+    });
+  } else if (leido.cod_oficina) {
+    porCodigo = cs.filter(function (o) {
+      return String(o.cod_oficina) === leido.cod_oficina;
+    });
+  }
+  var porOficina = porCodigo;
   var porImpuesto = leido.impuesto
     ? porOficina.filter(function (o) { return String(o.impuesto) === leido.impuesto; })
     : porOficina;
@@ -85,7 +97,7 @@ function emparejarArchivo(leido, candidatas) {
 
   if (ids.length === 1) {
     var faltan = [];
-    if (!leido.cod_oficina) faltan.push('el nombre no trae código de oficina');
+    if (!leido.cod_dane && !leido.cod_oficina) faltan.push('el nombre no trae código de municipio');
     if (!leido.impuesto) faltan.push('el nombre no trae el impuesto');
     return { estado: 'listo', id: ids[0], opciones: ids,
              motivo: faltan.length ? 'Único candidato, aunque ' + faltan.join(' y ') + '.' : '' };
@@ -97,7 +109,12 @@ function emparejarArchivo(leido, candidatas) {
   }
 
   var porque = [];
-  if (leido.cod_oficina && !cs.some(function (o) {
+  if (leido.cod_dane && !cs.some(function (o) {
+    return String(o.cod_dane) === leido.cod_dane;
+  })) {
+    porque.push('ninguna obligación del periodo tiene el código DANE ' + leido.cod_dane);
+  }
+  if (!leido.cod_dane && leido.cod_oficina && !cs.some(function (o) {
     return String(o.cod_oficina) === leido.cod_oficina;
   })) {
     porque.push('ninguna obligación del periodo tiene la oficina ' + leido.cod_oficina);
@@ -105,8 +122,8 @@ function emparejarArchivo(leido, candidatas) {
   if (leido.impuesto && porOficina.length && !porImpuesto.length) {
     porque.push('ninguna es de ' + leido.impuesto);
   }
-  if (!leido.cod_oficina && !leido.impuesto) {
-    porque.push('del nombre no se pudo leer ni la oficina ni el impuesto');
+  if (!leido.cod_dane && !leido.cod_oficina && !leido.impuesto) {
+    porque.push('del nombre no se pudo leer ni el código del municipio ni el impuesto');
   }
   return { estado: 'ninguno', id: '', opciones: [],
            motivo: porque.length ? porque.join('; ') + '.' : 'No encaja con ninguna.' };

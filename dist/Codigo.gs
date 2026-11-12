@@ -1591,11 +1591,82 @@ function decorar(o) {
   };
 }
 
-/** Todas las obligaciones que el usuario puede ver: todas, decoradas. */
-function listarTodas() {
+/**
+ * LA VENTANA DE TRABAJO
+ *
+ * El libro tiene el ano entero: mas de seis mil obligaciones. Decorarlas todas
+ * y mandarlas al navegador en cada pantalla es lo que la ponia lenta, y ademas
+ * llenaba la lista de vencimientos de hace meses que nadie va a trabajar hoy.
+ *
+ * Asi que se filtra ANTES de decorar, que es la parte cara. El filtro se hace
+ * sobre la fecha cruda de la hoja, sin construir el objeto de la interfaz.
+ *
+ *   'mes'       lo que vence este mes                      <- por defecto
+ *   'proximo'   este mes y el siguiente
+ *   'vencidas'  lo que ya vencio y sigue abierto
+ *   'abiertas'  todo lo que no esta APROBADA
+ *   'todo'      el ano entero, para cuando de verdad haga falta
+ */
+var VENTANA_POR_DEFECTO = 'mes';
+
+/** Primer y ultimo dia del mes de una fecha, en zona Bogota. */
+function limitesDelMes(desplazamiento) {
+  var hoy = new Date();
+  var a = Number(Utilities.formatDate(hoy, TZ, 'yyyy'));
+  var m = Number(Utilities.formatDate(hoy, TZ, 'MM')) + (desplazamiento || 0);
+  while (m > 12) { m -= 12; a++; }
+  while (m < 1) { m += 12; a--; }
+  return { desde: new Date(a, m - 1, 1), hasta: new Date(a, m, 0, 23, 59, 59) };
+}
+
+/** True si esta fila cruda entra en la ventana. No decora nada. */
+function entraEnVentana(o, ventana) {
+  var est = String(o.estado || '').toUpperCase();
+  if (ventana === 'todo') return true;
+  if (ventana === 'abiertas') return est !== ESTADO.APROBADA;
+
+  var v = o.vencimiento instanceof Date ? o.vencimiento : new Date(o.vencimiento);
+  if (isNaN(v.getTime())) return true;          // sin fecha: siempre se ve
+
+  if (ventana === 'vencidas') {
+    return est !== ESTADO.APROBADA && v < limitesDelMes(0).desde;
+  }
+  var lim = limitesDelMes(0);
+  var hasta = ventana === 'proximo' ? limitesDelMes(1).hasta : lim.hasta;
+  return v >= lim.desde && v <= hasta;
+}
+
+/**
+ * Las obligaciones de la ventana, decoradas.
+ * Sin ventana se usa la de por defecto: el mes en curso.
+ */
+function listarTodas(ventana) {
+  var v = ventana || VENTANA_POR_DEFECTO;
   return registros(HOJA.OBLIGACIONES)
-    .filter(function (o) { return String(o.id || '').trim(); })
+    .filter(function (o) {
+      return String(o.id || '').trim() && entraEnVentana(o, v);
+    })
     .map(decorar);
+}
+
+/** Cuantas hay en cada ventana, sin decorar ninguna. Es barato. */
+function conteosDeVentana() {
+  var todas = registros(HOJA.OBLIGACIONES)
+    .filter(function (o) { return String(o.id || '').trim(); });
+  var mio = puede('editarAjenas') ? null : yo().correo;
+  var mias = mio
+    ? todas.filter(function (o) {
+        return String(o.responsable || '').trim().toLowerCase() === mio;
+      })
+    : todas;
+
+  return {
+    mes: mias.filter(function (o) { return entraEnVentana(o, 'mes'); }).length,
+    proximo: mias.filter(function (o) { return entraEnVentana(o, 'proximo'); }).length,
+    vencidas: mias.filter(function (o) { return entraEnVentana(o, 'vencidas'); }).length,
+    abiertas: mias.filter(function (o) { return entraEnVentana(o, 'abiertas'); }).length,
+    todo: mias.length
+  };
 }
 
 /**
@@ -1603,9 +1674,9 @@ function listarTodas() {
  * El PROFESIONAL ve las suyas; JEFE y ADMIN ven las de todos.
  * Orden: lo que mas aprieta arriba.
  */
-function listarParaEnviar() {
-  var todas = puede('asignar') ? listarTodas()
-            : listarTodas().filter(function (o) { return o.mia; });
+function listarParaEnviar(ventana) {
+  var todas = puede('asignar') ? listarTodas(ventana)
+            : listarTodas(ventana).filter(function (o) { return o.mia; });
 
   return todas
     .filter(function (o) {
@@ -1650,9 +1721,12 @@ function apiInicio() {
       'Los valores válidos son PROFESIONAL, JEFE y ADMIN.' };
   }
 
-  var lista = listarParaEnviar();
+  var ventana = VENTANA_POR_DEFECTO;
+  var lista = listarParaEnviar(ventana);
   return {
     yo: q,
+    ventana: ventana,
+    ventanas: conteosDeVentana(),
     config: {
       modo: config('modo'),
       nombre_remitente: config('nombre_remitente'),
@@ -1665,10 +1739,13 @@ function apiInicio() {
   };
 }
 
-/** Refresca solo la lista de ENVIAR. */
-function apiListaEnviar() {
-  var lista = listarParaEnviar();
+/** Refresca solo la lista de ENVIAR, en la ventana que pida el cliente. */
+function apiListaEnviar(ventana) {
+  var v = ventana || VENTANA_POR_DEFECTO;
+  var lista = listarParaEnviar(v);
   return {
+    ventana: v,
+    ventanas: conteosDeVentana(),
     filas: lista,
     conteos: conteos(lista),
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
@@ -2222,8 +2299,10 @@ function apiAlertas() {
   var q = yo();
   if (!q.activo) throw new Error('Tu usuario está inactivo en SINAV.');
 
-  var mias = puede('asignar') ? listarTodas()
-           : listarTodas().filter(function (o) { return o.mia; });
+  // 'abiertas' y no 'mes': una alerta tiene que incluir lo ya vencido que
+  // sigue sin cerrar, que es justo lo que no se puede dejar pasar.
+  var mias = puede('asignar') ? listarTodas('abiertas')
+           : listarTodas('abiertas').filter(function (o) { return o.mia; });
 
   var r = agruparAlertas(mias, diasDeAviso());
   r.yo = { correo: q.correo, ve_todo: puede('asignar') };
@@ -2490,20 +2569,23 @@ function leerNombreArchivo(nombre) {
     if (mb) periodo = normPeriodo(mb[1] + '-' + mb[2] + mb[3]);
   }
 
-  // codigo de oficina: un grupo de 3 o 4 digitos que no sea un anio ni el
-  // periodo que acabamos de leer.
-  var oficina = '';
-  var grupos = limpio.match(/\d{3,4}/g) || [];
+  // El codigo del municipio. Se aceptan los dos que existen:
+  //   5 digitos -> codigo DANE, que es lo que trae el calendario y lo que
+  //                tienen TODAS las obligaciones cargadas
+  //   3 o 4     -> codigo de oficina, que solo tienen algunas
+  // Se descartan los anios y el periodo que ya se leyo, para no confundirlos.
+  var dane = '', oficina = '';
+  var grupos = limpio.match(/\d{3,5}/g) || [];
   for (var i = 0; i < grupos.length; i++) {
     var g = grupos[i];
     if (/^(19|20)\d{2}$/.test(g)) continue;              // es un anio
     if (periodo && periodo.indexOf(g) === 0) continue;    // es el periodo
-    oficina = normCodigo(g, 4);
-    break;
+    if (g.length === 5 && !dane) dane = g;
+    else if (g.length <= 4 && !oficina) oficina = normCodigo(g, 4);
   }
 
-  return { cod_oficina: oficina, impuesto: impuesto, periodo: periodo,
-           nombre: s };
+  return { cod_dane: dane, cod_oficina: oficina, impuesto: impuesto,
+           periodo: periodo, nombre: s };
 }
 
 /**
@@ -2518,9 +2600,18 @@ function leerNombreArchivo(nombre) {
 function emparejarArchivo(leido, candidatas) {
   var cs = candidatas || [];
 
-  var porOficina = leido.cod_oficina
-    ? cs.filter(function (o) { return String(o.cod_oficina) === leido.cod_oficina; })
-    : cs;
+  // El DANE manda: lo tienen todas. El codigo de oficina es el respaldo.
+  var porCodigo = cs;
+  if (leido.cod_dane) {
+    porCodigo = cs.filter(function (o) {
+      return String(o.cod_dane) === leido.cod_dane;
+    });
+  } else if (leido.cod_oficina) {
+    porCodigo = cs.filter(function (o) {
+      return String(o.cod_oficina) === leido.cod_oficina;
+    });
+  }
+  var porOficina = porCodigo;
   var porImpuesto = leido.impuesto
     ? porOficina.filter(function (o) { return String(o.impuesto) === leido.impuesto; })
     : porOficina;
@@ -2529,7 +2620,7 @@ function emparejarArchivo(leido, candidatas) {
 
   if (ids.length === 1) {
     var faltan = [];
-    if (!leido.cod_oficina) faltan.push('el nombre no trae código de oficina');
+    if (!leido.cod_dane && !leido.cod_oficina) faltan.push('el nombre no trae código de municipio');
     if (!leido.impuesto) faltan.push('el nombre no trae el impuesto');
     return { estado: 'listo', id: ids[0], opciones: ids,
              motivo: faltan.length ? 'Único candidato, aunque ' + faltan.join(' y ') + '.' : '' };
@@ -2541,7 +2632,12 @@ function emparejarArchivo(leido, candidatas) {
   }
 
   var porque = [];
-  if (leido.cod_oficina && !cs.some(function (o) {
+  if (leido.cod_dane && !cs.some(function (o) {
+    return String(o.cod_dane) === leido.cod_dane;
+  })) {
+    porque.push('ninguna obligación del periodo tiene el código DANE ' + leido.cod_dane);
+  }
+  if (!leido.cod_dane && leido.cod_oficina && !cs.some(function (o) {
     return String(o.cod_oficina) === leido.cod_oficina;
   })) {
     porque.push('ninguna obligación del periodo tiene la oficina ' + leido.cod_oficina);
@@ -2549,8 +2645,8 @@ function emparejarArchivo(leido, candidatas) {
   if (leido.impuesto && porOficina.length && !porImpuesto.length) {
     porque.push('ninguna es de ' + leido.impuesto);
   }
-  if (!leido.cod_oficina && !leido.impuesto) {
-    porque.push('del nombre no se pudo leer ni la oficina ni el impuesto');
+  if (!leido.cod_dane && !leido.cod_oficina && !leido.impuesto) {
+    porque.push('del nombre no se pudo leer ni el código del municipio ni el impuesto');
   }
   return { estado: 'ninguno', id: '', opciones: [],
            motivo: porque.length ? porque.join('; ') + '.' : 'No encaja con ninguna.' };
@@ -2758,7 +2854,8 @@ function agruparMetricas(filas) {
 function apiMetricas(periodo) {
   exige('verMetricas');
 
-  var todas = listarTodas();
+  // las metricas son agregadas: aqui si hace falta el ano entero
+  var todas = listarTodas('todo');
   var p = periodo ? normPeriodo(periodo) : '';
   var filas = p ? todas.filter(function (o) { return o.periodo === p; }) : todas;
 
@@ -3256,8 +3353,9 @@ function asignables() {
 function apiListaAsignacion() {
   exige('asignar');
 
-  var lista = listarTodas()
-    .filter(function (o) { return o.estado !== ESTADO.APROBADA; })
+  // 'abiertas': para repartir hay que ver todo lo que sigue sin cerrar,
+  // no solo lo del mes en curso.
+  var lista = listarTodas('abiertas')
     .map(function (o) {
       o.sin_responsable = !String(o.responsable || '').trim();
       return o;

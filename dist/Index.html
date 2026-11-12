@@ -762,6 +762,18 @@ function ErrorBloque({ mensaje, cuando, alReintentar }) {
    La pregunta de esta pantalla: que puedo mandar hoy, y que me lo esta trabando.
    =========================================================================== */
 
+/**
+ * La ventana de trabajo. El libro tiene el ano entero, pero lo que importa un
+ * martes de noviembre es noviembre. Lo demas sigue ahi, a un clic.
+ */
+const VENTANAS = [
+  { id: 'mes', et: 'Este mes' },
+  { id: 'proximo', et: 'Este mes y el siguiente' },
+  { id: 'vencidas', et: 'Vencidas sin cerrar' },
+  { id: 'abiertas', et: 'Todo lo abierto' },
+  { id: 'todo', et: 'El año entero' }
+];
+
 const FILTROS = [
   { id: 'todas', et: 'Por enviar', clave: 'todas' },
   { id: 'sin_soporte', et: 'Sin soporte', clave: 'sin_soporte' },
@@ -882,6 +894,7 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
 
 function Enviar({ inicio }) {
   const [datos, setDatos] = useState(inicio);
+  const [ventana, setVentana] = useState(inicio.ventana || 'mes');
   const [filtro, setFiltro] = useState('todas');
   const [elegidas, setElegidas] = useState([]);
   const [confirmando, setConfirmando] = useState(false);
@@ -912,11 +925,11 @@ function Enviar({ inicio }) {
   const elegidasVivas = elegidas.filter((id) =>
     elegiblesVisibles.some((o) => o.id === id));
 
-  const recargar = useCallback(async () => {
+  const recargar = useCallback(async (v) => {
     setTrabajando('recargando');
     setFallo('');
     try {
-      const d = await llamar('apiListaEnviar');
+      const d = await llamar('apiListaEnviar', v || ventana);
       setDatos((v) => Object.assign({}, v, d));
       setElegidas([]);
     } catch (e) {
@@ -1017,7 +1030,16 @@ function Enviar({ inicio }) {
         <${Hallazgo} filas=${filas} conteos=${conteosVista} />
       </div>
       <div class="acciones-titulo">
-        <button class="btn" onClick=${recargar} disabled=${!!trabajando}>
+        <label class="campo campo-linea">
+          <span>Periodo</span>
+          <select value=${ventana} disabled=${!!trabajando}
+            onChange=${(e) => { setVentana(e.target.value); recargar(e.target.value); }}>
+            ${VENTANAS.map((v) => html`<option key=${v.id} value=${v.id}>
+              ${v.et}${datos.ventanas ? ' (' + (datos.ventanas[v.id] || 0) + ')' : ''}
+            </option>`)}
+          </select>
+        </label>
+        <button class="btn" onClick=${() => recargar()} disabled=${!!trabajando}>
           <${Icono} nombre="recargar" />
           ${trabajando === 'recargando' ? 'Actualizando…' : 'Actualizar'}
         </button>

@@ -118,6 +118,8 @@ const inicio = {
   },
   config: { modo: 'PRUEBA', nombre_remitente: 'Impuestos Davivienda', dias_aviso: '10,4,2,0' },
   cuota: { usada: 0, tope: 1500 },
+  ventana: 'mes',
+  ventanas: { mes: 3, proximo: 5, vencidas: 1, abiertas: 6, todo: 9 },
   filas: filas.filter((o) => o.requiere_envio === 'SI' &&
     ['PENDIENTE', 'LISTA', 'DEVUELTA', 'REBOTADO'].indexOf(o.estado) >= 0),
   conteos, generado: ahora
@@ -276,8 +278,9 @@ window.google = { script: { run: (function () {
   const api = {
     apiInicio: () => D.INICIO,
     apiLogo: () => '',
-    apiListaEnviar: () => ({ filas: D.INICIO.filas, conteos: D.INICIO.conteos,
-                             cuota: D.INICIO.cuota, generado: D.INICIO.generado }),
+    apiListaEnviar: (v) => ({ ventana: v || 'mes', ventanas: D.INICIO.ventanas,
+                              filas: D.INICIO.filas, conteos: D.INICIO.conteos,
+                              cuota: D.INICIO.cuota, generado: D.INICIO.generado }),
     apiSubirSoporte: () => ({ ok: true }),
     apiEnviar: (ids) => ({ enviadas: ids.map((id) => ({ id })), rechazadas: [],
                            pendientes: [], modo: 'PRUEBA',

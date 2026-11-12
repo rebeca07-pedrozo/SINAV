@@ -109,8 +109,10 @@ function apiAlertas() {
   var q = yo();
   if (!q.activo) throw new Error('Tu usuario está inactivo en SINAV.');
 
-  var mias = puede('asignar') ? listarTodas()
-           : listarTodas().filter(function (o) { return o.mia; });
+  // 'abiertas' y no 'mes': una alerta tiene que incluir lo ya vencido que
+  // sigue sin cerrar, que es justo lo que no se puede dejar pasar.
+  var mias = puede('asignar') ? listarTodas('abiertas')
+           : listarTodas('abiertas').filter(function (o) { return o.mia; });
 
   var r = agruparAlertas(mias, diasDeAviso());
   r.yo = { correo: q.correo, ve_todo: puede('asignar') };

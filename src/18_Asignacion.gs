@@ -44,8 +44,9 @@ function asignables() {
 function apiListaAsignacion() {
   exige('asignar');
 
-  var lista = listarTodas()
-    .filter(function (o) { return o.estado !== ESTADO.APROBADA; })
+  // 'abiertas': para repartir hay que ver todo lo que sigue sin cerrar,
+  // no solo lo del mes en curso.
+  var lista = listarTodas('abiertas')
     .map(function (o) {
       o.sin_responsable = !String(o.responsable || '').trim();
       return o;
