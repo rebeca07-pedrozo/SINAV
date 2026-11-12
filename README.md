@@ -224,6 +224,7 @@ rechaza igual.
 | `activo` | `SI` o `NO` | Sí |
 | `area` | `MUNICIPALES` | No |
 | `nivel` | `I`, `II` o `III`. Vacío cuenta como `I` | Solo para profesionales |
+| `backup` | El correo de quien lo cubre cuando se ausenta | No, pero sin él no se puede redistribuir |
 
 **El `nivel` sí decide permisos**, desde el REQ-012: `PROFESIONAL-III` es el
 cargo de supervisión. El `I` y el `II` pueden lo mismo entre sí. Un profesional
@@ -437,8 +438,21 @@ error que se descubre meses después.
    impuesto, y su id queda en `sellado_id`.
 5. La obligación pasa de `ENVIADA` a `RESPONDIDA` y queda el evento.
 
-Los adjuntos de menos de 2 KB se ignoran: son firmas y logos incrustados, no el
-sellado.
+Los adjuntos de menos de 512 bytes se ignoran: son firmas y logos incrustados,
+no el sellado.
+
+### Probar en modo PRUEBA
+
+En `modo = PRUEBA` el correo se manda **a tu propia bandeja** a propósito, así
+que cuando respondes para probar, la respuesta también es tuya.
+
+Si se aplicara la regla de producción —descartar los mensajes propios— probar
+sería imposible: respondes y la herramienta no ve nada. Por eso **en PRUEBA lo
+único que se descarta es el primer mensaje del hilo**, que es el que salió de
+SINAV; todo lo que venga después cuenta como respuesta.
+
+En producción vuelve la regla normal: una respuesta es de la oficina, y lo que
+yo conteste sobre el hilo no cuenta como que ellos contestaron.
 
 Va **por lotes con guardia de tiempo**: cada llamada a Gmail es lenta y Apps
 Script corta a los 6 minutos. Si queda a medias, se vuelve a darle y sigue donde
@@ -465,11 +479,27 @@ backup. Solo lo maneja el **PROFESIONAL-III** (y el ADMIN), desde la pestaña
 |---|---|
 | Jesús Jaimes | Helen Cuadros |
 | Helen Cuadros | Jesús Jaimes |
-| Andrea Galvis | Liliana Ramírez |
-| Liliana Ramírez | Andrea Galvis |
+| Andrea Galvis | Ramírez |
+| Ramírez | Andrea Galvis |
 
 Elizabeth no tiene backup: cuando ella falta, cada quien se encarga de lo suyo.
 Eso es otro asunto (REQ-013, todavía sin construir).
+
+### Quién lo decide: la columna `backup` de USUARIOS
+
+**Lo que manda es la hoja.** Cada fila de USUARIOS tiene una columna `backup`
+con el correo de quien la cubre. Se edita ahí y no hace falta tocar código
+cuando entre o salga alguien del equipo.
+
+Los pares del código son solo el **respaldo**, por si esa columna está vacía, y
+`migrar()` la rellena con ellos la primera vez.
+
+Ese respaldo busca por **nombre y apellido**, no solo por el nombre de pila.
+La razón es un fallo real: el par de Andrea estaba escrito como «liliana» y la
+profesional resultó llamarse **Yasneidy Ramírez**, así que ni Andrea ni ella
+tenían backup y la pantalla decía *(sin backup)* para las dos. Con el apellido
+en la lista, el emparejamiento sobrevive a ese tipo de cambio — y si cambia del
+todo, se corrige en la hoja.
 
 ### Cómo se registra
 

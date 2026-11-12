@@ -19,6 +19,7 @@ function asignables() {
         rol: normalizarRol(f[ix.rol]),
         area: 'area' in ix ? normalizarArea(f[ix.area]) : '',
         nivel: 'nivel' in ix ? normalizarNivel(f[ix.nivel]) : '',
+        backup: 'backup' in ix ? String(f[ix.backup] || '').trim().toLowerCase() : '',
         activo: esActivo(f[ix.activo])
       };
     })

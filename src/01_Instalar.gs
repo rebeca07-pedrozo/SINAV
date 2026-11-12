@@ -414,6 +414,16 @@ function migrar() {
         cambios.nivel = nivelDef;
       }
 
+      // REQ-010: rellena el backup de quien no lo tenga, con los pares del
+      // codigo. Lo que ya este escrito no se toca: la hoja manda.
+      if ('backup' in ixu && !String(fu[i][ixu.backup] || '').trim() &&
+          rol === ROL.PROFESIONAL) {
+        try {
+          var b = backupDe(String(fu[i][ixu.correo]).trim().toLowerCase());
+          if (b) cambios.backup = b;
+        } catch (e) { /* si USUARIOS aun no esta lista, se hace en la siguiente */ }
+      }
+
       if (Object.keys(cambios).length) {
         escribirCampos(HOJA.USUARIOS, i + 2, cambios);
         tocadas++;

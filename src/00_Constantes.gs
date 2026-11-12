@@ -26,7 +26,10 @@ var HOJA = {
  */
 var COLS = {
   CONFIG: ['parametro', 'valor'],
-  USUARIOS: ['correo', 'nombre', 'rol', 'activo', 'area', 'nivel'],
+  // 'backup' al final: a quien le pasan sus obligaciones cuando se ausenta.
+  // Se escribe en la hoja y manda sobre los pares de abajo, para que no haya
+  // que tocar codigo cuando cambie alguien del equipo.
+  USUARIOS: ['correo', 'nombre', 'rol', 'activo', 'area', 'nivel', 'backup'],
   ROLES: ['rol', 'quien_lo_tiene', 'que_puede_hacer'],
   // REQ-009 y REQ-011. Una fila por vigencia fiscal, con los ids REALES de
   // Drive. Los ids se escriben una vez y no se vuelven a tocar: si alguna vez
@@ -173,12 +176,21 @@ var ROLES_DEFINICION = [
 
 /**
  * REQ-010. Los backups acordados por el equipo. Se cubren entre si.
+ *
+ * Esto es solo el RESPALDO: lo que manda es la columna 'backup' de USUARIOS,
+ * que se edita en la hoja. Aqui estan los pares por si esa columna esta vacia.
+ *
+ * Cada lado lleva VARIAS claves —nombre y apellido— porque la persona puede
+ * no llamarse como uno espera: el par de Andrea se escribio como 'liliana' y
+ * la profesional resulto ser Yasneidy Ramirez, asi que nadie tenia backup.
+ * Con el apellido ahi, el emparejamiento sobrevive a ese tipo de cambio.
+ *
  * Elizabeth no tiene backup: cuando ella falta, cada quien se encarga de lo
  * suyo, que es otro asunto (REQ-013).
  */
 var BACKUPS = [
-  ['jesus', 'helen'],
-  ['andrea', 'liliana']
+  { a: ['jesus', 'jaimes'], b: ['helen', 'cuadros'] },
+  { a: ['andrea', 'galvis'], b: ['liliana', 'yasneidy', 'ramirez'] }
 ];
 
 /** Los estados de una ausencia. */

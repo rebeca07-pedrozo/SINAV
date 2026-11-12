@@ -31,7 +31,10 @@ var HOJA = {
  */
 var COLS = {
   CONFIG: ['parametro', 'valor'],
-  USUARIOS: ['correo', 'nombre', 'rol', 'activo', 'area', 'nivel'],
+  // 'backup' al final: a quien le pasan sus obligaciones cuando se ausenta.
+  // Se escribe en la hoja y manda sobre los pares de abajo, para que no haya
+  // que tocar codigo cuando cambie alguien del equipo.
+  USUARIOS: ['correo', 'nombre', 'rol', 'activo', 'area', 'nivel', 'backup'],
   ROLES: ['rol', 'quien_lo_tiene', 'que_puede_hacer'],
   // REQ-009 y REQ-011. Una fila por vigencia fiscal, con los ids REALES de
   // Drive. Los ids se escriben una vez y no se vuelven a tocar: si alguna vez
@@ -178,12 +181,21 @@ var ROLES_DEFINICION = [
 
 /**
  * REQ-010. Los backups acordados por el equipo. Se cubren entre si.
+ *
+ * Esto es solo el RESPALDO: lo que manda es la columna 'backup' de USUARIOS,
+ * que se edita en la hoja. Aqui estan los pares por si esa columna esta vacia.
+ *
+ * Cada lado lleva VARIAS claves —nombre y apellido— porque la persona puede
+ * no llamarse como uno espera: el par de Andrea se escribio como 'liliana' y
+ * la profesional resulto ser Yasneidy Ramirez, asi que nadie tenia backup.
+ * Con el apellido ahi, el emparejamiento sobrevive a ese tipo de cambio.
+ *
  * Elizabeth no tiene backup: cuando ella falta, cada quien se encarga de lo
  * suyo, que es otro asunto (REQ-013).
  */
 var BACKUPS = [
-  ['jesus', 'helen'],
-  ['andrea', 'liliana']
+  { a: ['jesus', 'jaimes'], b: ['helen', 'cuadros'] },
+  { a: ['andrea', 'galvis'], b: ['liliana', 'yasneidy', 'ramirez'] }
 ];
 
 /** Los estados de una ausencia. */
@@ -671,6 +683,16 @@ function migrar() {
       if ('nivel' in ixu && !cambios.nivel && !normalizarNivel(fu[i][ixu.nivel]) &&
           rol === ROL.PROFESIONAL && nivelDef) {
         cambios.nivel = nivelDef;
+      }
+
+      // REQ-010: rellena el backup de quien no lo tenga, con los pares del
+      // codigo. Lo que ya este escrito no se toca: la hoja manda.
+      if ('backup' in ixu && !String(fu[i][ixu.backup] || '').trim() &&
+          rol === ROL.PROFESIONAL) {
+        try {
+          var b = backupDe(String(fu[i][ixu.correo]).trim().toLowerCase());
+          if (b) cambios.backup = b;
+        } catch (e) { /* si USUARIOS aun no esta lista, se hace en la siguiente */ }
       }
 
       if (Object.keys(cambios).length) {
@@ -2259,11 +2281,28 @@ function esMiMensaje(mensaje, miCorreo) {
 }
 
 /**
+ * Decide si un mensaje del hilo cuenta como respuesta.
+ *
+ * En PRODUCCION la respuesta viene de la oficina, asi que lo mio se descarta:
+ * si contesto yo mismo sobre el hilo, eso no es que la oficina respondiera.
+ *
+ * En PRUEBA el correo se manda a mi propia bandeja a proposito, de modo que la
+ * respuesta TAMBIEN es mia. Si se aplicara la regla de produccion, probar seria
+ * imposible: se responde y la herramienta no ve nada. Por eso en PRUEBA lo
+ * unico que se descarta es el primer mensaje del hilo, que es el que salio de
+ * SINAV; todo lo que venga despues cuenta.
+ */
+function cuentaComoRespuesta(mensaje, indice, miCorreo, modo) {
+  if (modo === 'PRUEBA') return indice > 0;
+  return !esMiMensaje(mensaje, miCorreo);
+}
+
+/**
  * Revisa el hilo de una obligacion y recoge lo que haya llegado.
  * Devuelve lo que encontro, sin escribir en la hoja: quien escribe es
  * revisarRespuestas(), que agrupa.
  */
-function leerHilo(o, miCorreo) {
+function leerHilo(o, miCorreo, modo) {
   var hilo;
   try {
     hilo = GmailApp.getThreadById(String(o.hilo_id).trim());
@@ -2287,14 +2326,16 @@ function leerHilo(o, miCorreo) {
   for (var j = desde; j < mensajes.length; j++) {
     var m = mensajes[j];
     ultimo = m.getId();
-    if (esMiMensaje(m, miCorreo)) continue;      // es mio, no es respuesta
+    if (!cuentaComoRespuesta(m, j, miCorreo, modo)) continue;
 
     nuevos.push(m);
     fecha = m.getDate();
     de = String(m.getFrom() || '');
     m.getAttachments().forEach(function (a) {
-      // las firmas y los logos incrustados no son el sellado
-      if (a.getSize() < 2048) return;
+      // las firmas y los logos incrustados no son el sellado. El minimo es
+      // bajo a proposito: un PDF de una pagina ronda los 10 KB, pero en una
+      // prueba puede ser mucho mas pequeno y tiene que verse igual.
+      if (a.getSize() < 512) return;
       adjuntos.push(a);
     });
   }
@@ -2314,6 +2355,7 @@ function revisarRespuestas() {
   if (!q.activo) throw new Error('Tu usuario está inactivo en SINAV.');
 
   var arranque = new Date().getTime();
+  var modo = String(config('modo') || 'PRUEBA').toUpperCase();
   var ix = indices(HOJA.OBLIGACIONES);
   var todas = registros(HOJA.OBLIGACIONES).filter(function (o) {
     if (!String(o.id || '').trim()) return false;
@@ -2331,7 +2373,7 @@ function revisarRespuestas() {
       break;
     }
     var o = todas[i];
-    var r = leerHilo(o, q.correo);
+    var r = leerHilo(o, q.correo, modo);
 
     if (r.error) {
       registrar(o.id, EVENTO.ERROR, 'revisión del hilo: ' + r.error);
@@ -3607,6 +3649,7 @@ function asignables() {
         rol: normalizarRol(f[ix.rol]),
         area: 'area' in ix ? normalizarArea(f[ix.area]) : '',
         nivel: 'nivel' in ix ? normalizarNivel(f[ix.nivel]) : '',
+        backup: 'backup' in ix ? String(f[ix.backup] || '').trim().toLowerCase() : '',
         activo: esActivo(f[ix.activo])
       };
     })
@@ -3932,28 +3975,50 @@ function apiVigencias() {
  */
 
 /**
- * La clave del backup de alguien, segun los pares acordados. Pura.
- * Se busca por el nombre dentro del correo y no por el correo entero, para que
- * un cambio de dominio o de formato de cuenta no rompa los pares.
+ * Las claves del backup de alguien, segun los pares de respaldo. Pura.
+ * Devuelve una lista: el par puede estar escrito por nombre o por apellido.
+ * Se busca dentro del correo y tambien del nombre, para que un cambio de
+ * persona o de formato de cuenta no deje a nadie sin backup en silencio.
  */
-function claveBackup(correo) {
-  var yo_ = String(correo || '').trim().toLowerCase().split('@')[0];
-  if (!yo_) return '';
+function clavesBackup(correo, nombre) {
+  var texto = (String(correo || '').split('@')[0] + ' ' + String(nombre || ''))
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (!texto.trim()) return [];
+
   for (var i = 0; i < BACKUPS.length; i++) {
     var par = BACKUPS[i];
-    for (var j = 0; j < par.length; j++) {
-      if (yo_.indexOf(par[j]) >= 0) return par[1 - j];
-    }
+    var enA = par.a.some(function (k) { return texto.indexOf(k) >= 0; });
+    if (enA) return par.b;
+    var enB = par.b.some(function (k) { return texto.indexOf(k) >= 0; });
+    if (enB) return par.a;
   }
-  return '';
+  return [];
 }
 
-/** El correo del backup de alguien. '' si no tiene o no esta inscrito. */
+/**
+ * El correo del backup de alguien. '' si no tiene o no esta inscrito.
+ *
+ * Manda la columna 'backup' de USUARIOS: es la que el equipo edita cuando
+ * alguien entra o sale. Los pares del codigo son solo el respaldo.
+ */
 function backupDe(correo) {
-  var clave = claveBackup(correo);
-  if (!clave) return '';
-  var pareja = asignables().filter(function (u) {
-    return u.correo.split('@')[0].indexOf(clave) >= 0;
+  var gente = asignables();
+  var c = String(correo || '').trim().toLowerCase();
+  var quien = gente.filter(function (u) { return u.correo === c; })[0];
+
+  // 1. lo que diga la hoja
+  if (quien && quien.backup) {
+    var puesto = gente.filter(function (u) { return u.correo === quien.backup; })[0];
+    if (puesto) return puesto.correo;
+  }
+
+  // 2. los pares del codigo
+  var claves = clavesBackup(c, quien ? quien.nombre : '');
+  if (!claves.length) return '';
+  var pareja = gente.filter(function (u) {
+    var texto = (u.correo.split('@')[0] + ' ' + u.nombre)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return claves.some(function (k) { return texto.indexOf(k) >= 0; });
   })[0];
   return pareja ? pareja.correo : '';
 }
@@ -4701,32 +4766,71 @@ function pruebasCarga(esIgual) {
  * alguien a quien no le toca, y que el titular no se entere.
  */
 function pruebasAusencias(esIgual) {
-  esIgual('Jesús lo cubre Helen', claveBackup('jesus.jaimes@davivienda.com'), 'helen');
-  esIgual('Helen lo cubre Jesús', claveBackup('helen.cuadros@davivienda.com'), 'jesus');
-  esIgual('Andrea la cubre Liliana', claveBackup('andrea.galvis@davivienda.com'), 'liliana');
-  esIgual('Liliana la cubre Andrea', claveBackup('liliana.ramirez@davivienda.com'), 'andrea');
+  var cubre = function (correo, nombre) {
+    return clavesBackup(correo, nombre || '');
+  };
+  var tiene = function (lista, clave) { return lista.indexOf(clave) >= 0; };
+
+  esIgual('a Jesús lo cubre Helen',
+          tiene(cubre('jesus.jaimes@davivienda.com'), 'helen'), true);
+  esIgual('a Helen la cubre Jesús',
+          tiene(cubre('helen.cuadros@davivienda.com'), 'jesus'), true);
+  esIgual('a Andrea la cubre su par',
+          tiene(cubre('andrea.galvis@davivienda.com'), 'ramirez'), true);
+
+  // LA REGRESION: el par de Andrea se escribio como 'liliana' y la profesional
+  // resulto llamarse Yasneidy Ramirez, asi que nadie tenia backup. Ahora el
+  // apellido tambien cuenta, en el correo y en el nombre.
+  esIgual('Yasneidy Ramírez encuentra a Andrea',
+          tiene(cubre('yasneidy.ramirez@davivienda.com'), 'andrea'), true);
+  esIgual('y la encuentra aunque el correo no diga el apellido',
+          tiene(cubre('yramirez@davivienda.com', 'Yasneidy Ramírez'), 'andrea'), true);
+  esIgual('a Andrea la cubre Yasneidy',
+          tiene(cubre('andrea.galvis@davivienda.com'), 'yasneidy'), true);
 
   esIgual('el emparejamiento no depende del dominio',
-          claveBackup('jesus.jaimes@otracosa.com'), 'helen');
-  esIgual('ni de mayusculas', claveBackup('ANDREA.GALVIS@davivienda.com'), 'liliana');
+          tiene(cubre('jesus.jaimes@otracosa.com'), 'helen'), true);
+  esIgual('ni de mayúsculas',
+          tiene(cubre('ANDREA.GALVIS@davivienda.com'), 'ramirez'), true);
+  esIgual('ni de los acentos del nombre',
+          tiene(cubre('x@y.com', 'Yasneidy Ramírez'), 'andrea'), true);
 
-  esIgual('Elizabeth no tiene backup', claveBackup('elizabeth@davivienda.com'), '');
-  esIgual('alguien de fuera tampoco', claveBackup('pepito@davivienda.com'), '');
-  esIgual('vacio no revienta', claveBackup(''), '');
-  esIgual('nulo no revienta', claveBackup(null), '');
+  esIgual('Elizabeth no tiene backup', cubre('elizabeth@davivienda.com').length, 0);
+  esIgual('alguien de fuera tampoco', cubre('pepito@davivienda.com').length, 0);
+  esIgual('vacío no revienta', cubre('').length, 0);
+  esIgual('nulo no revienta', clavesBackup(null, null).length, 0);
 
   // los pares tienen que ser simetricos: si A cubre a B, B cubre a A
   var simetrico = true;
   BACKUPS.forEach(function (par) {
-    if (claveBackup(par[0] + '@x.com') !== par[1]) simetrico = false;
-    if (claveBackup(par[1] + '@x.com') !== par[0]) simetrico = false;
+    par.a.forEach(function (k) {
+      if (!tiene(cubre(k + '@x.com'), par.b[0])) simetrico = false;
+    });
+    par.b.forEach(function (k) {
+      if (!tiene(cubre(k + '@x.com'), par.a[0])) simetrico = false;
+    });
   });
   esIgual('los pares de backup son simétricos', simetrico, true);
 
   // nadie puede aparecer en dos pares, o el backup seria ambiguo
   var vistos = {}, repetido = false;
   BACKUPS.forEach(function (par) {
-    par.forEach(function (p) { if (vistos[p]) repetido = true; vistos[p] = true; });
+    par.a.concat(par.b).forEach(function (k) {
+      if (vistos[k]) repetido = true;
+      vistos[k] = true;
+    });
   });
   esIgual('nadie está en dos pares a la vez', repetido, false);
+
+  // REQ-010: en PRUEBA la respuesta llega de uno mismo, y tiene que contar
+  var falso = { getFrom: function () { return 'yo@davivienda.com'; } };
+  esIgual('en PRUEBA el primer mensaje es el que mandamos',
+          cuentaComoRespuesta(falso, 0, 'yo@davivienda.com', 'PRUEBA'), false);
+  esIgual('en PRUEBA lo que viene después sí cuenta',
+          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRUEBA'), true);
+  esIgual('en producción lo mío nunca cuenta como respuesta',
+          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('en producción lo de la oficina sí',
+          cuentaComoRespuesta({ getFrom: function () { return 'oficina@muni.gov.co'; } },
+                              1, 'yo@davivienda.com', 'PRODUCCION'), true);
 }

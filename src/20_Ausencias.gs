@@ -19,28 +19,50 @@
  */
 
 /**
- * La clave del backup de alguien, segun los pares acordados. Pura.
- * Se busca por el nombre dentro del correo y no por el correo entero, para que
- * un cambio de dominio o de formato de cuenta no rompa los pares.
+ * Las claves del backup de alguien, segun los pares de respaldo. Pura.
+ * Devuelve una lista: el par puede estar escrito por nombre o por apellido.
+ * Se busca dentro del correo y tambien del nombre, para que un cambio de
+ * persona o de formato de cuenta no deje a nadie sin backup en silencio.
  */
-function claveBackup(correo) {
-  var yo_ = String(correo || '').trim().toLowerCase().split('@')[0];
-  if (!yo_) return '';
+function clavesBackup(correo, nombre) {
+  var texto = (String(correo || '').split('@')[0] + ' ' + String(nombre || ''))
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (!texto.trim()) return [];
+
   for (var i = 0; i < BACKUPS.length; i++) {
     var par = BACKUPS[i];
-    for (var j = 0; j < par.length; j++) {
-      if (yo_.indexOf(par[j]) >= 0) return par[1 - j];
-    }
+    var enA = par.a.some(function (k) { return texto.indexOf(k) >= 0; });
+    if (enA) return par.b;
+    var enB = par.b.some(function (k) { return texto.indexOf(k) >= 0; });
+    if (enB) return par.a;
   }
-  return '';
+  return [];
 }
 
-/** El correo del backup de alguien. '' si no tiene o no esta inscrito. */
+/**
+ * El correo del backup de alguien. '' si no tiene o no esta inscrito.
+ *
+ * Manda la columna 'backup' de USUARIOS: es la que el equipo edita cuando
+ * alguien entra o sale. Los pares del codigo son solo el respaldo.
+ */
 function backupDe(correo) {
-  var clave = claveBackup(correo);
-  if (!clave) return '';
-  var pareja = asignables().filter(function (u) {
-    return u.correo.split('@')[0].indexOf(clave) >= 0;
+  var gente = asignables();
+  var c = String(correo || '').trim().toLowerCase();
+  var quien = gente.filter(function (u) { return u.correo === c; })[0];
+
+  // 1. lo que diga la hoja
+  if (quien && quien.backup) {
+    var puesto = gente.filter(function (u) { return u.correo === quien.backup; })[0];
+    if (puesto) return puesto.correo;
+  }
+
+  // 2. los pares del codigo
+  var claves = clavesBackup(c, quien ? quien.nombre : '');
+  if (!claves.length) return '';
+  var pareja = gente.filter(function (u) {
+    var texto = (u.correo.split('@')[0] + ' ' + u.nombre)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return claves.some(function (k) { return texto.indexOf(k) >= 0; });
   })[0];
   return pareja ? pareja.correo : '';
 }

@@ -510,32 +510,71 @@ function pruebasCarga(esIgual) {
  * alguien a quien no le toca, y que el titular no se entere.
  */
 function pruebasAusencias(esIgual) {
-  esIgual('Jesús lo cubre Helen', claveBackup('jesus.jaimes@davivienda.com'), 'helen');
-  esIgual('Helen lo cubre Jesús', claveBackup('helen.cuadros@davivienda.com'), 'jesus');
-  esIgual('Andrea la cubre Liliana', claveBackup('andrea.galvis@davivienda.com'), 'liliana');
-  esIgual('Liliana la cubre Andrea', claveBackup('liliana.ramirez@davivienda.com'), 'andrea');
+  var cubre = function (correo, nombre) {
+    return clavesBackup(correo, nombre || '');
+  };
+  var tiene = function (lista, clave) { return lista.indexOf(clave) >= 0; };
+
+  esIgual('a Jesús lo cubre Helen',
+          tiene(cubre('jesus.jaimes@davivienda.com'), 'helen'), true);
+  esIgual('a Helen la cubre Jesús',
+          tiene(cubre('helen.cuadros@davivienda.com'), 'jesus'), true);
+  esIgual('a Andrea la cubre su par',
+          tiene(cubre('andrea.galvis@davivienda.com'), 'ramirez'), true);
+
+  // LA REGRESION: el par de Andrea se escribio como 'liliana' y la profesional
+  // resulto llamarse Yasneidy Ramirez, asi que nadie tenia backup. Ahora el
+  // apellido tambien cuenta, en el correo y en el nombre.
+  esIgual('Yasneidy Ramírez encuentra a Andrea',
+          tiene(cubre('yasneidy.ramirez@davivienda.com'), 'andrea'), true);
+  esIgual('y la encuentra aunque el correo no diga el apellido',
+          tiene(cubre('yramirez@davivienda.com', 'Yasneidy Ramírez'), 'andrea'), true);
+  esIgual('a Andrea la cubre Yasneidy',
+          tiene(cubre('andrea.galvis@davivienda.com'), 'yasneidy'), true);
 
   esIgual('el emparejamiento no depende del dominio',
-          claveBackup('jesus.jaimes@otracosa.com'), 'helen');
-  esIgual('ni de mayusculas', claveBackup('ANDREA.GALVIS@davivienda.com'), 'liliana');
+          tiene(cubre('jesus.jaimes@otracosa.com'), 'helen'), true);
+  esIgual('ni de mayúsculas',
+          tiene(cubre('ANDREA.GALVIS@davivienda.com'), 'ramirez'), true);
+  esIgual('ni de los acentos del nombre',
+          tiene(cubre('x@y.com', 'Yasneidy Ramírez'), 'andrea'), true);
 
-  esIgual('Elizabeth no tiene backup', claveBackup('elizabeth@davivienda.com'), '');
-  esIgual('alguien de fuera tampoco', claveBackup('pepito@davivienda.com'), '');
-  esIgual('vacio no revienta', claveBackup(''), '');
-  esIgual('nulo no revienta', claveBackup(null), '');
+  esIgual('Elizabeth no tiene backup', cubre('elizabeth@davivienda.com').length, 0);
+  esIgual('alguien de fuera tampoco', cubre('pepito@davivienda.com').length, 0);
+  esIgual('vacío no revienta', cubre('').length, 0);
+  esIgual('nulo no revienta', clavesBackup(null, null).length, 0);
 
   // los pares tienen que ser simetricos: si A cubre a B, B cubre a A
   var simetrico = true;
   BACKUPS.forEach(function (par) {
-    if (claveBackup(par[0] + '@x.com') !== par[1]) simetrico = false;
-    if (claveBackup(par[1] + '@x.com') !== par[0]) simetrico = false;
+    par.a.forEach(function (k) {
+      if (!tiene(cubre(k + '@x.com'), par.b[0])) simetrico = false;
+    });
+    par.b.forEach(function (k) {
+      if (!tiene(cubre(k + '@x.com'), par.a[0])) simetrico = false;
+    });
   });
   esIgual('los pares de backup son simétricos', simetrico, true);
 
   // nadie puede aparecer en dos pares, o el backup seria ambiguo
   var vistos = {}, repetido = false;
   BACKUPS.forEach(function (par) {
-    par.forEach(function (p) { if (vistos[p]) repetido = true; vistos[p] = true; });
+    par.a.concat(par.b).forEach(function (k) {
+      if (vistos[k]) repetido = true;
+      vistos[k] = true;
+    });
   });
   esIgual('nadie está en dos pares a la vez', repetido, false);
+
+  // REQ-010: en PRUEBA la respuesta llega de uno mismo, y tiene que contar
+  var falso = { getFrom: function () { return 'yo@davivienda.com'; } };
+  esIgual('en PRUEBA el primer mensaje es el que mandamos',
+          cuentaComoRespuesta(falso, 0, 'yo@davivienda.com', 'PRUEBA'), false);
+  esIgual('en PRUEBA lo que viene después sí cuenta',
+          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRUEBA'), true);
+  esIgual('en producción lo mío nunca cuenta como respuesta',
+          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('en producción lo de la oficina sí',
+          cuentaComoRespuesta({ getFrom: function () { return 'oficina@muni.gov.co'; } },
+                              1, 'yo@davivienda.com', 'PRODUCCION'), true);
 }

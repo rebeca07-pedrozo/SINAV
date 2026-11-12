@@ -30,11 +30,28 @@ function esMiMensaje(mensaje, miCorreo) {
 }
 
 /**
+ * Decide si un mensaje del hilo cuenta como respuesta.
+ *
+ * En PRODUCCION la respuesta viene de la oficina, asi que lo mio se descarta:
+ * si contesto yo mismo sobre el hilo, eso no es que la oficina respondiera.
+ *
+ * En PRUEBA el correo se manda a mi propia bandeja a proposito, de modo que la
+ * respuesta TAMBIEN es mia. Si se aplicara la regla de produccion, probar seria
+ * imposible: se responde y la herramienta no ve nada. Por eso en PRUEBA lo
+ * unico que se descarta es el primer mensaje del hilo, que es el que salio de
+ * SINAV; todo lo que venga despues cuenta.
+ */
+function cuentaComoRespuesta(mensaje, indice, miCorreo, modo) {
+  if (modo === 'PRUEBA') return indice > 0;
+  return !esMiMensaje(mensaje, miCorreo);
+}
+
+/**
  * Revisa el hilo de una obligacion y recoge lo que haya llegado.
  * Devuelve lo que encontro, sin escribir en la hoja: quien escribe es
  * revisarRespuestas(), que agrupa.
  */
-function leerHilo(o, miCorreo) {
+function leerHilo(o, miCorreo, modo) {
   var hilo;
   try {
     hilo = GmailApp.getThreadById(String(o.hilo_id).trim());
@@ -58,14 +75,16 @@ function leerHilo(o, miCorreo) {
   for (var j = desde; j < mensajes.length; j++) {
     var m = mensajes[j];
     ultimo = m.getId();
-    if (esMiMensaje(m, miCorreo)) continue;      // es mio, no es respuesta
+    if (!cuentaComoRespuesta(m, j, miCorreo, modo)) continue;
 
     nuevos.push(m);
     fecha = m.getDate();
     de = String(m.getFrom() || '');
     m.getAttachments().forEach(function (a) {
-      // las firmas y los logos incrustados no son el sellado
-      if (a.getSize() < 2048) return;
+      // las firmas y los logos incrustados no son el sellado. El minimo es
+      // bajo a proposito: un PDF de una pagina ronda los 10 KB, pero en una
+      // prueba puede ser mucho mas pequeno y tiene que verse igual.
+      if (a.getSize() < 512) return;
       adjuntos.push(a);
     });
   }
@@ -85,6 +104,7 @@ function revisarRespuestas() {
   if (!q.activo) throw new Error('Tu usuario está inactivo en SINAV.');
 
   var arranque = new Date().getTime();
+  var modo = String(config('modo') || 'PRUEBA').toUpperCase();
   var ix = indices(HOJA.OBLIGACIONES);
   var todas = registros(HOJA.OBLIGACIONES).filter(function (o) {
     if (!String(o.id || '').trim()) return false;
@@ -102,7 +122,7 @@ function revisarRespuestas() {
       break;
     }
     var o = todas[i];
-    var r = leerHilo(o, q.correo);
+    var r = leerHilo(o, q.correo, modo);
 
     if (r.error) {
       registrar(o.id, EVENTO.ERROR, 'revisión del hilo: ' + r.error);
