@@ -15,6 +15,7 @@ var HOJA = {
   CONFIG: 'CONFIG',
   USUARIOS: 'USUARIOS',
   ROLES: 'ROLES',
+  VIGENCIAS: 'VIGENCIAS',
   OBLIGACIONES: 'OBLIGACIONES',
   EVENTOS: 'EVENTOS'
 };
@@ -31,6 +32,12 @@ var COLS = {
   CONFIG: ['parametro', 'valor'],
   USUARIOS: ['correo', 'nombre', 'rol', 'activo', 'area', 'nivel'],
   ROLES: ['rol', 'quien_lo_tiene', 'que_puede_hacer'],
+  // REQ-009 y REQ-011. Una fila por vigencia fiscal, con los ids REALES de
+  // Drive. Los ids se escriben una vez y no se vuelven a tocar: si alguna vez
+  // quedan vacios, la vigencia se marca sin carpetas en vez de crear otras.
+  VIGENCIAS: ['vigencia', 'carpeta_exogenas', 'carpeta_declaraciones',
+              'carpeta_soportes', 'carpeta_sellados', 'carpeta_sellados_soportes',
+              'activa'],
   OBLIGACIONES: [
     'id', 'cod_dane', 'cod_oficina', 'municipio', 'impuesto', 'regimen',
     'periodo', 'periodicidad', 'vencimiento', 'nit_municipio', 'correo_oficina',
@@ -38,7 +45,13 @@ var COLS = {
     'exogena', 'incluye_retencion', 'estado', 'revision_fecha', 'revision_por',
     'presentacion_fecha', 'valor', 'soporte_id', 'fecha_envio', 'hilo_id',
     'fecha_respuesta', 'sellado_id', 'nota',
-    'motivo_devuelta', 'estado_previo', 'reprocesos', 'forma_pago'
+    'motivo_devuelta', 'estado_previo', 'reprocesos', 'forma_pago',
+    // REQ-011: la vigencia fiscal manda sobre el ano de presentacion. Una
+    // declaracion de la vigencia 2026 presentada en 2027 se guarda en 2026.
+    'vigencia',
+    // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
+    // Vacio = Banco Davivienda, que es el caso normal.
+    'entidad'
   ],
   EVENTOS: ['fecha', 'id_obligacion', 'actor', 'que_paso', 'detalle']
 };
@@ -98,39 +111,56 @@ var EVENTO = {
   AVISO: 'AVISO'
 };
 
-var ROL = { ADMIN: 'ADMIN', JEFE: 'JEFE', PROFESIONAL: 'PROFESIONAL' };
+var ROL = { ADMIN: 'ADMIN', PROFESIONAL: 'PROFESIONAL' };
 
-/**
- * El rol decide los permisos. El area y el nivel se guardan y se muestran,
- * pero hoy no cambian lo que alguien puede hacer: un PROFESIONAL-I y un
- * PROFESIONAL-II de MUNICIPALES pueden lo mismo. Si algun dia hay que
- * diferenciarlos, se agrega la condicion aqui y no en veinte sitios.
- */
 var AREA = { MUNICIPALES: 'MUNICIPALES' };
 var AREAS = ['MUNICIPALES'];
 var NIVELES = ['I', 'II', 'III'];
 
+/**
+ * El PERFIL es lo que decide los permisos: el rol y, para los profesionales,
+ * tambien el nivel. 'PROFESIONAL-III' es el cargo de supervision del equipo
+ * (hoy Elizabeth); 'PROFESIONAL-I' es quien trabaja sus obligaciones.
+ *
+ * Los permisos estan atados al PERFIL, nunca al nombre de una persona: si
+ * manana el cargo lo ocupa otra, se cambia su nivel en USUARIOS y ya.
+ */
+var PERFIL = {
+  ADMIN: 'ADMIN',
+  PROFESIONAL_I: 'PROFESIONAL-I',
+  PROFESIONAL_II: 'PROFESIONAL-II',
+  PROFESIONAL_III: 'PROFESIONAL-III'
+};
+
+/** Los perfiles que supervisan al equipo. */
+var SUPERVISORES = [PERFIL.ADMIN, PERFIL.PROFESIONAL_III];
+
 /** Quien puede hacer que. El servidor es el unico que lo decide. */
 var PERMISO = {
-  asignar: ['ADMIN', 'JEFE'],
-  revisar: ['ADMIN', 'JEFE'],
-  configurar: ['ADMIN'],
-  editarAjenas: ['ADMIN', 'JEFE'],
-  enviarAjenas: ['ADMIN', 'JEFE'],
-  verMetricas: ['ADMIN', 'JEFE']
+  asignar:      SUPERVISORES,
+  revisar:      SUPERVISORES,
+  editarAjenas: SUPERVISORES,
+  enviarAjenas: SUPERVISORES,
+  verMetricas:  SUPERVISORES,
+  gestionarAusencias: SUPERVISORES,   // REQ-010
+  habilitarVigencia:  SUPERVISORES,   // REQ-011
+  configurar:   [PERFIL.ADMIN]
 };
 
 /** Se vuelca a la hoja ROLES como referencia, para no tener que adivinar. */
 var ROLES_DEFINICION = [
-  ['PROFESIONAL',
+  ['PROFESIONAL-I',
    'Por defecto para cualquier correo del dominio que entre y no este ya en USUARIOS.',
    'Trabaja sus propias obligaciones: sube soportes (uno o en lote), digitaliza los campos manuales y envia a las oficinas. Las ajenas las ve, no las toca.'],
-  ['JEFE',
-   'Elizabeth. Se asigna a mano en USUARIOS.',
-   'Todo lo del PROFESIONAL sobre cualquier obligacion, mas asignar responsables, dar el visto bueno (REVISADA / APROBADA), devolver con motivo y ver las metricas.'],
+  ['PROFESIONAL-II',
+   'Mismo trabajo que el I. Se asigna a mano en USUARIOS.',
+   'Lo mismo que PROFESIONAL-I. El nivel se guarda y se muestra, pero hoy no cambia permisos.'],
+  ['PROFESIONAL-III',
+   'El cargo de supervision del equipo. Hoy lo ocupa Elizabeth. Se asigna a mano en USUARIOS.',
+   'Todo lo del profesional sobre CUALQUIER obligacion, mas asignar responsables, dar el visto bueno (REVISADA / APROBADA), devolver con motivo, ver las metricas, registrar ausencias y habilitar una vigencia nueva.'],
   ['ADMIN',
-   'Quien administra la herramienta. Se asigna a mano en USUARIOS.',
-   'Todo lo del JEFE, mas editar CONFIG y USUARIOS desde la aplicacion.']
+   'Quien administra la herramienta. Uno solo. Se asigna a mano en USUARIOS.',
+   'Todo lo del PROFESIONAL-III, mas editar CONFIG y USUARIOS desde la aplicacion.']
 ];
 
 var IMPUESTOS = ['RETEICA', 'AUTORRETEICA', 'ICA', 'EXOGENA'];
@@ -152,10 +182,40 @@ var PERIODICIDAD_SINONIMOS = {
   ANUAL: 'ANUAL', ANIO: 'ANUAL', ANO: 'ANUAL', ANUALMENTE: 'ANUAL'
 };
 
+/**
+ * REQ-009. La raiz de Drive que ya existe, con su id REAL. No se crea ni se
+ * reemplaza: SINAV se cuelga de lo que el equipo ya organizo a mano.
+ *
+ *   Territoriales / <vigencia> / Exogenas
+ *                              / Declaraciones / Soportes / <municipio> / <impuesto>
+ *                                              / Sellados / Soportes
+ */
+var CARPETA_TERRITORIALES = '1A5j3j-zTw90YPl0cUgZ06vAtQ_D31cn9';
+
+/** Los ids que el equipo ya tiene creados para 2026. */
+var VIGENCIAS_CONOCIDAS = [
+  { vigencia: '2026',
+    carpeta_exogenas:          '1g7S9Lz_Brl4TyQdNdtmkpVySMfZlRqw0',
+    carpeta_declaraciones:     '1tPuJWPVvWETyWX7PLlZ1Q_M4c14WtM1t',
+    carpeta_soportes:          '1B8XXc9cuHu475vUDq0gpqKKU0nw_54iW',
+    carpeta_sellados:          '1WZuxykHsrEQf3c65nTE5RkwFpAUvuPgS',
+    carpeta_sellados_soportes: '1lmDCfzEPxdDlpYT-A9lOnhMg7nwZ5vBp',
+    activa: 'SI' }
+];
+
+/** Los nombres de las subcarpetas, para cuando haya que crear una vigencia. */
+var SUBCARPETAS_VIGENCIA = {
+  exogenas: 'Exógenas',
+  declaraciones: 'Declaraciones',
+  soportes: 'Soportes',
+  sellados: 'Sellados',
+  sellados_soportes: 'Soportes'
+};
+
 var CONFIG_BASE = [
   ['nombre_remitente', 'Impuestos Davivienda'],
-  ['carpeta_soportes', ''],
-  ['carpeta_sellados', ''],
+  ['carpeta_territoriales', CARPETA_TERRITORIALES],
+  ['vigencia_actual', '2026'],
   ['dias_aviso', '10,4,2,0'],
   ['modo', 'PRUEBA'],
   ['rol_defecto', 'PROFESIONAL'],
@@ -177,7 +237,7 @@ function instalar() {
     var hecho = [];
 
     hecho.push(asegurarHojas());
-    hecho.push(asegurarCarpetas());
+    hecho.push(asegurarVigencias());
     hecho.push(asegurarConfig());
     hecho.push(asegurarRoles());
     hecho.push(asegurarAdmin());
@@ -267,25 +327,29 @@ function asegurarHojas() {
   return notas.join('\n');
 }
 
-/** Carpetas de Drive. Se buscan por nombre antes de crearlas. */
-function asegurarCarpetas() {
-  var raiz = carpetaPorNombre(DriveApp.getRootFolder(), CARPETA_RAIZ);
-  var soportes = carpetaPorNombre(raiz, 'Soportes');
-  var sellados = carpetaPorNombre(raiz, 'Sellados');
-
-  var notas = [];
-  [['carpeta_soportes', soportes], ['carpeta_sellados', sellados]].forEach(function (par) {
-    var actual = config(par[0]);
-    var viva = false;
-    if (actual) {
-      try { DriveApp.getFolderById(actual); viva = true; } catch (e) { viva = false; }
-    }
-    if (!viva) {
-      ponerConfigSiHace(par[0], par[1].getId(), true);
-      notas.push('CONFIG.' + par[0] + ': ' + par[1].getId());
-    }
+/**
+ * REQ-009. Siembra la hoja VIGENCIAS con los ids REALES que el equipo ya tiene
+ * creados en Drive. No crea ninguna carpeta: las de 2026 ya existen, y crear
+ * otras partiria en dos el archivo del equipo sin que nadie se entere.
+ *
+ * Una vigencia que ya este en la hoja NO se toca, ni para corregirle un id.
+ */
+function asegurarVigencias() {
+  var existentes = {};
+  var ix = indices(HOJA.VIGENCIAS);
+  filas(HOJA.VIGENCIAS).forEach(function (f) {
+    var v = String(f[ix.vigencia] || '').trim();
+    if (v) existentes[v] = true;
   });
-  return notas.join('\n');
+
+  var nuevas = VIGENCIAS_CONOCIDAS.filter(function (v) { return !existentes[v.vigencia]; });
+  if (!nuevas.length) return '';
+
+  agregarFilas(HOJA.VIGENCIAS, nuevas.map(function (v) {
+    return COLS.VIGENCIAS.map(function (c) { return v[c] === undefined ? '' : v[c]; });
+  }));
+  return 'VIGENCIAS: ' + nuevas.map(function (v) { return v.vigencia; }).join(', ') +
+         ' con los ids de Drive que ya existen';
 }
 
 function carpetaPorNombre(padre, nombre) {
@@ -431,7 +495,7 @@ function asegurarPruebas() {
 /** Un soporte de verdad en Drive, para que el envio de prueba tenga que adjuntar algo. */
 function soportePrueba(o) {
   var nombre = o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' (prueba).txt';
-  var dir = carpetaSoporte(o.municipio, o.impuesto);
+  var dir = carpetaSoporte(o.vigencia, o.municipio, o.impuesto);
   var it = dir.getFilesByName(nombre);
   if (it.hasNext()) return it.next().getId();
 
@@ -506,7 +570,7 @@ function asegurarValidaciones() {
     notas.push(nombreHoja + '.' + columna);
   };
 
-  poner(HOJA.USUARIOS, 'rol', [ROL.PROFESIONAL, ROL.JEFE, ROL.ADMIN], false);
+  poner(HOJA.USUARIOS, 'rol', [ROL.PROFESIONAL, ROL.ADMIN], false);
   poner(HOJA.USUARIOS, 'activo', ['SI', 'NO'], false);
   poner(HOJA.USUARIOS, 'area', AREAS, true);
   poner(HOJA.USUARIOS, 'nivel', NIVELES, true);
@@ -554,15 +618,20 @@ function migrar() {
       if (!String(fu[i][ixu.correo]).trim()) continue;
       var cambios = {};
 
+      // REQ-012: JEFE desaparece y se convierte en PROFESIONAL nivel III.
+      // El nivel se fuerza aunque la celda ya traiga otro valor: quien era
+      // JEFE es el cargo de supervision, y si no, pierde permisos sin avisar.
+      var eraJefe = esRolViejoJefe(fu[i][ixu.rol]);
       var rol = normalizarRol(fu[i][ixu.rol]);
       if (!rol) { rol = rolDef; cambios.rol = rol; }
       else if (rol !== String(fu[i][ixu.rol]).trim()) cambios.rol = rol;
+      if (eraJefe && 'nivel' in ixu) cambios.nivel = 'III';
 
       if ('area' in ixu && !normalizarArea(fu[i][ixu.area]) && areaDef) {
         cambios.area = areaDef;
       }
-      // el JEFE y el ADMIN no llevan nivel: el nivel es de los profesionales
-      if ('nivel' in ixu && !normalizarNivel(fu[i][ixu.nivel]) &&
+      // el ADMIN no lleva nivel; los profesionales sin nivel caen al defecto
+      if ('nivel' in ixu && !cambios.nivel && !normalizarNivel(fu[i][ixu.nivel]) &&
           rol === ROL.PROFESIONAL && nivelDef) {
         cambios.nivel = nivelDef;
       }
@@ -782,14 +851,36 @@ function diasHasta(fecha) {
 
 var _yo = null;
 
-/** PROFESIONAL | JEFE | ADMIN. '' si no reconoce el valor. */
+/**
+ * PROFESIONAL | ADMIN. '' si no reconoce el valor.
+ *
+ * JEFE ya no existe (REQ-012): el cargo de supervision es PROFESIONAL-III.
+ * Se sigue reconociendo el valor viejo para que un libro sin migrar no deje a
+ * nadie fuera; migrar() lo reescribe y le pone nivel III.
+ */
 function normalizarRol(v) {
   var s = String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .trim().toUpperCase().replace(/[\s_-]+/g, '');
-  if (s === 'PROFESIONAL') return ROL.PROFESIONAL;
-  if (s === 'JEFE' || s === 'JEFA') return ROL.JEFE;
+  if (s === 'PROFESIONAL' || s === 'JEFE' || s === 'JEFA') return ROL.PROFESIONAL;
   if (s === 'ADMIN' || s === 'ADMINISTRADOR') return ROL.ADMIN;
   return '';
+}
+
+/** True si la fila de USUARIOS todavia trae el rol viejo. */
+function esRolViejoJefe(v) {
+  var s = String(v || '').trim().toUpperCase().replace(/[\s_-]+/g, '');
+  return s === 'JEFE' || s === 'JEFA';
+}
+
+/**
+ * El perfil: lo unico que mira PERMISO. Para un profesional es rol + nivel;
+ * para el ADMIN es solo el rol. Sin nivel, un profesional cae al I, que es el
+ * de menos permisos: ante la duda, nunca de mas.
+ */
+function perfilDe(q) {
+  if (!q || !q.rol) return '';
+  if (q.rol === ROL.ADMIN) return PERFIL.ADMIN;
+  return ROL.PROFESIONAL + '-' + (q.nivel || 'I');
 }
 
 /** MUNICIPALES. '' si no reconoce el valor. */
@@ -833,7 +924,7 @@ function yo() {
 
   var correo = String(Session.getActiveUser().getEmail() || '').toLowerCase();
   _yo = { correo: correo, nombre: correo, rol: '', area: '', nivel: '',
-          activo: false, inscrito: false };
+          perfil: '', activo: false, inscrito: false };
 
   if (!correo) return _yo;
 
@@ -846,6 +937,9 @@ function yo() {
       _yo.rol = normalizarRol(f[i][ix.rol]);
       _yo.area = 'area' in ix ? normalizarArea(f[i][ix.area]) : '';
       _yo.nivel = 'nivel' in ix ? normalizarNivel(f[i][ix.nivel]) : '';
+      // un libro sin migrar: JEFE equivale a PROFESIONAL-III
+      if (!_yo.nivel && esRolViejoJefe(f[i][ix.rol])) _yo.nivel = 'III';
+      _yo.perfil = perfilDe(_yo);
       _yo.activo = esActivo(f[i][ix.activo]);
       break;
     }
@@ -901,15 +995,16 @@ function asegurarAlta() {
 function puede(accion) {
   var q = yo();
   if (!q.activo) return false;
-  var roles = PERMISO[accion];
-  if (!roles) throw new Error('Acción desconocida: ' + accion);
-  return roles.indexOf(q.rol) >= 0;
+  var perfiles = PERMISO[accion];
+  if (!perfiles) throw new Error('Acción desconocida: ' + accion);
+  return perfiles.indexOf(perfilDe(q)) >= 0;
 }
 
 /** Corta la ejecucion si el usuario no puede. */
 function exige(accion) {
   if (!puede(accion)) {
-    throw new Error('Tu rol (' + (yo().rol || 'sin rol') + ') no puede: ' + accion);
+    throw new Error('Tu perfil (' + (perfilDe(yo()) || 'sin perfil') +
+                    ') no puede: ' + accion);
   }
   return true;
 }
@@ -937,12 +1032,15 @@ function apiYo() {
     rol: q.rol,
     area: q.area,
     nivel: q.nivel,
-    perfil: perfilTexto(q),
+    perfil: perfilDe(q),
+    perfilTexto: perfilTexto(q),
     activo: q.activo,
     puedeAsignar: q.activo && puede('asignar'),
     puedeRevisar: q.activo && puede('revisar'),
     puedeConfigurar: q.activo && puede('configurar'),
-    puedeVerMetricas: q.activo && puede('verMetricas')
+    puedeVerMetricas: q.activo && puede('verMetricas'),
+    puedeGestionarAusencias: q.activo && puede('gestionarAusencias'),
+    puedeHabilitarVigencia: q.activo && puede('habilitarVigencia')
   };
 }
 
@@ -1112,6 +1210,26 @@ function armarId(codDane, impuesto, regimen, periodo) {
           normPeriodo(periodo)].join('|');
 }
 
+/** Un ano de cuatro digitos. '' si no encaja. */
+function normVigencia(v) {
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  var m = s.match(/(20\d{2})/);
+  return m ? m[1] : '';
+}
+
+/**
+ * La entidad dueña de la obligacion. Vacio significa BANCO DAVIVIENDA S.A,
+ * que es el caso de casi todas; Bogota tiene ademas otras (por ejemplo la
+ * Corporacion Financiera), y por eso hace falta distinguirlas: se declaran por
+ * separado y sus soportes no pueden mezclarse.
+ */
+function normEntidad(v) {
+  var s = limpiar(v);
+  if (!s) return '';
+  if (/^BANCO\s*DAVIVIENDA/.test(s)) return '';
+  return String(v).trim();
+}
+
 /** OFICINA | VIRTUAL. Por defecto OFICINA, que es el caso comun. */
 function normTipoPresentacion(v) {
   return limpiar(v) === 'VIRTUAL' ? 'VIRTUAL' : 'OFICINA';
@@ -1192,6 +1310,15 @@ function normObligacion(cruda) {
   o.exogena = o.impuesto === 'RETEICA' ? (normSiNo(cruda.exogena) || 'NO') : 'NO';
   o.incluye_retencion = o.impuesto === 'AUTORRETEICA'
     ? (normSiNo(cruda.incluye_retencion) || 'NO') : 'NO';
+
+  // REQ-011. La vigencia fiscal sale del periodo, que es el ano al que
+  // PERTENECE la obligacion, no el ano en que se presenta. Si viene explicita,
+  // manda la explicita: hay obligaciones de 2026 con periodo de enero 2027.
+  o.vigencia = normVigencia(cruda.vigencia) ||
+               (o.periodo ? o.periodo.slice(0, 4) : '');
+
+  // Bogota tiene varias entidades ademas del banco. Vacio = Banco Davivienda.
+  o.entidad = normEntidad(cruda.entidad);
 
   o.valor = normValor(cruda.valor);
   o.nota = String(cruda.nota || '').trim();
@@ -1288,9 +1415,9 @@ function puedeEnviar(fila) {
 
 /**
  * Valida un cambio de estado contra el grafo y contra los datos de la fila.
- * Pura: recibe el rol y la fila, no los busca. opts: {motivo}
+ * Pura: recibe el perfil y la fila, no los busca. opts: {motivo}
  */
-function validarPaso(fila, a, opts, rol) {
+function validarPaso(fila, a, opts, perfil) {
   var o = opts || {};
   var de = String(fila.estado || '').toUpperCase();
   a = String(a || '').toUpperCase();
@@ -1301,9 +1428,12 @@ function validarPaso(fila, a, opts, rol) {
   if (a === ESTADO.LISTA && !String(fila.soporte_id || '').trim()) {
     return { ok: false, motivo: 'LISTA exige soporte: sin soporte no hay envío' };
   }
+  // REQ-012: el visto bueno es del cargo de supervision (PROFESIONAL-III),
+  // no de una persona concreta. Se recibe el PERFIL ya resuelto, para que esta
+  // funcion siga siendo pura y se pueda probar sin hojas.
   if ((a === ESTADO.REVISADA || a === ESTADO.APROBADA) &&
-      [ROL.ADMIN, ROL.JEFE].indexOf(rol) < 0) {
-    return { ok: false, motivo: a + ' solo la pone JEFE o ADMIN' };
+      SUPERVISORES.indexOf(perfil) < 0) {
+    return { ok: false, motivo: a + ' solo la pone PROFESIONAL-III o ADMIN' };
   }
   if (a === ESTADO.DEVUELTA && !String(o.motivo || '').trim()) {
     return { ok: false, motivo: 'DEVUELTA exige motivo' };
@@ -1347,7 +1477,7 @@ function aplicar(id, a, opts) {
 
     exigeMia(actual.responsable, 'editarAjenas');
 
-    var v = validarPaso(actual, a, o, yo().rol);
+    var v = validarPaso(actual, a, o, perfilDe(yo()));
     if (!v.ok) {
       registrar(id, EVENTO.ERROR, 'paso rechazado: ' + v.motivo);
       throw new Error(v.motivo);
@@ -1545,12 +1675,6 @@ function apiListaEnviar() {
 
 /** SINAV · el soporte que se adjunta al correo. Sin soporte no hay envio. */
 
-function carpeta(clave) {
-  var id = config(clave);
-  if (!id) throw new Error('CONFIG.' + clave + ' está vacío. Corre instalar().');
-  return DriveApp.getFolderById(id);
-}
-
 /** Nombre usable como carpeta de Drive. */
 function nombreCarpeta(v) {
   var s = String(v || '').replace(/[\\/]+/g, '-').replace(/\s+/g, ' ').trim();
@@ -1558,43 +1682,18 @@ function nombreCarpeta(v) {
 }
 
 /**
- * La carpeta de un municipio y un impuesto, creandola si no existe:
- *   SINAV/Soportes/<municipio>/<impuesto>/
- *
- * Buscar carpetas en Drive es lo mas lento de una carga, y en un lote de 40
- * PDF del mismo municipio se repetiria 40 veces. Por eso el id se guarda en
- * las propiedades del script: la primera vez cuesta, las siguientes no.
- * Si alguien borra la carpeta a mano, el id cacheado deja de servir y se
- * vuelve a crear.
+ * Donde va el soporte de una obligacion (REQ-009).
+ *   Territoriales/<vigencia>/Declaraciones/Soportes/<municipio>/<impuesto>
+ * Las exogenas van a su propia carpeta del ano, sin bajar por impuesto.
  */
-function carpetaDe(raizClave, municipio, impuesto) {
-  var mun = nombreCarpeta(municipio);
-  var imp = nombreCarpeta(impuesto);
-  var clave = 'carp:' + raizClave + ':' + mun + '|' + imp;
-  var props = PropertiesService.getScriptProperties();
-
-  var guardado = props.getProperty(clave);
-  if (guardado) {
-    try {
-      var c = DriveApp.getFolderById(guardado);
-      if (!c.isTrashed()) return c;
-    } catch (e) { /* la borraron: se recrea abajo */ }
-  }
-
-  var dentroMun = carpetaPorNombre(carpeta(raizClave), mun);
-  var dentroImp = carpetaPorNombre(dentroMun, imp);
-  props.setProperty(clave, dentroImp.getId());
-  return dentroImp;
+function carpetaSoporte(vigencia, municipio, impuesto) {
+  var clase = String(impuesto || '').toUpperCase() === 'EXOGENA' ? 'exogenas' : 'soportes';
+  return carpetaDocumento(clase, vigencia, municipio, impuesto);
 }
 
-/** La carpeta donde va el soporte de una obligacion. */
-function carpetaSoporte(municipio, impuesto) {
-  return carpetaDe('carpeta_soportes', municipio, impuesto);
-}
-
-/** La carpeta donde va el sellado que devuelve la oficina. */
-function carpetaSellado(municipio, impuesto) {
-  return carpetaDe('carpeta_sellados', municipio, impuesto);
+/** Donde va el sellado que devuelve la oficina. */
+function carpetaSellado(vigencia, municipio, impuesto) {
+  return carpetaDocumento('sellados', vigencia, municipio, impuesto);
 }
 
 /** Nombre legible del archivo. El id ya trae municipio, impuesto y periodo. */
@@ -1635,7 +1734,8 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
                                tipo || 'application/octet-stream',
                                nombre || ('soporte-' + id));
   blob.setName(nombreSoporte(val, ix, nombre));
-  var archivo = carpetaSoporte(val[ix.municipio], val[ix.impuesto]).createFile(blob);
+  var archivo = carpetaSoporte(val[ix.vigencia], val[ix.municipio],
+                               val[ix.impuesto]).createFile(blob);
 
   // 3. el cerrojo solo para escribir la hoja
   return conCerrojo(function () {
@@ -1653,6 +1753,7 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
     escribirCampos(HOJA.OBLIGACIONES, f, campos);
     registrar(id, EVENTO.SOPORTE_CARGADO,
               archivo.getName() + ' (' + archivo.getId() + ') en ' +
+              'vigencia ' + (val[ix.vigencia] || '?') + ' · ' +
               nombreCarpeta(val[ix.municipio]) + '/' + nombreCarpeta(val[ix.impuesto]));
 
     return { id: id, soporte_id: archivo.getId(), nombre: archivo.getName(),
@@ -3246,6 +3347,185 @@ function apiAsignar(ids, correo) {
 }
 
 
+// ═════ 19_Vigencias.gs ═════
+
+/**
+ * SINAV · vigencias fiscales y carpetas de Drive (REQ-009, REQ-011).
+ *
+ * El equipo trabaja por ano vencido: en 2027 se presentan las obligaciones de
+ * la vigencia 2026. Por eso son tres cosas distintas y no una:
+ *
+ *   vigencia fiscal      a que ano PERTENECE la obligacion  -> decide la carpeta
+ *   ano de presentacion  cuando se presenta
+ *   fecha de envio       cuando SINAV mando el correo
+ *
+ * La carpeta de destino sale SIEMPRE de la vigencia, nunca de la fecha de hoy.
+ *
+ * Estructura, que el equipo ya creo a mano en Drive:
+ *
+ *   Territoriales / <vigencia> / Exógenas
+ *                              / Declaraciones / Soportes / <municipio> / <impuesto>
+ *                                              / Sellados / Soportes
+ *
+ * Los ids de 2026 estan en VIGENCIAS_CONOCIDAS y se escriben una sola vez.
+ * SINAV nunca reemplaza un id que ya este: si una carpeta no responde, avisa
+ * en vez de crear otra, porque crear una carpeta nueva seria partir en dos el
+ * archivo del equipo sin que nadie se entere.
+ */
+
+/** Todas las vigencias de la hoja, como objetos. */
+function vigencias() {
+  return registros(HOJA.VIGENCIAS)
+    .filter(function (v) { return String(v.vigencia || '').trim(); })
+    .map(function (v) {
+      v.vigencia = String(v.vigencia).trim();
+      v.activa = esActivo(v.activa);
+      return v;
+    });
+}
+
+/** La vigencia por defecto: CONFIG.vigencia_actual, o la mayor activa. */
+function vigenciaActual() {
+  var pedida = String(config('vigencia_actual') || '').trim();
+  var todas = vigencias();
+  if (pedida && todas.some(function (v) { return v.vigencia === pedida; })) return pedida;
+  var activas = todas.filter(function (v) { return v.activa; })
+    .map(function (v) { return v.vigencia; }).sort();
+  if (activas.length) return activas[activas.length - 1];
+  return String(new Date().getFullYear());
+}
+
+/** La fila de una vigencia. Lanza si no esta habilitada. */
+function vigenciaDe(anio) {
+  var a = String(anio || '').trim() || vigenciaActual();
+  var v = vigencias().filter(function (x) { return x.vigencia === a; })[0];
+  if (!v) {
+    throw new Error('La vigencia ' + a + ' no está habilitada. ' +
+      'Un PROFESIONAL-III la habilita desde Configuración, o con habilitarVigencia("' + a + '").');
+  }
+  return v;
+}
+
+/** Abre una carpeta por id, con un mensaje util si no responde. */
+function carpetaPorId(id, queEs) {
+  var limpio = String(id || '').trim();
+  if (!limpio) {
+    throw new Error('No hay id de Drive para ' + queEs + '. ' +
+      'Revisa la hoja VIGENCIAS: SINAV no crea esa carpeta sola, a propósito.');
+  }
+  try {
+    return DriveApp.getFolderById(limpio);
+  } catch (e) {
+    throw new Error('No se pudo abrir la carpeta de ' + queEs + ' (id ' + limpio + '). ' +
+      'O se borró, o la cuenta que desplegó la aplicación no tiene acceso. ' +
+      'SINAV no crea otra en su lugar.');
+  }
+}
+
+/**
+ * La carpeta donde va un documento.
+ *   clase: 'soportes' | 'sellados' | 'exogenas' | 'sellados_soportes'
+ *
+ * Para soportes y sellados se baja a <municipio>/<impuesto>, que es como lo
+ * pidio el equipo. Las exogenas se quedan en su carpeta por municipio.
+ */
+function carpetaDocumento(clase, vigencia, municipio, impuesto) {
+  var v = vigenciaDe(vigencia);
+  var raiz = {
+    soportes:          ['carpeta_soportes', 'Soportes'],
+    sellados:          ['carpeta_sellados', 'Sellados'],
+    exogenas:          ['carpeta_exogenas', 'Exógenas'],
+    sellados_soportes: ['carpeta_sellados_soportes', 'Sellados/Soportes']
+  }[clase];
+  if (!raiz) throw new Error('Clase de carpeta desconocida: ' + clase);
+
+  var base = carpetaPorId(v[raiz[0]], raiz[1] + ' de ' + v.vigencia);
+  if (clase === 'exogenas') {
+    return carpetaCache(base, [nombreCarpeta(municipio)], clase, v.vigencia);
+  }
+  return carpetaCache(base, [nombreCarpeta(municipio), nombreCarpeta(impuesto)],
+                      clase, v.vigencia);
+}
+
+/**
+ * Baja por una ruta de subcarpetas creandolas si hacen falta, y se acuerda del
+ * id. Buscar carpetas es lo lento de una carga de cuarenta PDF y en un lote
+ * del mismo municipio se repetiria cuarenta veces.
+ *
+ * Solo se crean las subcarpetas de municipio e impuesto. Las carpetas del ano
+ * nunca se crean aqui: esas son las que el equipo ya tiene.
+ */
+function carpetaCache(base, ruta, clase, vigencia) {
+  var clave = 'carp:' + vigencia + ':' + clase + ':' + ruta.join('|');
+  var props = PropertiesService.getScriptProperties();
+  var guardado = props.getProperty(clave);
+  if (guardado) {
+    try {
+      var c = DriveApp.getFolderById(guardado);
+      if (!c.isTrashed()) return c;
+    } catch (e) { /* la borraron: se vuelve a crear abajo */ }
+  }
+  var actual = base;
+  for (var i = 0; i < ruta.length; i++) actual = carpetaPorNombre(actual, ruta[i]);
+  props.setProperty(clave, actual.getId());
+  return actual;
+}
+
+/**
+ * REQ-011. Habilita una vigencia nueva: crea su estructura bajo Territoriales
+ * y guarda los ids. No toca las vigencias que ya existen ni mueve nada.
+ */
+function habilitarVigencia(anio) {
+  exige('habilitarVigencia');
+
+  var a = String(anio || '').trim();
+  if (!/^20\d{2}$/.test(a)) throw new Error('La vigencia es un año de cuatro dígitos: ' + anio);
+
+  return conCerrojo(function () {
+    if (vigencias().some(function (v) { return v.vigencia === a; })) {
+      return 'La vigencia ' + a + ' ya estaba habilitada. No se tocó nada.';
+    }
+
+    var raiz = carpetaPorId(config('carpeta_territoriales') || CARPETA_TERRITORIALES,
+                            'Territoriales');
+    var anioDir = carpetaPorNombre(raiz, a);
+    var exo = carpetaPorNombre(anioDir, SUBCARPETAS_VIGENCIA.exogenas);
+    var dec = carpetaPorNombre(anioDir, SUBCARPETAS_VIGENCIA.declaraciones);
+    var sop = carpetaPorNombre(dec, SUBCARPETAS_VIGENCIA.soportes);
+    var sel = carpetaPorNombre(dec, SUBCARPETAS_VIGENCIA.sellados);
+    var selSop = carpetaPorNombre(sel, SUBCARPETAS_VIGENCIA.sellados_soportes);
+
+    var fila = {
+      vigencia: a,
+      carpeta_exogenas: exo.getId(),
+      carpeta_declaraciones: dec.getId(),
+      carpeta_soportes: sop.getId(),
+      carpeta_sellados: sel.getId(),
+      carpeta_sellados_soportes: selSop.getId(),
+      activa: 'SI'
+    };
+    agregarFilas(HOJA.VIGENCIAS, [COLS.VIGENCIAS.map(function (c) {
+      return fila[c] === undefined ? '' : fila[c];
+    })]);
+    registrar('', EVENTO.AVISO, 'vigencia ' + a + ' habilitada por ' + yo().correo);
+
+    return 'Vigencia ' + a + ' habilitada en Territoriales/' + a + '.\n' +
+           'Las vigencias anteriores no se tocaron.';
+  });
+}
+
+/** Lo que la interfaz necesita saber de las vigencias. */
+function apiVigencias() {
+  return {
+    actual: vigenciaActual(),
+    vigencias: vigencias().map(function (v) {
+      return { vigencia: v.vigencia, activa: v.activa };
+    }),
+    puedeHabilitar: puede('habilitarVigencia')
+  };
+}
+
+
 // ═════ 99_Pruebas.gs ═════
 
 /**
@@ -3357,7 +3637,8 @@ function pruebasSinSoporte(esIgual) {
           validarPaso({ estado: ESTADO.PENDIENTE, soporte_id: '1Ab' }, ESTADO.LISTA, {}, ROL.ADMIN).ok,
           true);
   esIgual('DEVUELTA sin soporte no vuelve a LISTA',
-          validarPaso({ estado: ESTADO.DEVUELTA, soporte_id: '  ' }, ESTADO.LISTA, {}, ROL.JEFE).ok,
+          validarPaso({ estado: ESTADO.DEVUELTA, soporte_id: '  ' }, ESTADO.LISTA, {},
+                      PERFIL.PROFESIONAL_III).ok,
           false);
   esIgual('ni un ADMIN puede enviar sin soporte',
           validarPaso(con({ soporte_id: '' }), ESTADO.ENVIADA, {}, ROL.ADMIN).ok, false);
@@ -3423,12 +3704,16 @@ function pruebasTransiciones(esIgual) {
   esIgual('estado inventado', puedePasar('LO_QUE_SEA', 'LISTA'), false);
   esIgual('estado con espacios se tolera', puedePasar(' lista ', 'ENVIADA'), true);
 
-  // REVISADA y APROBADA solo JEFE o ADMIN
+  // REVISADA y APROBADA solo PROFESIONAL-III o ADMIN (REQ-012)
   var respondida = { estado: ESTADO.RESPONDIDA, soporte_id: '1Ab' };
   esIgual('el PROFESIONAL no marca REVISADA',
           validarPaso(respondida, ESTADO.REVISADA, {}, ROL.PROFESIONAL).ok, false);
-  esIgual('el JEFE si marca REVISADA',
-          validarPaso(respondida, ESTADO.REVISADA, {}, ROL.JEFE).ok, true);
+  esIgual('el PROFESIONAL-III si marca REVISADA',
+          validarPaso(respondida, ESTADO.REVISADA, {}, PERFIL.PROFESIONAL_III).ok, true);
+  esIgual('un PROFESIONAL-I no marca REVISADA',
+          validarPaso(respondida, ESTADO.REVISADA, {}, PERFIL.PROFESIONAL_I).ok, false);
+  esIgual('el ADMIN si marca REVISADA',
+          validarPaso(respondida, ESTADO.REVISADA, {}, PERFIL.ADMIN).ok, true);
   esIgual('el ADMIN si marca REVISADA',
           validarPaso(respondida, ESTADO.REVISADA, {}, ROL.ADMIN).ok, true);
   esIgual('el PROFESIONAL no marca APROBADA',
@@ -3437,11 +3722,13 @@ function pruebasTransiciones(esIgual) {
 
   // DEVUELTA exige motivo
   esIgual('DEVUELTA sin motivo no pasa',
-          validarPaso(respondida, ESTADO.DEVUELTA, {}, ROL.JEFE).ok, false);
+          validarPaso(respondida, ESTADO.DEVUELTA, {}, PERFIL.PROFESIONAL_III).ok, false);
   esIgual('DEVUELTA con motivo en blanco no pasa',
-          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: '   ' }, ROL.JEFE).ok, false);
+          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: '   ' },
+                      PERFIL.PROFESIONAL_III).ok, false);
   esIgual('DEVUELTA con motivo pasa',
-          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: 'sello ilegible' }, ROL.JEFE).ok,
+          validarPaso(respondida, ESTADO.DEVUELTA, { motivo: 'sello ilegible' },
+                      PERFIL.PROFESIONAL_III).ok,
           true);
 
   esIgual('no se repite el mismo estado',
@@ -3456,8 +3743,19 @@ function pruebasTransiciones(esIgual) {
 function pruebasRoles(esIgual) {
   esIgual('rol PROFESIONAL', normalizarRol('PROFESIONAL'), 'PROFESIONAL');
   esIgual('rol en minusculas', normalizarRol('profesional'), 'PROFESIONAL');
-  esIgual('rol con espacio', normalizarRol(' Jefe '), 'JEFE');
-  esIgual('JEFA tambien es JEFE', normalizarRol('JEFA'), 'JEFE');
+  // REQ-012: el rol JEFE desaparecio; un libro sin migrar lo lee como
+  // PROFESIONAL, y migrar() le pone nivel III para que no pierda permisos.
+  esIgual('JEFE viejo se lee como PROFESIONAL', normalizarRol(' Jefe '), 'PROFESIONAL');
+  esIgual('JEFA tambien', normalizarRol('JEFA'), 'PROFESIONAL');
+  esIgual('JEFE se reconoce como rol viejo', esRolViejoJefe('Jefe'), true);
+  esIgual('PROFESIONAL no es rol viejo', esRolViejoJefe('PROFESIONAL'), false);
+
+  esIgual('perfil del supervisor',
+          perfilDe({ rol: 'PROFESIONAL', nivel: 'III' }), 'PROFESIONAL-III');
+  esIgual('perfil sin nivel cae al I, nunca de mas',
+          perfilDe({ rol: 'PROFESIONAL', nivel: '' }), 'PROFESIONAL-I');
+  esIgual('el ADMIN no lleva nivel', perfilDe({ rol: 'ADMIN', nivel: 'III' }), 'ADMIN');
+  esIgual('sin rol no hay perfil', perfilDe({ rol: '', nivel: 'III' }), '');
   esIgual('ADMINISTRADOR es ADMIN', normalizarRol('Administrador'), 'ADMIN');
   esIgual('rol con acento', normalizarRol('Profesiónal'), 'PROFESIONAL');
   esIgual('rol mal escrito no pasa', normalizarRol('Profecional'), '');
@@ -3489,8 +3787,8 @@ function pruebasRoles(esIgual) {
           perfilTexto({ rol: 'PROFESIONAL', nivel: 'I', area: 'MUNICIPALES' }),
           'Profesional-I de municipales');
   esIgual('perfil del jefe sin nivel',
-          perfilTexto({ rol: 'JEFE', nivel: '', area: 'MUNICIPALES' }),
-          'Jefe de municipales');
+          perfilTexto({ rol: 'PROFESIONAL', nivel: 'III', area: 'MUNICIPALES' }),
+          'Profesional-III de municipales');
   esIgual('perfil sin rol', perfilTexto({ rol: '', nivel: '', area: '' }), 'sin rol');
 }
 

@@ -2,14 +2,36 @@
 
 var _yo = null;
 
-/** PROFESIONAL | JEFE | ADMIN. '' si no reconoce el valor. */
+/**
+ * PROFESIONAL | ADMIN. '' si no reconoce el valor.
+ *
+ * JEFE ya no existe (REQ-012): el cargo de supervision es PROFESIONAL-III.
+ * Se sigue reconociendo el valor viejo para que un libro sin migrar no deje a
+ * nadie fuera; migrar() lo reescribe y le pone nivel III.
+ */
 function normalizarRol(v) {
   var s = String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .trim().toUpperCase().replace(/[\s_-]+/g, '');
-  if (s === 'PROFESIONAL') return ROL.PROFESIONAL;
-  if (s === 'JEFE' || s === 'JEFA') return ROL.JEFE;
+  if (s === 'PROFESIONAL' || s === 'JEFE' || s === 'JEFA') return ROL.PROFESIONAL;
   if (s === 'ADMIN' || s === 'ADMINISTRADOR') return ROL.ADMIN;
   return '';
+}
+
+/** True si la fila de USUARIOS todavia trae el rol viejo. */
+function esRolViejoJefe(v) {
+  var s = String(v || '').trim().toUpperCase().replace(/[\s_-]+/g, '');
+  return s === 'JEFE' || s === 'JEFA';
+}
+
+/**
+ * El perfil: lo unico que mira PERMISO. Para un profesional es rol + nivel;
+ * para el ADMIN es solo el rol. Sin nivel, un profesional cae al I, que es el
+ * de menos permisos: ante la duda, nunca de mas.
+ */
+function perfilDe(q) {
+  if (!q || !q.rol) return '';
+  if (q.rol === ROL.ADMIN) return PERFIL.ADMIN;
+  return ROL.PROFESIONAL + '-' + (q.nivel || 'I');
 }
 
 /** MUNICIPALES. '' si no reconoce el valor. */
@@ -53,7 +75,7 @@ function yo() {
 
   var correo = String(Session.getActiveUser().getEmail() || '').toLowerCase();
   _yo = { correo: correo, nombre: correo, rol: '', area: '', nivel: '',
-          activo: false, inscrito: false };
+          perfil: '', activo: false, inscrito: false };
 
   if (!correo) return _yo;
 
@@ -66,6 +88,9 @@ function yo() {
       _yo.rol = normalizarRol(f[i][ix.rol]);
       _yo.area = 'area' in ix ? normalizarArea(f[i][ix.area]) : '';
       _yo.nivel = 'nivel' in ix ? normalizarNivel(f[i][ix.nivel]) : '';
+      // un libro sin migrar: JEFE equivale a PROFESIONAL-III
+      if (!_yo.nivel && esRolViejoJefe(f[i][ix.rol])) _yo.nivel = 'III';
+      _yo.perfil = perfilDe(_yo);
       _yo.activo = esActivo(f[i][ix.activo]);
       break;
     }
@@ -121,15 +146,16 @@ function asegurarAlta() {
 function puede(accion) {
   var q = yo();
   if (!q.activo) return false;
-  var roles = PERMISO[accion];
-  if (!roles) throw new Error('Acción desconocida: ' + accion);
-  return roles.indexOf(q.rol) >= 0;
+  var perfiles = PERMISO[accion];
+  if (!perfiles) throw new Error('Acción desconocida: ' + accion);
+  return perfiles.indexOf(perfilDe(q)) >= 0;
 }
 
 /** Corta la ejecucion si el usuario no puede. */
 function exige(accion) {
   if (!puede(accion)) {
-    throw new Error('Tu rol (' + (yo().rol || 'sin rol') + ') no puede: ' + accion);
+    throw new Error('Tu perfil (' + (perfilDe(yo()) || 'sin perfil') +
+                    ') no puede: ' + accion);
   }
   return true;
 }
@@ -157,12 +183,15 @@ function apiYo() {
     rol: q.rol,
     area: q.area,
     nivel: q.nivel,
-    perfil: perfilTexto(q),
+    perfil: perfilDe(q),
+    perfilTexto: perfilTexto(q),
     activo: q.activo,
     puedeAsignar: q.activo && puede('asignar'),
     puedeRevisar: q.activo && puede('revisar'),
     puedeConfigurar: q.activo && puede('configurar'),
-    puedeVerMetricas: q.activo && puede('verMetricas')
+    puedeVerMetricas: q.activo && puede('verMetricas'),
+    puedeGestionarAusencias: q.activo && puede('gestionarAusencias'),
+    puedeHabilitarVigencia: q.activo && puede('habilitarVigencia')
   };
 }
 

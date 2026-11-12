@@ -66,7 +66,7 @@ function Lateral({ yo, modo, vista, alCambiar, conteos, logo }) {
 
     <div class="pie-lateral">
       <p class="persona"><b>${yo.nombre}</b>
-        <span>${yo.perfil || yo.rol.toLowerCase()}</span>
+        <span>${yo.perfilTexto || yo.perfil || yo.rol.toLowerCase()}</span>
         <span class="correo" title=${yo.correo}>${yo.correo}</span></p>
       ${modo === 'PRUEBA' ? html`<p class="aviso-modo">
         <b>Modo prueba</b>Los correos llegan a tu bandeja, no a las oficinas.

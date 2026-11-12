@@ -112,9 +112,9 @@ const inicio = {
   yo: {
     correo: yoCorreo, nombre: 'Rebeca Pedrozo',
     rol: 'ADMIN', area: 'MUNICIPALES', nivel: '',
-    perfil: 'Admin de municipales', activo: true,
+    perfil: 'ADMIN', perfilTexto: 'Admin de municipales', activo: true,
     puedeAsignar: true, puedeRevisar: true, puedeConfigurar: true,
-    puedeVerMetricas: true
+    puedeVerMetricas: true, puedeGestionarAusencias: true, puedeHabilitarVigencia: true
   },
   config: { modo: 'PRUEBA', nombre_remitente: 'Impuestos Davivienda', dias_aviso: '10,4,2,0' },
   cuota: { usada: 0, tope: 1500 },
