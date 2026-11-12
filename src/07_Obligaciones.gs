@@ -64,6 +64,10 @@ function decorar(o) {
       sellado: !!String(o.sellado_id || '').trim()
     },
     mia: esMia(o.responsable),
+    // REQ-010. Si esta lleno, esta obligacion es de otro y yo solo la estoy
+    // cubriendo mientras esta de vacaciones.
+    titular_original: String(o.titular_original || ''),
+    cubriendo: !!String(o.titular_original || '').trim(),
     enviable: env.ok,
     motivo_no_enviable: env.motivo,
     nivel: nivel
@@ -186,6 +190,10 @@ function apiInicio() {
   // alta automatica: el correo que entra por primera vez queda inscrito con el
   // rol por defecto. El JEFE y el ADMIN se siguen poniendo a mano en USUARIOS.
   asegurarAlta();
+  // REQ-010: lo que estaba cubierto y ya termino vuelve a su titular antes de
+  // que nadie mire la lista. Es barato y evita tener que programar un
+  // disparador para algo que solo importa justo antes de abrir la pantalla.
+  try { cerrarAusenciasVencidas(); } catch (e) { /* no es critico */ }
 
   var q = apiYo();
   if (!q.correo) {

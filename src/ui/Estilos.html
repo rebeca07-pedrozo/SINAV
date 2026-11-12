@@ -543,6 +543,59 @@ td.celda-ancha { padding: 8px 10px; min-width: 260px; vertical-align: middle; }
 /* un parrafo explicativo entre paneles, no dentro de uno */
 .hallazgo-suelto { margin: 0 0 var(--gap); max-width: 80ch; }
 
+/* ---------- el modal de confirmacion (REQ-010) ---------------------------- */
+
+/* el velo desenfoca lo de atras: lo que importa ahora es la decision */
+.velo {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(17, 17, 17, .32);
+  -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+  animation: aparece 160ms ease-out;
+}
+@keyframes aparece { from { opacity: 0 } to { opacity: 1 } }
+@keyframes sube {
+  from { opacity: 0; transform: translateY(8px) scale(.99) }
+  to   { opacity: 1; transform: none }
+}
+
+.modal {
+  width: min(560px, 100%); max-height: 86vh; overflow: auto;
+  padding: 22px var(--pad); border-radius: var(--r-tarjeta);
+  background: var(--superficie);
+  box-shadow: 0 18px 48px rgba(17, 17, 17, .22);
+  animation: sube 200ms cubic-bezier(.2, .7, .3, 1);
+}
+.modal h2 { margin: 0 0 12px; font-size: var(--fs-seccion); font-weight: 600; }
+.modal-cuerpo { margin: 0 0 10px; max-width: 60ch; }
+.modal-cuerpo b { font-weight: 600; }
+
+.modal-cifras {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px; margin: 16px 0;
+}
+.modal-cifras > div {
+  padding: 10px; border: 1px solid var(--borde); border-radius: var(--r-control);
+}
+.modal-cifras .et { display: block; font-size: var(--fs-meta); color: var(--apagado); }
+.modal-cifras .vl {
+  display: block; margin-top: 2px; font-size: var(--fs-seccion); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-lista {
+  margin: 0 0 14px; padding-left: 18px;
+  font-size: var(--fs-chico); color: var(--apagado);
+}
+.modal-lista li { margin: 2px 0; }
+
+.modal-pie { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+
+/* quien pidio menos movimiento no lo recibe */
+@media (prefers-reduced-motion: reduce) {
+  .velo, .modal { animation: none; }
+}
+
 @media (max-width: 720px) {
   .rejilla-campos { grid-template-columns: 1fr; }
   .dos-columnas { grid-template-columns: 1fr; }

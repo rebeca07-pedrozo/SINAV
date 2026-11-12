@@ -556,6 +556,59 @@ td.celda-ancha { padding: 8px 10px; min-width: 260px; vertical-align: middle; }
 /* un parrafo explicativo entre paneles, no dentro de uno */
 .hallazgo-suelto { margin: 0 0 var(--gap); max-width: 80ch; }
 
+/* ---------- el modal de confirmacion (REQ-010) ---------------------------- */
+
+/* el velo desenfoca lo de atras: lo que importa ahora es la decision */
+.velo {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(17, 17, 17, .32);
+  -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+  animation: aparece 160ms ease-out;
+}
+@keyframes aparece { from { opacity: 0 } to { opacity: 1 } }
+@keyframes sube {
+  from { opacity: 0; transform: translateY(8px) scale(.99) }
+  to   { opacity: 1; transform: none }
+}
+
+.modal {
+  width: min(560px, 100%); max-height: 86vh; overflow: auto;
+  padding: 22px var(--pad); border-radius: var(--r-tarjeta);
+  background: var(--superficie);
+  box-shadow: 0 18px 48px rgba(17, 17, 17, .22);
+  animation: sube 200ms cubic-bezier(.2, .7, .3, 1);
+}
+.modal h2 { margin: 0 0 12px; font-size: var(--fs-seccion); font-weight: 600; }
+.modal-cuerpo { margin: 0 0 10px; max-width: 60ch; }
+.modal-cuerpo b { font-weight: 600; }
+
+.modal-cifras {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px; margin: 16px 0;
+}
+.modal-cifras > div {
+  padding: 10px; border: 1px solid var(--borde); border-radius: var(--r-control);
+}
+.modal-cifras .et { display: block; font-size: var(--fs-meta); color: var(--apagado); }
+.modal-cifras .vl {
+  display: block; margin-top: 2px; font-size: var(--fs-seccion); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-lista {
+  margin: 0 0 14px; padding-left: 18px;
+  font-size: var(--fs-chico); color: var(--apagado);
+}
+.modal-lista li { margin: 2px 0; }
+
+.modal-pie { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+
+/* quien pidio menos movimiento no lo recibe */
+@media (prefers-reduced-motion: reduce) {
+  .velo, .modal { animation: none; }
+}
+
 @media (max-width: 720px) {
   .rejilla-campos { grid-template-columns: 1fr; }
   .dos-columnas { grid-template-columns: 1fr; }
@@ -670,7 +723,8 @@ function Icono({ nombre }) {
     subir: 'M8 11V3M5 6l3-3 3 3M3 12.5h10',
     recargar: 'M13 8a5 5 0 1 1-1.6-3.7M13 2.5V5h-2.5',
     campos: 'M3 3.5h10M3 8h10M3 12.5h6M11.5 11.5l1 1 2-2',
-    metricas: 'M2.5 13.5h11M4.5 11V7M8 11V3.5M11.5 11V9'
+    metricas: 'M2.5 13.5h11M4.5 11V7M8 11V3.5M11.5 11V9',
+    ausencias: 'M3 6.5h10a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1zM5.5 6.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2.5M6.5 10l3 0'
   };
   return html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d=${trazos[nombre]}
     stroke-linecap="round" stroke-linejoin="round" /></svg>`;
@@ -2341,6 +2395,268 @@ function Asignacion() {
 }
 </script>
 
+  <!-- ===== ui/Ausencias.html ===== -->
+<script>
+/* ===========================================================================
+   SINAV · pestana AUSENCIAS (REQ-010). Solo PROFESIONAL-III y ADMIN.
+   La pregunta de esta pantalla: quien se va, cuanto, y que pasa con su trabajo.
+   =========================================================================== */
+
+/**
+ * El modal de confirmacion. Antes de mover el trabajo de alguien hay que ver
+ * exactamente cuanto se mueve y a quien le llega: redistribuir a ciegas es como
+ * se pierde una declaracion.
+ */
+function ModalAusencia({ p, alConfirmar, alCancelar, trabajando }) {
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape' && !trabajando) alCancelar(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [alCancelar, trabajando]);
+
+  return html`<div class="velo" onClick=${(e) => {
+      if (e.target === e.currentTarget && !trabajando) alCancelar();
+    }}>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t-aus">
+      <h2 id="t-aus">Confirmar la redistribución</h2>
+
+      ${/* el texto se arma como arreglo: interpolado dentro de la plantilla,
+            htm se come el espacio del salto de linea y queda "asignadas aAndrea" */ ''}
+      <p class="modal-cuerpo">${[
+        'Estás a punto de redistribuir las cargas y obligaciones asignadas a ',
+        html`<b key="n">${p.nombre}</b>`,
+        ', correspondientes al periodo comprendido entre ',
+        html`<b key="d">${p.desde}</b>`, ' y ', html`<b key="h">${p.hasta}</b>`, '.'
+      ]}</p>
+      <p class="modal-cuerpo">${[
+        'Las responsabilidades serán asignadas temporalmente a ',
+        html`<b key="b">${p.nombre_backup}</b>`,
+        '. ¿Deseas continuar con esta operación?'
+      ]}</p>
+
+      <div class="modal-cifras">
+        <div><span class="et">Obligaciones</span><span class="vl">${p.cuantas}</span></div>
+        <div><span class="et">Días</span><span class="vl">${p.dias}</span></div>
+        ${p.por_impuesto.map((x) => html`<div key=${x.impuesto}>
+          <span class="et">${x.impuesto}</span><span class="vl">${x.cuantas}</span>
+        </div>`)}
+      </div>
+
+      ${p.ejemplos.length ? html`<ul class="modal-lista">
+        ${p.ejemplos.map((e, i) => html`<li key=${i}>${e}</li>`)}
+        ${p.cuantas > p.ejemplos.length
+          ? html`<li class="sub">y ${p.cuantas - p.ejemplos.length} más…</li>` : null}
+      </ul>` : null}
+
+      <p class="sub">
+        Solo se mueve lo que vence dentro de esas fechas. Al terminar la
+        ausencia vuelven solas a ${p.nombre}, conservando lo que se haya
+        avanzado.
+      </p>
+
+      <div class="modal-pie">
+        <button class="btn btn-principal" onClick=${alConfirmar} disabled=${trabajando}>
+          ${trabajando ? 'Redistribuyendo…' : 'Sí, continuar'}
+        </button>
+        <button class="btn" onClick=${alCancelar} disabled=${trabajando}>Cancelar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+const ETIQUETA_AUSENCIA = {
+  ACTIVA: 'En curso', PROGRAMADA: 'Programada',
+  TERMINADA: 'Terminada', CANCELADA: 'Cancelada'
+};
+const NIVEL_AUSENCIA = { ACTIVA: 'porvencer', TERMINADA: 'aldia', CANCELADA: '' };
+
+function Ausencias() {
+  const [datos, setDatos] = useState(null);
+  const [quien, setQuien] = useState('');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+  const [previa, setPrevia] = useState(null);
+  const [trabajando, setTrabajando] = useState(false);
+  const [fallo, setFallo] = useState('');
+  const [aviso, setAviso] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setFallo('');
+    try {
+      const d = await llamar('apiAusencias');
+      setDatos(d);
+      if (!quien && d.personas.length) setQuien(d.personas[0].correo);
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    }
+  }, [quien]);
+
+  useEffect(() => { cargar(); }, []);
+
+  async function previsualizar() {
+    setFallo('');
+    setTrabajando(true);
+    try {
+      setPrevia(await llamar('apiPrevisualizarAusencia', quien, desde, hasta));
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando(false);
+    }
+  }
+
+  async function confirmar() {
+    setTrabajando(true);
+    try {
+      const r = await llamar('apiRegistrarAusencia', quien, desde, hasta, '');
+      setPrevia(null);
+      setAviso({ clase: '', titulo: r.movidas + ' obligaciones pasaron a ' + r.nombre_backup,
+                 lineas: ['Vuelven solas a su titular después del ' + r.hasta + '.'] });
+      setDesde(''); setHasta('');
+      await cargar();
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+      setPrevia(null);
+    } finally {
+      setTrabajando(false);
+    }
+  }
+
+  async function cancelar(id) {
+    setTrabajando(true);
+    try {
+      const r = await llamar('apiCancelarAusencia', id);
+      setAviso({ clase: '', titulo: 'Ausencia cancelada',
+                 lineas: [r.devueltas + ' obligaciones volvieron a su titular.'] });
+      await cargar();
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando(false);
+    }
+  }
+
+  if (!datos) {
+    return html`<main class="lienzo">
+      <div class="titulo-fila"><div><h1>Ausencias</h1>
+        <p class="hallazgo">${fallo || html`<${Hueso} ancho="380px" />`}</p></div></div>
+      ${fallo ? html`<section class="panel">
+        <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
+      </section>` : null}
+    </main>`;
+  }
+
+  const activas = datos.ausencias.filter((a) => a.estado === 'ACTIVA');
+  const elegida = datos.personas.filter((p) => p.correo === quien)[0];
+
+  return html`<main class="lienzo">
+    <div class="titulo-fila">
+      <div>
+        <h1>Ausencias</h1>
+        <p class="hallazgo">
+          ${frase(activas.length
+            ? [activas.length,
+               activas.length === 1
+                 ? ' ausencia en curso: su trabajo lo está cubriendo el backup.'
+                 : ' ausencias en curso: su trabajo lo están cubriendo los backups.']
+            : ['Nadie está ausente. Cada quien tiene lo suyo.'])}
+        </p>
+      </div>
+      <div class="acciones-titulo">
+        <button class="btn" onClick=${cargar} disabled=${trabajando}>
+          <${Icono} nombre="recargar" /> Actualizar
+        </button>
+      </div>
+    </div>
+
+    ${aviso ? html`<div class=${'resultado ' + aviso.clase} role="status">
+      <h2>${aviso.titulo}</h2>
+      <ul>${aviso.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}</ul>
+    </div>` : null}
+
+    <section class="panel">
+      <div class="panel-cab"><h2>Registrar una ausencia</h2></div>
+      <div class="tira-controles">
+        <label class="campo">
+          <span>Quién estará ausente</span>
+          <select value=${quien} disabled=${trabajando}
+            onChange=${(e) => { setQuien(e.target.value); setPrevia(null); }}>
+            ${datos.personas.map((p) => html`<option key=${p.correo} value=${p.correo}>
+              ${p.nombre}${p.backup ? '' : ' (sin backup)'}</option>`)}
+          </select>
+        </label>
+        <label class="campo"><span>Desde</span>
+          <input type="date" value=${desde} disabled=${trabajando}
+            onChange=${(e) => { setDesde(e.target.value); setPrevia(null); }} /></label>
+        <label class="campo"><span>Hasta</span>
+          <input type="date" value=${hasta} disabled=${trabajando}
+            onChange=${(e) => { setHasta(e.target.value); setPrevia(null); }} /></label>
+        <button class="btn btn-principal" disabled=${!quien || !desde || !hasta || trabajando}
+          onClick=${previsualizar}>
+          ${trabajando && !previa ? 'Calculando…' : 'Ver qué se movería'}
+        </button>
+      </div>
+
+      <p class="hallazgo hallazgo-form">
+        ${elegida && elegida.backup
+          ? 'El backup de ' + elegida.nombre + ' es ' + elegida.nombre_backup + '.'
+          : (elegida ? elegida.nombre + ' no tiene backup asignado.' : '')}
+        ${' '}Solo se mueve lo que vence dentro de las fechas, y la asignación
+        original no se pierde: al terminar vuelven solas.
+      </p>
+
+      ${fallo ? html`<div class="error-bloque"><p><b>No se pudo.</b> ${fallo}</p></div>` : null}
+
+      ${datos.sinBackup.length ? html`<p class="sub" style=${{ padding: '0 20px 14px' }}>
+        Sin backup asignado: ${datos.sinBackup.join(', ')}.
+      </p>` : null}
+    </section>
+
+    <section class="panel">
+      <div class="panel-cab">
+        <h2>Historial</h2>
+        <span class="total">${datos.ausencias.length}</span>
+        <span class="der">${datos.generado ? 'leído ' + datos.generado.slice(11) : ''}</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Quién</th><th>Desde</th><th>Hasta</th><th>Lo cubre</th>
+          <th class="num der">Obligaciones</th><th>Estado</th><th class="der"></th>
+        </tr></thead>
+        <tbody>
+          ${datos.ausencias.map((a) => html`<tr key=${a.id}>
+            <td class="celda-mun"><span class="ident">${a.correo_ausente}</span>
+              <span class="sub">${a.id}</span></td>
+            <td class="celda-linea2 num">${a.desde_txt}</td>
+            <td class="celda-linea2 num">${a.hasta_txt}</td>
+            <td class="celda-linea2"><span class="sub">${a.correo_backup}</span></td>
+            <td class="celda-linea2 num der">${a.movidas}</td>
+            <td class="celda-linea2">
+              <span class=${'pildora ' + (NIVEL_AUSENCIA[a.estado] || '')}>
+                ${ETIQUETA_AUSENCIA[a.estado] || a.estado}</span></td>
+            <td class="celda-accion der">
+              ${a.estado === 'ACTIVA'
+                ? html`<button class="btn" disabled=${trabajando}
+                    onClick=${() => cancelar(a.id)}>Cancelar</button>`
+                : null}
+            </td>
+          </tr>`)}
+        </tbody>
+      </table>
+      ${!datos.ausencias.length
+        ? html`<p class="vacio">Todavía no se ha registrado ninguna ausencia.</p>` : null}
+    </section>
+
+    ${previa ? (previa.puede
+      ? html`<${ModalAusencia} p=${previa} trabajando=${trabajando}
+          alConfirmar=${confirmar} alCancelar=${() => setPrevia(null)} />`
+      : html`<div class="resultado malo" role="status">
+          <h2>No se puede redistribuir</h2><ul><li>${previa.aviso}</li></ul>
+        </div>`) : null}
+  </main>`;
+}
+</script>
+
   <!-- ===== ui/App.html ===== -->
 <script>
 /* ===========================================================================
@@ -2357,6 +2673,8 @@ const VISTAS = [
   { id: 'alertas', et: 'Alertas', icono: 'alertas', grupo: 'trabajo' },
   { id: 'metricas', et: 'Métricas', icono: 'metricas', grupo: 'admin',
     permiso: 'puedeVerMetricas' },
+  { id: 'ausencias', et: 'Ausencias', icono: 'ausencias', grupo: 'admin',
+    permiso: 'puedeGestionarAusencias' },
   { id: 'asignacion', et: 'Asignación', icono: 'asignacion', grupo: 'admin',
     permiso: 'puedeAsignar' },
   { id: 'configuracion', et: 'Configuración', icono: 'configuracion', grupo: 'admin',
@@ -2451,6 +2769,7 @@ function Vista({ vista, inicio }) {
   if (vista === 'metricas') return html`<${Metricas} />`;
   if (vista === 'alertas') return html`<${Alertas} />`;
   if (vista === 'asignacion') return html`<${Asignacion} />`;
+  if (vista === 'ausencias') return html`<${Ausencias} />`;
 
   if (vista === 'respuestas') {
     return html`<${PorConstruir} et="Respuestas"

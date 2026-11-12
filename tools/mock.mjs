@@ -297,6 +297,30 @@ window.google = { script: { run: (function () {
     // emparejarArchivo en 99_Pruebas.gs.
     apiCargaPlan: () => D.PLAN_EJEMPLO,
     apiAlertas: () => D.ALERTAS,
+    apiAusencias: () => ({
+      personas: [
+        { correo: 'andrea@davivienda.com', nombre: 'Andrea Galvis',
+          backup: 'liliana@davivienda.com', nombre_backup: 'Liliana Ramírez' },
+        { correo: 'jesus@davivienda.com', nombre: 'Jesús Jaimes',
+          backup: 'helen@davivienda.com', nombre_backup: 'Helen Cuadros' }
+      ],
+      sinBackup: [],
+      ausencias: [{ id: 'AUS-20261101-090000', correo_ausente: 'andrea@davivienda.com',
+        desde_txt: '2026-11-20', hasta_txt: '2026-12-05',
+        correo_backup: 'liliana@davivienda.com', estado: 'ACTIVA', movidas: 18 }],
+      generado: D.AHORA }),
+    apiPrevisualizarAusencia: (c, d, h) => ({
+      correo: c, nombre: 'Andrea Galvis', backup: 'liliana@davivienda.com',
+      nombre_backup: 'Liliana Ramírez', desde: d || '2026-11-20', hasta: h || '2026-12-05',
+      dias: 16, cuantas: 18,
+      por_impuesto: [{ impuesto: 'ICA', cuantas: 7 }, { impuesto: 'RETEICA', cuantas: 11 }],
+      ejemplos: ['Medellín · RETEICA · vence 2026-11-24',
+                 'Envigado · ICA · vence 2026-11-28'],
+      puede: true, aviso: '' }),
+    apiRegistrarAusencia: () => ({ id: 'AUS-nueva', movidas: 18,
+      backup: 'liliana@davivienda.com', nombre_backup: 'Liliana Ramírez',
+      hasta: '2026-12-05' }),
+    apiCancelarAusencia: () => ({ devueltas: 18 }),
     apiListaAsignacion: () => D.ASIGNACION,
     apiAsignar: (ids, correo) => ({ asignadas: (ids || []).length, rechazadas: [],
                                     correo: correo || '', sin_cambio: 0 }),

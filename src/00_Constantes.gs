@@ -11,6 +11,7 @@ var HOJA = {
   USUARIOS: 'USUARIOS',
   ROLES: 'ROLES',
   VIGENCIAS: 'VIGENCIAS',
+  AUSENCIAS: 'AUSENCIAS',
   OBLIGACIONES: 'OBLIGACIONES',
   EVENTOS: 'EVENTOS'
 };
@@ -33,6 +34,11 @@ var COLS = {
   VIGENCIAS: ['vigencia', 'carpeta_exogenas', 'carpeta_declaraciones',
               'carpeta_soportes', 'carpeta_sellados', 'carpeta_sellados_soportes',
               'activa'],
+  // REQ-010. Una fila por ausencia. No se borran: son la trazabilidad de por
+  // que una obligacion cambio de manos y cuando volvio.
+  AUSENCIAS: ['id', 'correo_ausente', 'desde', 'hasta', 'correo_backup',
+              'estado', 'movidas', 'registrada_por', 'registrada_el',
+              'cerrada_el', 'nota'],
   OBLIGACIONES: [
     'id', 'cod_dane', 'cod_oficina', 'municipio', 'impuesto', 'regimen',
     'periodo', 'periodicidad', 'vencimiento', 'nit_municipio', 'correo_oficina',
@@ -44,6 +50,10 @@ var COLS = {
     // REQ-011: la vigencia fiscal manda sobre el ano de presentacion. Una
     // declaracion de la vigencia 2026 presentada en 2027 se guarda en 2026.
     'vigencia',
+    // REQ-010. Mientras alguien cubre a otro, aqui queda a quien hay que
+    // devolverle la obligacion cuando termine la ausencia. Vacio = nadie la
+    // esta cubriendo. La asignacion ORIGINAL nunca se sobrescribe.
+    'titular_original',
     // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
     // Vacio = Banco Davivienda, que es el caso normal.
     'entidad'
@@ -157,6 +167,24 @@ var ROLES_DEFINICION = [
    'Quien administra la herramienta. Uno solo. Se asigna a mano en USUARIOS.',
    'Todo lo del PROFESIONAL-III, mas editar CONFIG y USUARIOS desde la aplicacion.']
 ];
+
+/**
+ * REQ-010. Los backups acordados por el equipo. Se cubren entre si.
+ * Elizabeth no tiene backup: cuando ella falta, cada quien se encarga de lo
+ * suyo, que es otro asunto (REQ-013).
+ */
+var BACKUPS = [
+  ['jesus', 'helen'],
+  ['andrea', 'liliana']
+];
+
+/** Los estados de una ausencia. */
+var AUSENCIA = {
+  PROGRAMADA: 'PROGRAMADA',   // registrada, todavia no empieza
+  ACTIVA: 'ACTIVA',           // el backup tiene las obligaciones
+  TERMINADA: 'TERMINADA',     // ya se devolvieron
+  CANCELADA: 'CANCELADA'
+};
 
 var IMPUESTOS = ['RETEICA', 'AUTORRETEICA', 'ICA', 'EXOGENA'];
 var PERIODICIDADES = ['MENSUAL', 'BIMESTRAL', 'TRIMESTRAL', 'CUATRIMESTRAL', 'ANUAL'];

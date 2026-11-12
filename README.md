@@ -291,6 +291,7 @@ no entra, y hay que inscribirlo a mano.
 | **OBLIGACIONES** · `responsable` | El correo corporativo de quien responde. Vacío = sin asignar, sale en Asignación | El importador y la pestaña Asignación |
 | **CALENDARIO** | Donde se pega la hoja del Excel del equipo. **No la borres**: `generarVigencia()` saca de ahí las fechas | Tú, pegando |
 | **PROGRAMACION** | Quién debe qué y cada cuánto. 1.217 reglas que NO cambian de un año a otro | `cargarProgramacion()` |
+| **AUSENCIAS** | Una fila por ausencia registrada. No se borran: son trazabilidad | La pestaña Ausencias |
 | **OBLIGACIONES** | El maestro. Una fila por obligación y periodo | El programa y la pantalla de digitalización |
 | **EVENTOS** | El log, solo se agrega al final | **Solo** el programa |
 
@@ -413,6 +414,54 @@ no se esconda nada en silencio:
 **Alertas** y **Asignación** usan *todo lo abierto* a propósito: una alerta tiene
 que incluir lo ya vencido que sigue sin cerrar, y para repartir hay que ver todo
 lo que no está cerrado. **Métricas** usa el año entero, que son agregados.
+
+## Ausencias y backups
+
+Cuando alguien se va de vacaciones, sus obligaciones pasan temporalmente a su
+backup. Solo lo maneja el **PROFESIONAL-III** (y el ADMIN), desde la pestaña
+**Ausencias**.
+
+| Se ausenta | Lo cubre |
+|---|---|
+| Jesús Jaimes | Helen Cuadros |
+| Helen Cuadros | Jesús Jaimes |
+| Andrea Galvis | Liliana Ramírez |
+| Liliana Ramírez | Andrea Galvis |
+
+Elizabeth no tiene backup: cuando ella falta, cada quien se encarga de lo suyo.
+Eso es otro asunto (REQ-013, todavía sin construir).
+
+### Cómo se registra
+
+1. Elegir quién se ausenta y las fechas.
+2. **Ver qué se movería** — muestra cuántas obligaciones caen en ese rango,
+   repartidas por impuesto, con ejemplos.
+3. Un modal pide confirmación explícita antes de tocar nada.
+4. Al confirmar, esas obligaciones pasan al backup.
+
+### Tres cosas que no se negocian
+
+- **La asignación original no se pierde.** El `responsable` pasa a ser el
+  backup, pero en `titular_original` queda a quién hay que devolvérsela. Sin
+  eso, al volver de vacaciones nadie sabría de quién era cada cosa.
+- **Solo se mueve lo que VENCE dentro del rango.** Lo que vence después sigue
+  siendo del titular: no está de vacaciones cuando toque trabajarlo.
+- **La devolución conserva lo hecho.** Si el backup subió el soporte y envió,
+  la obligación vuelve con su soporte y su envío. Se devuelve la propiedad, no
+  se deshace el trabajo.
+
+### El regreso
+
+Automático. Al entrar a la aplicación, SINAV devuelve lo de las ausencias cuya
+fecha final ya pasó. No hace falta un disparador: solo importa justo antes de
+que alguien mire la pantalla.
+
+También se puede **cancelar** una ausencia en curso desde el historial, y todo
+vuelve de inmediato.
+
+La hoja **AUSENCIAS** guarda cada una con sus fechas, cuántas obligaciones
+movió y quién la registró. No se borran: son la trazabilidad de por qué una
+obligación cambió de manos.
 
 ## Las carpetas de Drive
 

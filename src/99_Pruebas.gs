@@ -29,6 +29,7 @@ function pruebas() {
   pruebasCargaMasiva(esIgual);
   pruebasMetricas(esIgual);
   pruebasCarga(esIgual);
+  pruebasAusencias(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -502,4 +503,39 @@ function pruebasCarga(esIgual) {
           DESCUENTOS_QUE_ENTRAN.indexOf('FECHA LIMITE') >= 0, true);
   esIgual('la de descuento no entra',
           DESCUENTOS_QUE_ENTRAN.indexOf('DESCUENTO 10%') >= 0, false);
+}
+
+/**
+ * Ausencias (REQ-010). Emparejar mal a un backup significa darle el trabajo de
+ * alguien a quien no le toca, y que el titular no se entere.
+ */
+function pruebasAusencias(esIgual) {
+  esIgual('Jesús lo cubre Helen', claveBackup('jesus.jaimes@davivienda.com'), 'helen');
+  esIgual('Helen lo cubre Jesús', claveBackup('helen.cuadros@davivienda.com'), 'jesus');
+  esIgual('Andrea la cubre Liliana', claveBackup('andrea.galvis@davivienda.com'), 'liliana');
+  esIgual('Liliana la cubre Andrea', claveBackup('liliana.ramirez@davivienda.com'), 'andrea');
+
+  esIgual('el emparejamiento no depende del dominio',
+          claveBackup('jesus.jaimes@otracosa.com'), 'helen');
+  esIgual('ni de mayusculas', claveBackup('ANDREA.GALVIS@davivienda.com'), 'liliana');
+
+  esIgual('Elizabeth no tiene backup', claveBackup('elizabeth@davivienda.com'), '');
+  esIgual('alguien de fuera tampoco', claveBackup('pepito@davivienda.com'), '');
+  esIgual('vacio no revienta', claveBackup(''), '');
+  esIgual('nulo no revienta', claveBackup(null), '');
+
+  // los pares tienen que ser simetricos: si A cubre a B, B cubre a A
+  var simetrico = true;
+  BACKUPS.forEach(function (par) {
+    if (claveBackup(par[0] + '@x.com') !== par[1]) simetrico = false;
+    if (claveBackup(par[1] + '@x.com') !== par[0]) simetrico = false;
+  });
+  esIgual('los pares de backup son simétricos', simetrico, true);
+
+  // nadie puede aparecer en dos pares, o el backup seria ambiguo
+  var vistos = {}, repetido = false;
+  BACKUPS.forEach(function (par) {
+    par.forEach(function (p) { if (vistos[p]) repetido = true; vistos[p] = true; });
+  });
+  esIgual('nadie está en dos pares a la vez', repetido, false);
 }

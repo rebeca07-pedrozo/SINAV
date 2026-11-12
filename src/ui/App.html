@@ -13,6 +13,8 @@ const VISTAS = [
   { id: 'alertas', et: 'Alertas', icono: 'alertas', grupo: 'trabajo' },
   { id: 'metricas', et: 'Métricas', icono: 'metricas', grupo: 'admin',
     permiso: 'puedeVerMetricas' },
+  { id: 'ausencias', et: 'Ausencias', icono: 'ausencias', grupo: 'admin',
+    permiso: 'puedeGestionarAusencias' },
   { id: 'asignacion', et: 'Asignación', icono: 'asignacion', grupo: 'admin',
     permiso: 'puedeAsignar' },
   { id: 'configuracion', et: 'Configuración', icono: 'configuracion', grupo: 'admin',
@@ -107,6 +109,7 @@ function Vista({ vista, inicio }) {
   if (vista === 'metricas') return html`<${Metricas} />`;
   if (vista === 'alertas') return html`<${Alertas} />`;
   if (vista === 'asignacion') return html`<${Asignacion} />`;
+  if (vista === 'ausencias') return html`<${Ausencias} />`;
 
   if (vista === 'respuestas') {
     return html`<${PorConstruir} et="Respuestas"
