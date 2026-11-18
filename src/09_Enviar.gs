@@ -174,7 +174,12 @@ function apiEnviar(ids) {
     }
 
     // LA REGLA: sin soporte no hay envio
+    // la revision se comprueba aqui tambien, en el servidor: que el boton
+    // este apagado no basta, una llamada directa a la API tiene que fallar
     var ok = puedeEnviar(o);
+    if (ok.ok && !soporteRevisado(o)) {
+      ok = { ok: false, motivo: 'falta revisar el soporte' };
+    }
     if (!ok.ok) {
       rechazadas.push({ id: id, motivo: ok.motivo });
       eventos.push({ id: id, quePaso: EVENTO.ERROR, detalle: 'envío rechazado: ' + ok.motivo });

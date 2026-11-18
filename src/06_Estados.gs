@@ -20,12 +20,7 @@ function puedeEnviar(fila) {
   if (!String(f.soporte_id || '').trim()) {
     return { ok: false, motivo: 'sin soporte' };
   }
-  // LA OTRA REGLA: el soporte hay que haberlo MIRADO. Un PDF con el nombre
-  // correcto puede tener dentro la declaracion de otro municipio, y eso no se
-  // descubre hasta que la oficina lo recibe. Por eso no basta con que exista.
-  if (String(f.soporte_revisado || '').trim() !== String(f.soporte_id).trim()) {
-    return { ok: false, motivo: 'falta revisar el soporte' };
-  }
+
   if (String(f.estado || '').toUpperCase() !== ESTADO.LISTA) {
     return { ok: false, motivo: 'el estado es ' + (f.estado || 'vacio') + ', no LISTA' };
   }
@@ -33,6 +28,20 @@ function puedeEnviar(fila) {
     return { ok: false, motivo: 'sin correo de oficina' };
   }
   return { ok: true, motivo: '' };
+}
+
+/**
+ * El soporte esta revisado: alguien lo MIRO y es el mismo archivo que se vio.
+ *
+ * Esto NO entra en puedeEnviar() a proposito. puedeEnviar() responde "¿se
+ * puede seleccionar esta fila?", y si exigiera la revision no se podria
+ * seleccionar nada para llegar a revisarlo: un circulo cerrado. La revision es
+ * la ultima puerta, justo antes de que salga el correo.
+ */
+function soporteRevisado(fila) {
+  var f = fila || {};
+  var sid = String(f.soporte_id || '').trim();
+  return !!sid && String(f.soporte_revisado || '').trim() === sid;
 }
 
 /**
@@ -63,6 +72,10 @@ function validarPaso(fila, a, opts, perfil) {
   if (a === ESTADO.ENVIADA) {
     var e = puedeEnviar(fila);
     if (!e.ok) return { ok: false, motivo: e.motivo };
+    // la ultima puerta: el soporte hay que haberlo visto
+    if (!soporteRevisado(fila)) {
+      return { ok: false, motivo: 'falta revisar el soporte' };
+    }
   }
   return { ok: true, motivo: '' };
 }

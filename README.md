@@ -8,6 +8,57 @@ Contexto de producto en [PRODUCT.md](PRODUCT.md). Decisiones visuales en
 
 ---
 
+## El flujo, de principio a fin
+
+Así se mueve una obligación desde que aparece hasta que queda cerrada. Cada
+paso se valida en el servidor; la interfaz solo apaga botones.
+
+**1 · Aparece.** La obligación ya está en la hoja OBLIGACIONES con su
+municipio, impuesto, periodo y vencimiento. Nace en `PENDIENTE`. El responsable
+sale de la matriz de distribución (ver *Quién responde por cada obligación*);
+si no se pudo resolver, queda sin responsable y aparece en Asignación.
+
+**2 · Se asigna.** Elizabeth (PROFESIONAL-III) o el admin reparten lo que no
+tiene dueño desde la pestaña **Asignación**. El profesional la ve en su lista y
+en sus alertas.
+
+**3 · Se completa la plata.** `valor`, `forma_pago` (PSE, ventanilla,
+transferencia…) y `paga_quien`. Sin esos datos el envío no se habilita.
+
+**4 · Se sube el soporte.** El profesional arrastra el PDF en su fila, o varios
+de golpe en **Carga masiva**: ahí se emparejan por el código DANE del nombre
+del archivo (ver *Cómo nombrar los PDF*). El archivo queda en
+`<vigencia>/<municipio>/<impuesto>/`, y la obligación pasa a `LISTA`.
+
+**5 · Se selecciona.** Con soporte, estado correcto y correo de la oficina, la
+casilla de la fila se activa. Sin eso, no.
+
+**6 · Se revisa el soporte. Obligatorio.** Al darle a *Enviar seleccionadas* no
+sale ningún correo todavía: se abre el visor con cada PDF, uno por uno, y hay
+que marcarlo **Correcto** o **Incorrecto**.
+
+- **Correcto** → queda el visto bueno y pasa al último check.
+- **Incorrecto** → se quita el archivo, la obligación vuelve a `PENDIENTE` y
+  hay que subir el correcto. Se puede cerrar el visor y seguir con las demás.
+
+**7 · Último check y envío.** Con los soportes en orden aparece la confirmación
+con lo que va a salir. Al confirmar, SINAV manda el correo desde la cuenta de
+quien está usando la herramienta, guarda el **`hilo_id`** de Gmail y la
+obligación pasa a `ENVIADA`.
+
+**8 · Contesta la oficina.** Si responden **sobre el mismo correo**, la pestaña
+**Respuestas** recoge el mensaje y el adjunto, lo guarda en Sellados y lo deja
+abrible desde ahí mismo. La obligación pasa a `RESPONDIDA`.
+
+**9 · Se cierra.** Elizabeth o el admin la marcan `APROBADA`. Sale de *todo lo
+abierto* y queda solo en métricas.
+
+**Si alguien se va:** su backup recibe las obligaciones del rango de la
+ausencia, con `titular_original` guardado para devolvérselas al regreso (ver
+*Ausencias y backups*).
+
+---
+
 ## Lo primero: qué funciones se ejecutan
 
 Son **tres**, y las tres viven en el menú **SINAV** que aparece dentro del
@@ -441,12 +492,19 @@ La columna `soporte_revisado` guarda el **`soporte_id`** que se miró, no un
 SI/NO. Si alguien reemplaza el archivo, deja de coincidir y hay que revisarlo
 otra vez. Un visto bueno vale para el documento que se vio, no para siempre.
 
-La regla se valida **en el servidor**, dentro de `puedeEnviar()`, junto a «sin
-soporte no hay envío». No es solo que el botón esté apagado: una llamada
-directa a la API se rechaza igual, con el motivo *falta revisar el soporte*.
+La regla se valida **en el servidor**: `soporteRevisado()` la comprueba dentro
+de `validarPaso()` al pasar a `ENVIADA` y otra vez en `apiEnviar`. No es solo
+que el botón esté apagado: una llamada directa a la API se rechaza igual, con
+el motivo *falta revisar el soporte*.
 
-En la lista, las filas con soporte sin revisar lo dicen debajo de la cadena de
-evidencia.
+**La revisión no entra en `puedeEnviar()`, a propósito.** `puedeEnviar()`
+responde «¿se puede *seleccionar* esta fila?». Si exigiera la revisión, no se
+podría seleccionar nada para llegar a revisarlo: un círculo cerrado. La
+revisión es la última puerta, no la primera. Hay una prueba que lo fija, para
+que no se vuelva a mover por descuido.
+
+En la lista, las filas con soporte sin revisar dicen *se revisa al enviar*
+debajo de la cadena de evidencia.
 
 ## Las respuestas de las oficinas
 

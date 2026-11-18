@@ -1468,12 +1468,7 @@ function puedeEnviar(fila) {
   if (!String(f.soporte_id || '').trim()) {
     return { ok: false, motivo: 'sin soporte' };
   }
-  // LA OTRA REGLA: el soporte hay que haberlo MIRADO. Un PDF con el nombre
-  // correcto puede tener dentro la declaracion de otro municipio, y eso no se
-  // descubre hasta que la oficina lo recibe. Por eso no basta con que exista.
-  if (String(f.soporte_revisado || '').trim() !== String(f.soporte_id).trim()) {
-    return { ok: false, motivo: 'falta revisar el soporte' };
-  }
+
   if (String(f.estado || '').toUpperCase() !== ESTADO.LISTA) {
     return { ok: false, motivo: 'el estado es ' + (f.estado || 'vacio') + ', no LISTA' };
   }
@@ -1481,6 +1476,20 @@ function puedeEnviar(fila) {
     return { ok: false, motivo: 'sin correo de oficina' };
   }
   return { ok: true, motivo: '' };
+}
+
+/**
+ * El soporte esta revisado: alguien lo MIRO y es el mismo archivo que se vio.
+ *
+ * Esto NO entra en puedeEnviar() a proposito. puedeEnviar() responde "¿se
+ * puede seleccionar esta fila?", y si exigiera la revision no se podria
+ * seleccionar nada para llegar a revisarlo: un circulo cerrado. La revision es
+ * la ultima puerta, justo antes de que salga el correo.
+ */
+function soporteRevisado(fila) {
+  var f = fila || {};
+  var sid = String(f.soporte_id || '').trim();
+  return !!sid && String(f.soporte_revisado || '').trim() === sid;
 }
 
 /**
@@ -1511,6 +1520,10 @@ function validarPaso(fila, a, opts, perfil) {
   if (a === ESTADO.ENVIADA) {
     var e = puedeEnviar(fila);
     if (!e.ok) return { ok: false, motivo: e.motivo };
+    // la ultima puerta: el soporte hay que haberlo visto
+    if (!soporteRevisado(fila)) {
+      return { ok: false, motivo: 'falta revisar el soporte' };
+    }
   }
   return { ok: true, motivo: '' };
 }
@@ -2202,7 +2215,12 @@ function apiEnviar(ids) {
     }
 
     // LA REGLA: sin soporte no hay envio
+    // la revision se comprueba aqui tambien, en el servidor: que el boton
+    // este apagado no basta, una llamada directa a la API tiene que fallar
     var ok = puedeEnviar(o);
+    if (ok.ok && !soporteRevisado(o)) {
+      ok = { ok: false, motivo: 'falta revisar el soporte' };
+    }
     if (!ok.ok) {
       rechazadas.push({ id: id, motivo: ok.motivo });
       eventos.push({ id: id, quePaso: EVENTO.ERROR, detalle: 'envío rechazado: ' + ok.motivo });
@@ -4469,16 +4487,25 @@ function pruebasSinSoporte(esIgual) {
   esIgual('requiere_envio REVISAR no se envia',
           puedeEnviar(con({ requiere_envio: 'REVISAR' })).ok, false);
 
-  // LA OTRA REGLA: el soporte hay que haberlo MIRADO. Un PDF con el nombre
-  // correcto puede llevar dentro la declaracion de otro municipio.
-  esIgual('con soporte sin revisar no se envia',
-          puedeEnviar(con({ soporte_revisado: '' })).ok, false);
+  // La revision NO entra en puedeEnviar(): si lo hiciera, la fila no se
+  // podria seleccionar para llegar a revisarla. Se selecciona igual.
+  esIgual('sin revisar la fila SI se puede seleccionar',
+          puedeEnviar(con({ soporte_revisado: '' })).ok, true);
+
+  // pero es la ultima puerta antes de que salga el correo
+  esIgual('sin revisar no se llega a ENVIADA',
+          validarPaso(con({ soporte_revisado: '' }), ESTADO.ENVIADA, {},
+                      PERFIL.PROFESIONAL_I).ok, false);
   esIgual('y lo dice',
-          puedeEnviar(con({ soporte_revisado: '' })).motivo, 'falta revisar el soporte');
+          validarPaso(con({ soporte_revisado: '' }), ESTADO.ENVIADA, {},
+                      PERFIL.PROFESIONAL_I).motivo, 'falta revisar el soporte');
   esIgual('un visto bueno de OTRO archivo no sirve',
-          puedeEnviar(con({ soporte_revisado: 'otroArchivo' })).ok, false);
-  esIgual('revisado el archivo que es, si se envia',
-          puedeEnviar(con({ soporte_revisado: '1AbCdEf' })).ok, true);
+          soporteRevisado(con({ soporte_revisado: 'otroArchivo' })), false);
+  esIgual('revisado el archivo que es, si pasa',
+          validarPaso(con({ soporte_revisado: '1AbCdEf' }), ESTADO.ENVIADA, {},
+                      PERFIL.PROFESIONAL_I).ok, true);
+  esIgual('sin soporte no hay nada que revisar',
+          soporteRevisado(con({ soporte_id: '', soporte_revisado: '' })), false);
   esIgual('sin correo de oficina no se envia',
           puedeEnviar(con({ correo_oficina: '' })).ok, false);
   esIgual('correo invalido no se envia',

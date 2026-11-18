@@ -119,7 +119,7 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
     <td class="celda-linea2">
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
       ${o.cadena.soporte && !o.soporte_revisado
-        ? html`<span class="sub porvencer">sin revisar</span>` : null}
+        ? html`<span class="sub porvencer">se revisa al enviar</span>` : null}
     </td>
 
     <td class="celda-linea2">

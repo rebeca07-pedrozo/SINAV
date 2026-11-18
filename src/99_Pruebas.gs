@@ -94,16 +94,25 @@ function pruebasSinSoporte(esIgual) {
   esIgual('requiere_envio REVISAR no se envia',
           puedeEnviar(con({ requiere_envio: 'REVISAR' })).ok, false);
 
-  // LA OTRA REGLA: el soporte hay que haberlo MIRADO. Un PDF con el nombre
-  // correcto puede llevar dentro la declaracion de otro municipio.
-  esIgual('con soporte sin revisar no se envia',
-          puedeEnviar(con({ soporte_revisado: '' })).ok, false);
+  // La revision NO entra en puedeEnviar(): si lo hiciera, la fila no se
+  // podria seleccionar para llegar a revisarla. Se selecciona igual.
+  esIgual('sin revisar la fila SI se puede seleccionar',
+          puedeEnviar(con({ soporte_revisado: '' })).ok, true);
+
+  // pero es la ultima puerta antes de que salga el correo
+  esIgual('sin revisar no se llega a ENVIADA',
+          validarPaso(con({ soporte_revisado: '' }), ESTADO.ENVIADA, {},
+                      PERFIL.PROFESIONAL_I).ok, false);
   esIgual('y lo dice',
-          puedeEnviar(con({ soporte_revisado: '' })).motivo, 'falta revisar el soporte');
+          validarPaso(con({ soporte_revisado: '' }), ESTADO.ENVIADA, {},
+                      PERFIL.PROFESIONAL_I).motivo, 'falta revisar el soporte');
   esIgual('un visto bueno de OTRO archivo no sirve',
-          puedeEnviar(con({ soporte_revisado: 'otroArchivo' })).ok, false);
-  esIgual('revisado el archivo que es, si se envia',
-          puedeEnviar(con({ soporte_revisado: '1AbCdEf' })).ok, true);
+          soporteRevisado(con({ soporte_revisado: 'otroArchivo' })), false);
+  esIgual('revisado el archivo que es, si pasa',
+          validarPaso(con({ soporte_revisado: '1AbCdEf' }), ESTADO.ENVIADA, {},
+                      PERFIL.PROFESIONAL_I).ok, true);
+  esIgual('sin soporte no hay nada que revisar',
+          soporteRevisado(con({ soporte_id: '', soporte_revisado: '' })), false);
   esIgual('sin correo de oficina no se envia',
           puedeEnviar(con({ correo_oficina: '' })).ok, false);
   esIgual('correo invalido no se envia',
