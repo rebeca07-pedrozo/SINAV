@@ -163,5 +163,10 @@ const kb = (f) => Math.round(fs.statSync(path.join(dist, f)).size / 1024) + ' KB
 console.log('dist/ listo — esto es lo que se pega en Apps Script:');
 console.log('  Codigo.gs         ' + kb('Codigo.gs') + '   (' + gs.length + ' archivos de src/*.gs)');
 console.log('  Index.html        ' + kb('Index.html') + '   (' + usados.size + ' archivos de src/ui/*.html)');
-aparte.forEach((f) => console.log('  ' + f.padEnd(18) + kb(f) + '   (aparte, se corre una vez por vigencia)'));
+const QUE_ES = {
+  'Carga.gs': 'aparte, se corre una vez por vigencia',
+  'Mensuales.gs': 'aparte, trae el mes y lleva el trigger del día 1'
+};
+aparte.forEach((f) => console.log('  ' + f.padEnd(18) + kb(f) +
+  '   (' + (QUE_ES[f] || 'aparte') + ')'));
 console.log('  appsscript.json   ' + kb('appsscript.json'));

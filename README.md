@@ -13,10 +13,11 @@ Contexto de producto en [PRODUCT.md](PRODUCT.md). Decisiones visuales en
 Así se mueve una obligación desde que aparece hasta que queda cerrada. Cada
 paso se valida en el servidor; la interfaz solo apaga botones.
 
-**1 · Aparece.** La obligación ya está en la hoja OBLIGACIONES con su
-municipio, impuesto, periodo y vencimiento. Nace en `PENDIENTE`. El responsable
-sale de la matriz de distribución (ver *Quién responde por cada obligación*);
-si no se pudo resolver, queda sin responsable y aparece en Asignación.
+**1 · Aparece.** El día 1 de cada mes la carga mensual trae del CALENDARIO lo
+que vence ese mes y el siguiente, y lo escribe en OBLIGACIONES en estado
+`PENDIENTE` (ver *La carga mensual*). El responsable sale de la matriz de
+distribución (ver *Quién responde por cada obligación*); si no se pudo
+resolver, queda sin responsable y aparece en Asignación.
 
 **2 · Se asigna.** Elizabeth (PROFESIONAL-III) o el admin reparten lo que no
 tiene dueño desde la pestaña **Asignación**. El profesional la ve en su lista y
@@ -38,8 +39,8 @@ sale ningún correo todavía: se abre el visor con cada PDF, uno por uno, y hay
 que marcarlo **Correcto** o **Incorrecto**.
 
 - **Correcto** → queda el visto bueno y pasa al último check.
-- **Incorrecto** → se quita el archivo, la obligación vuelve a `PENDIENTE` y
-  hay que subir el correcto. Se puede cerrar el visor y seguir con las demás.
+- **Incorrecto** → se cierra el visor y vuelves a la lista, con esa fila otra
+  vez pidiendo *Subir soporte*. El archivo malo ya no está.
 
 **7 · Último check y envío.** Con los soportes en orden aparece la confirmación
 con lo que va a salir. Al confirmar, SINAV manda el correo desde la cuenta de
@@ -98,19 +99,29 @@ editor. Si el menú no aparece, cierra y vuelve a abrir el libro.
 Hay una cuarta, `onOpen()`, que **nunca se corre a mano**: Google la llama sola
 al abrir el libro y es la que pinta el menú.
 
-### Y dos más, en el menú `SINAV · Carga`
+### Y las de carga, en sus dos menús
 
-Solo aparecen si pegaste `dist/Carga.gs`, y solo las puede correr el `ADMIN`.
-Se usan cuando entra una vigencia nueva, no en el día a día.
+Solo aparecen si pegaste `dist/Carga.gs` y `dist/Mensuales.gs`, y solo las puede
+correr el `ADMIN`.
+
+**`SINAV · Carga`** — una vez por vigencia, no en el día a día:
 
 | Función | Cómo se corre | Cuándo |
 |---|---|---|
 | `cargarProgramacion()` | **SINAV · Carga → 1 · Cargar PROGRAMACION** | Una vez. Lee la hoja CALENDARIO y deja las reglas en PROGRAMACION |
-| `generarVigencia()` | **SINAV · Carga → 2 · Generar la vigencia actual** | Después de la anterior. Crea las obligaciones del año |
+| `generarVigencia()` | **SINAV · Carga → 2 · Generar la vigencia actual** | Solo si de verdad quieres el año entero en el libro. Normalmente **no**: usa la carga mensual |
 
-`generarVigencia()` **se reanuda sola**: son más de seis mil filas y Apps Script
-corta a los 6 minutos. Si te dice que quedaron pendientes, vuelve a darle y
-sigue donde iba. Lo ya escrito no se duplica.
+**`SINAV · Mes`** — es la que se usa de verdad (ver *La carga mensual*):
+
+| Función | Cómo se corre | Cuándo |
+|---|---|---|
+| `cargarMesVigente()` | **SINAV · Mes → Cargar el mes en curso y el siguiente** | Lo hace el trigger el día 1. A mano, cuando quieras adelantarlo |
+| `instalarCargaMensual()` | **SINAV · Mes → Programar la carga mensual** | Una vez, para dejar el trigger puesto |
+| `archivarCerradas()` | **SINAV · Mes → Archivar los meses cerrados** | Cuando el libro se vaya poniendo pesado |
+
+Las dos cargas **se reanudan**: Apps Script corta a los 6 minutos, y si te dicen
+que quedó algo pendiente, vuelves a darle y sigue. Nada se duplica, porque el id
+de la obligación sale de sus datos y no de un contador.
 
 Todas las demás funciones del proyecto empiezan por `api…` (`apiInicio`,
 `apiEnviar`, `apiSubirSoporte`, `apiMetricas`…). Esas **las llama la aplicación
@@ -467,6 +478,70 @@ no se esconda nada en silencio:
 que incluir lo ya vencido que sigue sin cerrar, y para repartir hay que ver todo
 lo que no está cerrado. **Métricas** usa el año entero, que son agregados.
 
+## La carga mensual
+
+El año entero son 6.320 obligaciones. Aunque las pantallas filtren por mes, el
+libro **igual tiene que leer las 6.320 filas para filtrarlas**, y eso se siente
+en cada pantalla.
+
+Así que OBLIGACIONES no guarda el año: guarda **el mes en curso y el
+siguiente**, del orden de mil filas. El día 1 de cada mes entra el mes nuevo,
+solo.
+
+```
+CALENDARIO     las fechas. Se pega una vez y no se vuelve a tocar
+PROGRAMACION   quién responde, a qué correo, con qué NIT. Se genera una vez
+OBLIGACIONES   solo el mes en curso y el siguiente. Lo llena el trigger
+HISTORICO      los meses cerrados que se archivaron. Nada se borra nunca
+```
+
+**El criterio es la fecha de vencimiento, no el periodo.** Lo que hay que
+trabajar este mes es lo que se vence este mes: una declaración del periodo de
+octubre que vence el 18 de noviembre entra en noviembre, que es cuando toca
+presentarla.
+
+### Dejar el trigger puesto
+
+Una sola vez, y lo hace el `ADMIN`:
+
+1. Pega `dist/Mensuales.gs` en el editor como un archivo nuevo llamado
+   `Mensuales` (**+ → Script**, y le pones el nombre).
+2. Cierra y vuelve a abrir el Sheets, para que salga el menú **SINAV · Mes**.
+3. **SINAV · Mes → Programar la carga mensual (día 1)**. La primera vez Google
+   pide permisos: acéptalos.
+4. Comprueba que quedó: **SINAV · Mes → ¿Está programada?**. Tiene que decir
+   *Programada*.
+5. Carga el mes de hoy sin esperar al día 1: **SINAV · Mes → Cargar el mes en
+   curso y el siguiente**.
+
+Desde ahí, el **día 1 de cada mes entre 5 y 6 de la mañana** (hora del libro)
+se cargan solos el mes que entra y el siguiente. Google garantiza la franja, no
+el minuto exacto.
+
+**Lo corre la cuenta que lo instaló**, no quien abra el libro. Por eso lo
+instala el `ADMIN`: si esa cuenta se desactiva, el trigger deja de correr y hay
+que volver a programarlo desde otra.
+
+Para ver que de verdad corrió: en el editor, **Ejecuciones** (el icono del
+reloj a la izquierda). Y en la hoja EVENTOS queda un `AVISO` por cada carga,
+firmado como `sistema`.
+
+### Si prefieres hacerlo a mano
+
+`cargarMesVigente()` se puede correr las veces que quieras, y `generarMes('2026', 11)`
+carga un mes concreto. Ninguna de las dos duplica nada: lo que ya está en la
+hoja se salta.
+
+### Archivar lo viejo
+
+Con los meses, OBLIGACIONES vuelve a crecer. **SINAV · Mes → Archivar los meses
+cerrados** mueve a la hoja HISTORICO lo que está `APROBADA` y venció antes de
+este mes.
+
+No borra nada y **no toca lo que sigue abierto**, por viejo que sea: una
+obligación de marzo sin cerrar se queda en OBLIGACIONES, a la vista, que es
+justo donde tiene que estar.
+
 ## Revisar el soporte antes de enviar
 
 **Obligatorio.** Al darle a *Enviar seleccionadas*, antes de que salga ningún
@@ -481,7 +556,7 @@ la declaración de un municipio a la alcaldía de otro.
 | Si marcas | Qué pasa |
 |---|---|
 | **Correcto** | Queda el visto bueno y la obligación se puede enviar |
-| **Incorrecto** | **Se quita el archivo**, la obligación vuelve a `PENDIENTE` y hay que subir el correcto |
+| **Incorrecto** | **Se cierra el visor**, se quita el archivo, la obligación vuelve a `PENDIENTE` y su fila vuelve a pedir *Subir soporte* |
 
 Se quita el archivo a propósito: dejarlo puesto solo invita a que alguien lo
 mande sin mirar.
@@ -795,50 +870,63 @@ src/
   03_Roles        yo(), puede(), exige(), asegurarAlta() — el rol se resuelve aquí y solo aquí
   04_Normalizar   funciones puras: periodicidad, periodo, códigos, correos, valor, pago
   05_Eventos      el log append-only
-  06_Estados      puedePasar(), puedeEnviar(), validarPaso(), aplicar()
-  07_Obligaciones listar filtrado por rol, conteos, apiInicio()
-  08_Soportes     subir el adjunto a Drive (carpeta por municipio) y pasar a LISTA
+  06_Estados      puedePasar(), puedeEnviar(), soporteRevisado(), validarPaso(), aplicar()
+  07_Obligaciones listar con la ventana de trabajo, conteos, apiInicio()
+  08_Soportes     subir el adjunto a Drive, revisarlo, pasar a LISTA
   09_Enviar       Gmail, hilo_id, cuota por persona, lotes con guardia de tiempo
   10_WebApp       doGet, include(), apiLogo()
+  11_Respuestas   leer el hilo que mandamos, guardar el sellado, apiRespuestas()
+  12_Alertas      lo que se vence y lo que se pasó, por persona
   14_Campos       digitalización manual: apiGuardarCampos(), apiListaCampos()
   15_Carga        carga masiva: leer el nombre del PDF y emparejarlo, apiCargaPlan()
-  16_Metricas     apiMetricas() — solo JEFE y ADMIN
+  16_Metricas     apiMetricas() — solo PROFESIONAL-III y ADMIN
+  17_Ejemplo      datos de prueba, para ensayar el flujo completo
+  18_Asignacion   repartir lo que quedó sin responsable
+  19_Vigencias    la hoja VIGENCIAS y las carpetas de Drive por año
+  20_Ausencias    vacaciones y backups (REQ-010)
+  21_Calendario   leer la hoja CALENDARIO: periodos, vencimientos, impuestos
   99_Pruebas      pruebas()
-  ui/             Index, Estilos, Comun, Enviar, Carga, Campos, Metricas, App
+  ui/             Index, Estilos, Comun, App, Enviar, Carga, Campos, Metricas,
+                  Respuestas, Alertas, Asignacion, Ausencias
 ```
 
-Los huecos 11, 12 y 13 están reservados a propósito para Respuestas, Alertas y
-Disparadores, que es lo que sigue.
+Y aparte del núcleo, porque no son del día a día:
 
-Y alrededor:
+```
+src/Carga.gs      la matriz de responsables y la carga de PROGRAMACION.
+                  Se corre una vez y se puede borrar del editor después
+src/Mensuales.gs  la carga del mes, el trigger del día 1 y el archivado
+```
+
+El hueco 13 está reservado para los disparadores por persona, que es lo que
+sigue. Y alrededor:
 
 ```
 build.js          une src/ en dist/
-dist/             lo UNICO que se pega en Apps Script (3 archivos). Autogenerado
+dist/             lo UNICO que se pega en Apps Script (4 archivos). Autogenerado
 tools/pruebas.mjs las pruebas
 tools/mock.mjs    arma la interfaz para verla sin desplegar
 ```
 
 El código vive repartido en `src/` porque así se puede leer y probar por
-partes, pero **Apps Script recibe un solo archivo**: así el orden de carga deja
-de ser un problema y pegar el código es copiar tres cosas, no veinticuatro.
+partes, pero **Apps Script recibe `Codigo.gs` y `Index.html`**, más los dos de
+carga: así el orden de carga deja de ser un problema y pegar el código es
+copiar cuatro cosas, no veinticinco.
 
 ### Lo que falta (en orden)
 
-1. **RESPUESTAS** — `11_Respuestas.gs` + `ui/Respuestas.html`. Busca sobre el
-   `hilo_id` guardado al enviar, con `GmailApp.search` acotado a la etiqueta
-   `SINAV`. Ahí entran también los disparadores por persona
-   (`13_Disparadores.gs`) y el botón "Revisar respuestas ahora".
-
-   **Pendiente de decidir antes de escribirlo:** los requerimientos piden además
-   detectar el correo de `noreply@davivienda.com` y adjuntar el soporte de pago
-   que indique. Eso **no** pasa por el `hilo_id`: ese remitente manda un correo
-   nuevo, no una respuesta al hilo, así que hace falta otro mecanismo de
-   emparejamiento leyendo el cuerpo del mensaje. Sin un ejemplo real de ese
-   correo no se puede diseñar.
-2. **ALERTAS** — `12_Alertas.gs` + `ui/Alertas.html`.
-3. **Asignación** (JEFE) y **Configuración** (ADMIN). Las pestañas ya están en la
-   navegación, con su marco y una línea que dice qué va a ir ahí.
+1. **REQ-013 · aprobaciones alternativas** — quién aprueba mientras Elizabeth
+   está ausente. La pieza de ausencias (REQ-010) ya está; falta que el permiso
+   de `revisar` se mueva con ella.
+2. **Los 217 correos de oficina que faltan.** De los 315 municipios del
+   calendario, solo 98 tienen correo. Sin correo no hay envío, y esas
+   obligaciones se quedan en `LISTA`. Está la lista en `faltan_correos.csv`.
+3. **El correo de `noreply@davivienda.com`** con el soporte de pago. Eso **no**
+   pasa por el `hilo_id`: ese remitente manda un correo nuevo, no una respuesta
+   al hilo, así que hace falta emparejarlo leyendo el cuerpo. Sin un ejemplo
+   real no se puede diseñar.
+4. **Disparadores por persona** (`13_Disparadores.gs`): el aviso diario de lo
+   que se vence, a cada quien lo suyo.
 
 ### Si algún día quieren un build de verdad
 
@@ -859,6 +947,12 @@ necesita compilar nada y se pega directo en el editor.
 - **Sin soporte no hay envío**, en dos puntos: no se puede llegar a `LISTA` sin
   `soporte_id`, y `apiEnviar` vuelve a verificarlo antes de cada correo. En la
   interfaz la casilla de esas filas está apagada.
+- **La revisión del soporte es la última puerta, no la primera.** No entra en
+  `puedeEnviar()`: si lo hiciera, la fila no se podría seleccionar para llegar
+  a revisarla. Se comprueba al pasar a `ENVIADA` y otra vez en `apiEnviar`.
+- **OBLIGACIONES guarda el mes, no el año.** Seis mil filas se leen enteras en
+  cada pantalla aunque se filtren después. Lo que se archiva se mueve a
+  HISTORICO; nunca se borra.
 - **Los códigos son texto.** `cod_dane`, `cod_oficina`, `periodo`, `nit_municipio`,
   `soporte_id`, `hilo_id` y `sellado_id` tienen formato `@` en la hoja.
 - **Nada de fórmulas vivas en el maestro.** Los valores se copian al crear la fila.

@@ -30,6 +30,7 @@ function pruebas() {
   pruebasMetricas(esIgual);
   pruebasCarga(esIgual);
   pruebasAusencias(esIgual);
+  pruebasCargaMensual(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -598,4 +599,42 @@ function pruebasAusencias(esIgual) {
   esIgual('en producción lo de la oficina sí',
           cuentaComoRespuesta({ getFrom: function () { return 'oficina@muni.gov.co'; } },
                               1, 'yo@davivienda.com', 'PRODUCCION'), true);
+}
+
+/**
+ * La carga mensual se para sobre un filtro de una linea: si ese filtro falla,
+ * o se cargan 6.000 obligaciones o no se carga ninguna. Asi que se prueba.
+ */
+function pruebasCargaMensual(esIgual) {
+  var f = function (a, m, d) { return new Date(a, m - 1, d); };
+
+  esIgual('el 1 del mes entra', venceEnElMes(f(2026, 11, 1), 2026, 11), true);
+  esIgual('el 30 del mes entra', venceEnElMes(f(2026, 11, 30), 2026, 11), true);
+  esIgual('el ultimo dia del mes anterior no',
+          venceEnElMes(f(2026, 10, 31), 2026, 11), false);
+  esIgual('el 1 del mes siguiente no',
+          venceEnElMes(f(2026, 12, 1), 2026, 11), false);
+  esIgual('el mismo mes de otro ano no',
+          venceEnElMes(f(2025, 11, 15), 2026, 11), false);
+
+  // enero contra diciembre: es el salto que rompe las cargas de ano vencido
+  esIgual('enero del ano siguiente no entra en diciembre',
+          venceEnElMes(f(2027, 1, 15), 2026, 12), false);
+  esIgual('y enero si entra en enero',
+          venceEnElMes(f(2027, 1, 15), 2027, 1), true);
+
+  // el mes llega como texto desde el menu
+  esIgual('el mes como texto tambien sirve',
+          venceEnElMes(f(2026, 11, 18), '2026', '11'), true);
+
+  // basura: mejor no cargar nada que cargar lo que no es
+  esIgual('sin fecha no entra', venceEnElMes('', 2026, 11), false);
+  esIgual('nulo no entra', venceEnElMes(null, 2026, 11), false);
+  esIgual('texto que parece fecha no entra',
+          venceEnElMes('18/11/2026', 2026, 11), false);
+  esIgual('una fecha invalida no entra',
+          venceEnElMes(new Date('x'), 2026, 11), false);
+
+  esIgual('hay doce nombres de mes', NOMBRE_MES.length, 12);
+  esIgual('noviembre es el 11', NOMBRE_MES[10], 'noviembre');
 }

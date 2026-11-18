@@ -6,6 +6,11 @@ var CUOTA_DIARIA = 1500;      // destinatarios por persona por dia
 var CARPETA_RAIZ = 'SINAV';
 var SEGUNDOS_MAX = 270;       // 4m30s del limite de 6 minutos
 
+/** Para escribir fechas en mensajes, sin depender del locale del servidor. */
+var NOMBRE_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre',
+                  'diciembre'];
+
 var HOJA = {
   CONFIG: 'CONFIG',
   USUARIOS: 'USUARIOS',

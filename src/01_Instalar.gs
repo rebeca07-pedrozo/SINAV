@@ -45,6 +45,9 @@ function onOpen() {
   if (typeof menuCarga === 'function') {
     try { menuCarga(); } catch (e) { /* el menu no es critico */ }
   }
+  if (typeof menuMensuales === 'function') {
+    try { menuMensuales(); } catch (e) { /* idem */ }
+  }
 }
 
 function asegurarHojas() {

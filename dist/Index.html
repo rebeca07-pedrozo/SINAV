@@ -1014,7 +1014,11 @@ function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
           ${s.revisado ? 'Correcto ✓' : 'Correcto'}
         </button>
         <button class="btn btn-malo" disabled=${trabajando}
-          onClick=${async () => { await alMarcar(s.id, false); avanzar(); }}>
+          onClick=${async () => {
+            // marcar incorrecto cierra el visor: lo que sigue es subir otro PDF
+            const r = await alMarcar(s.id, false);
+            if (r !== 'cerrado') avanzar();
+          }}>
           Incorrecto
         </button>
         <span class="sub">${listos} de ${soportes.length} revisados</span>
@@ -1144,10 +1148,22 @@ function Enviar({ inicio }) {
       setRevision((v) => v.map((s) =>
         s.id === id ? Object.assign({}, s, { revisado: correcto }) : s));
       if (!correcto) {
+        // se cierra el visor y se vuelve a la lista, donde esa fila ya pide
+        // «Subir soporte» otra vez
+        const o = filas.find((f) => f.id === id);
         setElegidas((v) => v.filter((x) => x !== id));
+        setRevision(null);
+        setConfirmando(false);
         setResultado({ clase: 'malo',
           titulo: 'Soporte marcado como incorrecto',
-          lineas: ['Se quitó el archivo de esa obligación. Hay que subir el correcto.'] });
+          lineas: [
+            frase(['Se quitó el archivo de',
+                   o ? o.municipio + ' ' + o.impuesto + ' ' + o.periodo : 'la obligación',
+                   'y volvió a PENDIENTE.']),
+            'Sube el PDF correcto en su fila y vuelve a enviar.'
+          ] });
+        await recargar();
+        return 'cerrado';
       }
     } catch (e) {
       setFallo(String(e && e.message ? e.message : e));
