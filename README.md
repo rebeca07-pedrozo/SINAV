@@ -416,6 +416,38 @@ no se esconda nada en silencio:
 que incluir lo ya vencido que sigue sin cerrar, y para repartir hay que ver todo
 lo que no está cerrado. **Métricas** usa el año entero, que son agregados.
 
+## Revisar el soporte antes de enviar
+
+**Obligatorio.** Al darle a *Enviar seleccionadas*, antes de que salga ningún
+correo se abre el visor con cada PDF, uno por uno, y hay que marcarlo
+**Correcto** o **Incorrecto**.
+
+**Por qué:** un PDF con el nombre correcto puede llevar dentro la declaración
+de otro municipio. Pasa al arrastrar el archivo equivocado o al renombrar mal.
+Eso no se descubre hasta que la oficina lo recibe, y para entonces ya se mandó
+la declaración de un municipio a la alcaldía de otro.
+
+| Si marcas | Qué pasa |
+|---|---|
+| **Correcto** | Queda el visto bueno y la obligación se puede enviar |
+| **Incorrecto** | **Se quita el archivo**, la obligación vuelve a `PENDIENTE` y hay que subir el correcto |
+
+Se quita el archivo a propósito: dejarlo puesto solo invita a que alguien lo
+mande sin mirar.
+
+### El visto bueno es del documento, no de la obligación
+
+La columna `soporte_revisado` guarda el **`soporte_id`** que se miró, no un
+SI/NO. Si alguien reemplaza el archivo, deja de coincidir y hay que revisarlo
+otra vez. Un visto bueno vale para el documento que se vio, no para siempre.
+
+La regla se valida **en el servidor**, dentro de `puedeEnviar()`, junto a «sin
+soporte no hay envío». No es solo que el botón esté apagado: una llamada
+directa a la API se rechaza igual, con el motivo *falta revisar el soporte*.
+
+En la lista, las filas con soporte sin revisar lo dicen debajo de la cadena de
+evidencia.
+
 ## Las respuestas de las oficinas
 
 Al enviar, SINAV guarda el **`hilo_id`** de Gmail. La pestaña **Respuestas** lee

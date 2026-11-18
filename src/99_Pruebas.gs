@@ -65,6 +65,7 @@ function pruebasSinSoporte(esIgual) {
   var base = {
     estado: ESTADO.LISTA,
     soporte_id: '1AbCdEf',
+    soporte_revisado: '1AbCdEf',
     requiere_envio: 'SI',
     correo_oficina: 'oficina@davivienda.com'
   };
@@ -92,6 +93,17 @@ function pruebasSinSoporte(esIgual) {
           puedeEnviar(con({ requiere_envio: 'NO' })).ok, false);
   esIgual('requiere_envio REVISAR no se envia',
           puedeEnviar(con({ requiere_envio: 'REVISAR' })).ok, false);
+
+  // LA OTRA REGLA: el soporte hay que haberlo MIRADO. Un PDF con el nombre
+  // correcto puede llevar dentro la declaracion de otro municipio.
+  esIgual('con soporte sin revisar no se envia',
+          puedeEnviar(con({ soporte_revisado: '' })).ok, false);
+  esIgual('y lo dice',
+          puedeEnviar(con({ soporte_revisado: '' })).motivo, 'falta revisar el soporte');
+  esIgual('un visto bueno de OTRO archivo no sirve',
+          puedeEnviar(con({ soporte_revisado: 'otroArchivo' })).ok, false);
+  esIgual('revisado el archivo que es, si se envia',
+          puedeEnviar(con({ soporte_revisado: '1AbCdEf' })).ok, true);
   esIgual('sin correo de oficina no se envia',
           puedeEnviar(con({ correo_oficina: '' })).ok, false);
   esIgual('correo invalido no se envia',

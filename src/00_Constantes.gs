@@ -60,6 +60,11 @@ var COLS = {
     // El ultimo mensaje del hilo que ya se proceso. Sin esto, cada revision
     // volveria a guardar el mismo adjunto una y otra vez.
     'ultimo_mensaje',
+    // El soporte que alguien MIRO y dio por bueno. Guarda el soporte_id, no un
+    // SI/NO: si se reemplaza el archivo, deja de coincidir y hay que volver a
+    // revisarlo. Un visto bueno vale para el documento que se vio, no para
+    // siempre.
+    'soporte_revisado',
     // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
     // Vacio = Banco Davivienda, que es el caso normal.
     'entidad'

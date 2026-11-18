@@ -47,6 +47,7 @@ const filas = [
     estado: 'LISTA', valor: 7905100,
     nota: '', reprocesos: 0, motivo_devuelta: '', fecha_envio: '', fecha_respuesta: '',
     cadena: { soporte: true, envio: false, respuesta: false, sellado: false },
+    soporte_revisado: true,
     mia: true, enviable: true, motivo_no_enviable: '', nivel: 'vencido'
   },
   {
@@ -282,6 +283,17 @@ window.google = { script: { run: (function () {
                               filas: D.INICIO.filas, conteos: D.INICIO.conteos,
                               cuota: D.INICIO.cuota, generado: D.INICIO.generado }),
     apiSubirSoporte: () => ({ ok: true }),
+    apiSoportesParaRevisar: (ids) => ({
+      soportes: (ids || []).map((id) => {
+        const o = D.INICIO.filas.find((f) => f.id === id) || {};
+        return { id: id, municipio: o.municipio || '?', cod_dane: o.cod_dane || '',
+                 impuesto: o.impuesto || '', periodo: o.periodo || '',
+                 vencimiento: o.vencimiento || '', correo_oficina: o.correo_oficina || '',
+                 soporte_id: 'EJEMPLO', nombre: (o.municipio || '') + ' ' +
+                   (o.impuesto || '') + ' ' + (o.periodo || '') + '.pdf',
+                 peso_kb: 142, vista: '', enlace: '#', revisado: false };
+      }) }),
+    apiMarcarSoporte: (id, ok) => ({ id: id, revisado: !!ok }),
     apiEnviar: (ids) => ({ enviadas: ids.map((id) => ({ id })), rechazadas: [],
                            pendientes: [], modo: 'PRUEBA',
                            cuota: { usada: ids.length, tope: 1500 } }),

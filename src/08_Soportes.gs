@@ -68,7 +68,9 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
     if (!f) throw new Error('No existe la obligación ' + id);
     var ahora = String(h.getRange(f, ix.estado + 1).getValue()).toUpperCase();
 
-    var campos = { soporte_id: archivo.getId() };
+    // el visto bueno era del archivo anterior: con uno nuevo hay que volver a
+    // mirarlo, asi que se borra
+    var campos = { soporte_id: archivo.getId(), soporte_revisado: '' };
     // el soporte era lo unico que faltaba: pasa a LISTA
     if (ahora === ESTADO.PENDIENTE || ahora === ESTADO.DEVUELTA ||
         ahora === ESTADO.REBOTADO) {
@@ -93,4 +95,98 @@ function apiEnlaceSoporte(id) {
   })[0];
   if (!o || !o.soporte_id) throw new Error('Esa obligación no tiene soporte.');
   return 'https://drive.google.com/file/d/' + o.soporte_id + '/view';
+}
+
+/* ===========================================================================
+   Revision del soporte antes de enviar.
+
+   Un PDF con el nombre correcto puede tener dentro la declaracion de otro
+   municipio: pasa al arrastrar el archivo equivocado o al renombrar mal. Eso
+   no se descubre hasta que la oficina lo recibe, y entonces ya se mando la
+   declaracion de un municipio a la alcaldia de otro.
+
+   Por eso el visto bueno guarda el soporte_id y no un SI/NO: vale para el
+   documento que se vio. Si se reemplaza el archivo, hay que mirarlo otra vez.
+   =========================================================================== */
+
+/** Lo que la pantalla necesita para mostrar cada PDF antes de enviar. */
+function apiSoportesParaRevisar(ids) {
+  var lista = (ids || []).filter(String);
+  if (!lista.length) return { soportes: [] };
+
+  var buscados = {};
+  lista.forEach(function (id) { buscados[String(id)] = true; });
+
+  var soportes = registros(HOJA.OBLIGACIONES)
+    .filter(function (o) { return buscados[String(o.id)]; })
+    .map(function (o) {
+      var sid = String(o.soporte_id || '').trim();
+      var nombre = '', pesoKB = 0;
+      if (sid) {
+        try {
+          var f = DriveApp.getFileById(sid);
+          nombre = f.getName();
+          pesoKB = Math.round(f.getSize() / 1024);
+        } catch (e) { nombre = '(no se pudo abrir el archivo en Drive)'; }
+      }
+      return {
+        id: String(o.id),
+        municipio: String(o.municipio),
+        cod_dane: String(o.cod_dane),
+        impuesto: String(o.impuesto),
+        periodo: String(o.periodo),
+        vencimiento: fechaTexto(o.vencimiento),
+        correo_oficina: String(o.correo_oficina || ''),
+        soporte_id: sid,
+        nombre: nombre,
+        peso_kb: pesoKB,
+        // la vista previa de Drive se puede incrustar; el enlace es el respaldo
+        vista: sid ? 'https://drive.google.com/file/d/' + sid + '/preview' : '',
+        enlace: sid ? 'https://drive.google.com/file/d/' + sid + '/view' : '',
+        revisado: String(o.soporte_revisado || '').trim() === sid && !!sid
+      };
+    });
+
+  return { soportes: soportes };
+}
+
+/**
+ * Marca el soporte como correcto o incorrecto.
+ *
+ * CORRECTO guarda el soporte_id revisado, y solo entonces se puede enviar.
+ * INCORRECTO borra el visto bueno y, ademas, quita el soporte: si el archivo
+ * no es el que debia, dejarlo puesto solo invita a que alguien lo mande sin
+ * mirar. La obligacion vuelve a PENDIENTE y pide un archivo nuevo.
+ */
+function apiMarcarSoporte(id, correcto, motivo) {
+  if (!id) throw new Error('Falta el id de la obligación.');
+
+  return conCerrojo(function () {
+    var fila = buscarFila(id);
+    if (!fila) throw new Error('No existe la obligación ' + id);
+
+    var ix = indices(HOJA.OBLIGACIONES);
+    var h = hoja(HOJA.OBLIGACIONES);
+    var val = h.getRange(fila, 1, 1, h.getLastColumn()).getValues()[0];
+    exigeMia(val[ix.responsable], 'editarAjenas');
+
+    var sid = String(val[ix.soporte_id] || '').trim();
+    if (!sid) throw new Error('Esa obligación no tiene soporte que revisar.');
+
+    if (correcto) {
+      escribirCampos(HOJA.OBLIGACIONES, fila, { soporte_revisado: sid });
+      registrar(id, EVENTO.AVISO, 'soporte revisado y dado por bueno');
+      return { id: id, revisado: true };
+    }
+
+    var estado = String(val[ix.estado]).toUpperCase();
+    var campos = { soporte_revisado: '', soporte_id: '' };
+    if (estado === ESTADO.LISTA) campos.estado = ESTADO.PENDIENTE;
+
+    escribirCampos(HOJA.OBLIGACIONES, fila, campos);
+    registrar(id, EVENTO.ERROR, 'soporte marcado como INCORRECTO' +
+      (motivo ? ': ' + String(motivo).trim() : '') + '. Hay que subir otro.');
+
+    return { id: id, revisado: false, estado: campos.estado || estado };
+  });
 }

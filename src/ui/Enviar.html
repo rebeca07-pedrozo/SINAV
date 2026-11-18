@@ -118,6 +118,8 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
 
     <td class="celda-linea2">
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
+      ${o.cadena.soporte && !o.soporte_revisado
+        ? html`<span class="sub porvencer">sin revisar</span>` : null}
     </td>
 
     <td class="celda-linea2">
@@ -134,6 +136,66 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
   </tr>`;
 }
 
+/**
+ * La revision del soporte, obligatoria antes de enviar.
+ *
+ * Un PDF con el nombre correcto puede tener dentro la declaracion de otro
+ * municipio. Eso no se descubre hasta que la oficina lo recibe, y entonces ya
+ * se mando la declaracion de un municipio a la alcaldia de otro. Por eso hay
+ * que VERLO, uno por uno, antes de que salga el correo.
+ */
+function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
+  const [i, setI] = useState(0);
+  const s = soportes[i];
+  if (!s) return null;
+
+  const avanzar = () => setI((n) => Math.min(n + 1, soportes.length - 1));
+
+  return html`<div class="velo">
+    <div class="modal modal-ancho" role="dialog" aria-modal="true"
+      aria-labelledby="t-rev">
+      <div class="rev-cab">
+        <div>
+          <h2 id="t-rev">${s.municipio} · ${s.impuesto} · ${s.periodo}</h2>
+          <p class="sub">${[
+            'DANE ', s.cod_dane, ' · vence ', s.vencimiento || 'sin fecha',
+            ' · ', s.nombre || 'sin archivo',
+            s.peso_kb ? ' (' + s.peso_kb + ' KB)' : ''
+          ].join('')}</p>
+        </div>
+        <span class="rev-cuenta">${i + 1} de ${soportes.length}</span>
+      </div>
+
+      ${s.vista
+        ? html`<iframe class="rev-vista" src=${s.vista} title=${'Soporte de ' + s.municipio}></iframe>`
+        : html`<p class="vacio">Esta obligación no tiene soporte.</p>`}
+
+      <p class="sub rev-nota">
+        Comprueba que el documento sea <b>de este municipio y de este
+        periodo</b>. Si no lo es, márcalo como incorrecto: se quita el archivo
+        y habrá que subir el correcto.
+        ${' '}<a href=${s.enlace} target="_blank" rel="noopener">Abrir en Drive</a>
+      </p>
+
+      <div class="modal-pie">
+        <button class="btn btn-principal" disabled=${trabajando}
+          onClick=${async () => { await alMarcar(s.id, true); avanzar(); }}>
+          ${s.revisado ? 'Correcto ✓' : 'Correcto'}
+        </button>
+        <button class="btn btn-malo" disabled=${trabajando}
+          onClick=${async () => { await alMarcar(s.id, false); avanzar(); }}>
+          Incorrecto
+        </button>
+        <span class="sub">${listos} de ${soportes.length} revisados</span>
+        <button class="btn" style=${{ marginLeft: 'auto' }}
+          disabled=${trabajando} onClick=${alCerrar}>
+          ${listos === soportes.length ? 'Listo' : 'Dejarlo para después'}
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function Enviar({ inicio }) {
   const [datos, setDatos] = useState(inicio);
   const [ventana, setVentana] = useState(inicio.ventana || 'mes');
@@ -144,6 +206,7 @@ function Enviar({ inicio }) {
   const [subiendo, setSubiendo] = useState('');
   const [resultado, setResultado] = useState(null);
   const [fallo, setFallo] = useState('');
+  const [revision, setRevision] = useState(null);
   const archivo = useRef(null);
   const destino = useRef('');
 
@@ -226,6 +289,49 @@ function Enviar({ inicio }) {
     }
   }
 
+  /* -------- revisar los soportes: obligatorio antes de enviar -------- */
+
+  async function abrirRevision() {
+    setTrabajando('revisando');
+    setFallo('');
+    try {
+      const r = await llamar('apiSoportesParaRevisar', elegidasVivas);
+      // las que ya se revisaron y no han cambiado no hay que volver a mirarlas
+      if (r.soportes.every((s) => s.revisado)) setConfirmando(true);
+      else setRevision(r.soportes);
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando('');
+    }
+  }
+
+  async function marcarSoporte(id, correcto) {
+    setTrabajando('marcando');
+    try {
+      await llamar('apiMarcarSoporte', id, correcto, '');
+      setRevision((v) => v.map((s) =>
+        s.id === id ? Object.assign({}, s, { revisado: correcto }) : s));
+      if (!correcto) {
+        setElegidas((v) => v.filter((x) => x !== id));
+        setResultado({ clase: 'malo',
+          titulo: 'Soporte marcado como incorrecto',
+          lineas: ['Se quitó el archivo de esa obligación. Hay que subir el correcto.'] });
+      }
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando('');
+    }
+  }
+
+  async function cerrarRevision() {
+    const buenos = (revision || []).filter((s) => s.revisado).length;
+    setRevision(null);
+    await recargar();
+    if (buenos) setConfirmando(true);
+  }
+
   /* -------- enviar -------- */
 
   async function enviarYa() {
@@ -287,7 +393,7 @@ function Enviar({ inicio }) {
         </button>
         <button class="btn btn-principal"
           disabled=${!elegidasVivas.length || !!trabajando}
-          onClick=${() => setConfirmando(true)}>
+          onClick=${abrirRevision}>
           ${trabajando === 'enviando'
             ? 'Enviando…'
             : 'Enviar seleccionadas (' + elegidasVivas.length + ')'}
@@ -367,6 +473,11 @@ function Enviar({ inicio }) {
           : 'No hay obligaciones con requiere_envio = SI asignadas a ti.'}
       </p>` : null}
     </section>
+
+    ${revision ? html`<${RevisarSoportes} soportes=${revision}
+      alMarcar=${marcarSoporte} alCerrar=${cerrarRevision}
+      trabajando=${!!trabajando}
+      listos=${revision.filter((s) => s.revisado).length} />` : null}
 
     <input ref=${archivo} type="file" onChange=${recibirArchivo}
       style=${{ position: 'absolute', width: '1px', height: '1px', opacity: 0,

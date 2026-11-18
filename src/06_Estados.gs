@@ -20,6 +20,12 @@ function puedeEnviar(fila) {
   if (!String(f.soporte_id || '').trim()) {
     return { ok: false, motivo: 'sin soporte' };
   }
+  // LA OTRA REGLA: el soporte hay que haberlo MIRADO. Un PDF con el nombre
+  // correcto puede tener dentro la declaracion de otro municipio, y eso no se
+  // descubre hasta que la oficina lo recibe. Por eso no basta con que exista.
+  if (String(f.soporte_revisado || '').trim() !== String(f.soporte_id).trim()) {
+    return { ok: false, motivo: 'falta revisar el soporte' };
+  }
   if (String(f.estado || '').toUpperCase() !== ESTADO.LISTA) {
     return { ok: false, motivo: 'el estado es ' + (f.estado || 'vacio') + ', no LISTA' };
   }

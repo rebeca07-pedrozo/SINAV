@@ -591,6 +591,25 @@ td.celda-ancha { padding: 8px 10px; min-width: 260px; vertical-align: middle; }
 
 .modal-pie { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 
+/* el visor del soporte, que ocupa casi toda la pantalla: hay que VERLO */
+.modal-ancho { width: min(960px, 100%); max-height: 92vh; }
+.rev-cab { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.rev-cab h2 { margin: 0 0 2px; }
+.rev-cuenta {
+  margin-left: auto; font-size: var(--fs-meta); color: var(--apagado);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.rev-vista {
+  width: 100%; height: min(58vh, 560px); border: 1px solid var(--borde);
+  border-radius: var(--r-control); background: var(--realce);
+}
+.rev-nota { margin: 10px 0 0; max-width: 78ch; }
+.rev-nota a { color: var(--tinta); }
+
+/* el boton de rechazar lleva el color del estado, no el de marca */
+.btn-malo { border-color: var(--vencido); color: var(--vencido-texto); }
+.btn-malo:hover { background: var(--vencido-fondo); }
+
 /* quien pidio menos movimiento no lo recibe */
 @media (prefers-reduced-motion: reduce) {
   .velo, .modal { animation: none; }
