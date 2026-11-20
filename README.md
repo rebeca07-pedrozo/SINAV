@@ -4,8 +4,9 @@ Control de obligaciones tributarias territoriales · Departamento de Impuestos,
 Banco Davivienda. Google Sheets + Apps Script + una aplicación web.
 
 Diagramas de arquitectura, estados y flujos en
-[ARQUITECTURA.md](ARQUITECTURA.md). Contexto de producto en
-[PRODUCT.md](PRODUCT.md). Decisiones visuales en [DESIGN.md](DESIGN.md).
+[ARQUITECTURA.md](ARQUITECTURA.md), y los mismos en UML, dibujados, en [Los
+diagramas](#los-diagramas). Contexto de producto en [PRODUCT.md](PRODUCT.md).
+Decisiones visuales en [DESIGN.md](DESIGN.md).
 
 **Si solo vas a leer una sección, lee [Lo que hay que
 vigilar](#lo-que-hay-que-vigilar).**
@@ -971,6 +972,53 @@ mock no pueda decir una cosa distinta de la que dirá Apps Script.
 La única excepción: `apiCargaPlan` devuelve siempre el mismo plan de ejemplo sin
 mirar los nombres que le pasen. El emparejamiento de verdad lo cubren las
 pruebas de `leerNombreArchivo` y `emparejarArchivo`.
+
+---
+
+## Los diagramas
+
+Los mismos flujos de [ARQUITECTURA.md](ARQUITECTURA.md), pero dibujados en UML.
+Los PNG están en `docs/`, y al lado de cada uno queda su `.puml` para poder
+regenerarlo.
+
+### La arquitectura
+
+![Arquitectura de SINAV](docs/arquitectura.png)
+
+Las cuatro capas, de arriba abajo: quién usa el sistema, el navegador, Apps
+Script por dentro —la capa `api…()`, las reglas, el acceso a datos y los
+activadores, con los `.gs` que componen cada una— y Google Workspace, con las
+hojas, Drive y Gmail. Abajo, las alcaldías: la declaración sale y la respuesta
+vuelve **por el mismo hilo**.
+
+### El flujo, con sus caminos malos
+
+![Flujo de SINAV](docs/flujo.png)
+
+Cuatro calles —el sistema, el profesional dueño de la fila, la alcaldía y la
+jefa— y el recorrido completo de una obligación, desde la carga del día 1 hasta
+HISTORICO. Incluye lo que pasa cuando algo sale mal: el estado que no deja tocar
+el soporte, el PDF que no corresponde, `REBOTADO`, `SIN_EVIDENCIA`, `DEVUELTA` y
+la obligación sin `hilo_id`.
+
+### Los otros escenarios
+
+![Otros escenarios de SINAV](docs/flujo-escenarios.png)
+
+Lo que se hace fuera del camino de una declaración: ausencias y backups,
+asignación, carga masiva, métricas y lo que solo puede el admin.
+
+### Regenerarlos
+
+Hace falta Java y `plantuml.jar`. En este equipo quedaron en
+`~/.jdk/jdk-21.0.13.1+2` y `~/.plantuml/plantuml.jar`, sueltos y sin instalar,
+porque los paquetes de `winget` piden permisos de administrador:
+
+```
+cd docs
+J="$HOME/.jdk/jdk-21.0.13.1+2/bin/java.exe"
+"$J" -jar "$HOME/.plantuml/plantuml.jar" -charset UTF-8 -tpng -SdpiScale=2 *.puml
+```
 
 ---
 

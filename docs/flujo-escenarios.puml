@@ -1,0 +1,61 @@
+@startuml
+title SINAV · Los otros escenarios\nlo que hacen la jefa y el ADMIN fuera del camino de una declaración
+
+skinparam shadowing false
+skinparam defaultFontName Verdana
+skinparam defaultFontSize 11
+skinparam ArrowColor #37474F
+skinparam ActivityDiamondBackgroundColor #FFF8E1
+skinparam NoteBackgroundColor #FFF8E1
+skinparam NoteBorderColor #FFB300
+
+|#E8F5E9|PROFESIONAL-III · la jefa / ADMIN|
+start
+split
+  partition "Ausencia  ·  vacaciones y backups" {
+    :«Yasneidy, del 1 al 15 de diciembre»;
+    :**apiPrevisualizarAusencia**\n¿qué vence en ese rango?;
+    #FFF9C4:«23 obligaciones pasarían a Andrea»\n**se ve ANTES de confirmar**;
+    if (¿confirma?) then (no)
+      stop
+    else (sí)
+    endif
+    :**apiRegistrarAusencia**\nresponsable = Andrea · titular_original = Yasneidy;
+    :AUSENCIAS: una fila, **no se borra nunca**;
+    #FFE0B2:al vencer, **cerrarAusenciasVencidas()**\nlas devuelve solas;
+    note right
+      El backup sale de la columna `backup` de USUARIOS;
+      si está vacía, de los pares del código:
+      **Andrea <-> Yasneidy** y **Jesús <-> Helen**.
+      La hoja manda sobre el código, para poder
+      cambiarlo sin tocar nada.
+    end note
+    stop
+  }
+split again
+  partition "Asignación" {
+    :**apiAsignar** · cambia el responsable\nde una fila ajena;
+    stop
+  }
+split again
+  partition "Carga masiva" {
+    :pantalla Carga · **apiCargaPlan**\nrecargar un periodo a mano;
+    stop
+  }
+split again
+  partition "Métricas" {
+    :**apiMetricas** · el tablero:\ncuánto va, cuánto falta, quién;
+    stop
+  }
+split again
+  partition "Sólo ADMIN" {
+    :habilitar una vigencia nueva\n(5 carpetas de Drive · hoja VIGENCIAS);
+    :modo PRUEBA / PRODUCCION en CONFIG;
+    note right
+      Subir a alguien de nivel es
+      a mano, en la hoja USUARIOS.
+    end note
+    stop
+  }
+end split
+@enduml

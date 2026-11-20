@@ -1,0 +1,142 @@
+@startuml
+title SINAV · Flujo del programa\nquién hace qué, en qué orden, y qué pasa cuando algo sale mal
+
+skinparam shadowing false
+skinparam defaultFontName Verdana
+skinparam defaultFontSize 11
+skinparam ArrowColor #37474F
+skinparam ActivityBorderColor #546E7A
+skinparam ActivityDiamondBackgroundColor #FFF8E1
+skinparam NoteBackgroundColor #FFF8E1
+skinparam NoteBorderColor #FFB300
+skinparam ConditionEndStyle hline
+
+|#FFE0B2|SISTEMA · activadores|
+|#E3F2FD|PROFESIONAL-I · el dueño de la fila|
+|#ECEFF1|ALCALDÍA|
+|#E8F5E9|PROFESIONAL-III · la jefa / ADMIN|
+
+|SISTEMA · activadores|
+start
+note right
+  **Una vez al año:** se pega el calendario tributario
+  en CALENDARIO (2.285 filas), y cargarProgramacion()
+  llena PROGRAMACION (1.269 reglas) UNA vez en la vida.
+end note
+:**cargarMesVigente()**\nel día 1 de cada mes, 5am\nnadie está conectado;
+:cruza CALENDARIO (las fechas)\ncon PROGRAMACION (quién y a dónde);
+note right
+  El criterio es la **fecha de vencimiento**, no el periodo:
+  en noviembre se trabaja lo que vence en noviembre,
+  aunque el periodo declarado sea de octubre.
+end note
+:escribe en OBLIGACIONES el mes en curso **y el siguiente**\n(~1.000 filas; el año entero son 6.320);
+:cada obligación nace en **PENDIENTE**;
+
+|PROFESIONAL-I · el dueño de la fila|
+:entra a la aplicación web\n(quien entra por primera vez con un correo del dominio\nse da de alta solo como PROFESIONAL-I);
+:pantalla **Alertas**: ve lo que se le vence;
+
+partition "1 · Subir el soporte  ·  apiSubirSoporte" {
+  :arrastra el PDF en su fila;
+  if (¿el estado permite tocar el soporte?\nPENDIENTE · LISTA · DEVUELTA · REBOTADO) then (no)
+    #FFCDD2:la fila dice **por qué** no se puede\ny el servidor rechaza la llamada;
+    kill
+  else (sí)
+  endif
+  :Drive: guarda en vigencia / municipio / impuesto;
+  :Sheets: soporte_id · estado = **LISTA**;
+  #FFF9C4:**se borra soporte_revisado**\narchivo nuevo, revisión nueva;
+}
+
+partition "2 · Revisar el PDF  ·  la última puerta, no la primera" {
+  :marca filas y pulsa «Enviar seleccionadas»;
+  :apiSoportesParaRevisar abre el visor,\nun PDF a la vez;
+  note right
+    **NO sale ningún correo todavía.**
+  end note
+  if (¿el PDF es el que corresponde?) then (CORRECTO)
+    :apiMarcarSoporte(correcto)\nsoporte_revisado = soporte_id;
+  else (INCORRECTO)
+    #FFCDD2:apiMarcarSoporte(incorrecto)\nborra soporte_id · vuelve a **PENDIENTE**;
+    :se cierra el visor y la fila\nvuelve a pedir soporte;
+    kill
+  endif
+}
+
+partition "3 · Enviar  ·  apiEnviar" {
+  :confirma el envío;
+  #E1F5FE:**se valida en el SERVIDOR**\nexige() · puedeEnviar() · validarPaso() · soporteRevisado();
+  note right
+    Una llamada directa a la API, saltándose
+    la interfaz, **se rechaza igual**. Sin soporte
+    revisado no hay envío, sin excepción.
+  end note
+  :Gmail: el correo sale de **su propio buzón**\ncon la declaración y el soporte adjunto;
+  :Sheets: hilo_id · estado = **ENVIADA**;
+  :EVENTOS: queda el registro (append-only);
+}
+
+|ALCALDÍA|
+:recibe la declaración\ny contesta —o no— **ese mismo hilo**;
+
+|SISTEMA · activadores|
+:**revisarRespuestas()**\na mano o por activador;
+if (¿la obligación tiene hilo_id?) then (no)
+  #ECEFF1:se ignora: sin hilo no se puede saber\na qué obligación pertenece la respuesta;
+  kill
+else (sí)
+endif
+:se abre **ESE** hilo de Gmail;
+note right
+  No se busca en la bandeja. Buscar por asunto
+  o por remitente sería adivinar, y un sellado
+  archivado en el municipio equivocado es un
+  error que se descubre meses después.
+end note
+switch (¿qué pasó con el hilo?)
+case (sigue sin respuesta)
+  :queda en **ENVIADA**;
+  kill
+case (el correo no llegó)
+  #FFCDD2:estado = **REBOTADO**;
+  |PROFESIONAL-I · el dueño de la fila|
+  :corrige el correo y vuelve a **LISTA**;
+  kill
+case (nunca contestaron)
+  |SISTEMA · activadores|
+  #FFF9C4:estado = **SIN_EVIDENCIA**\n(si contestan tarde, pasa a RESPONDIDA);
+  kill
+case (contestaron)
+  |SISTEMA · activadores|
+endswitch
+if (¿el mensaje trae adjunto?) then (sí)
+  :Drive: se guarda en **Sellados**,\nse abre desde la pantalla Respuestas;
+else (no)
+  :se registra solo el texto de la respuesta;
+endif
+:estado = **RESPONDIDA**;
+
+|PROFESIONAL-III · la jefa / ADMIN|
+:pantalla **Respuestas**: la jefa revisa\n(puede abrir el hilo y el sellado);
+if (¿está bien?) then (sí)
+  :estado = **REVISADA**;
+  #C8E6C9:estado = **APROBADA** · queda cerrada;
+  note right
+    APROBADA no tiene salida: es el final.
+    Lo que no está en el grafo de estados
+    no pasa — **validarPaso()** rechaza
+    cualquier salto que no esté dibujado.
+  end note
+else (no)
+  #FFCDD2:estado = **DEVUELTA**;
+  |PROFESIONAL-I · el dueño de la fila|
+  :corrige, vuelve a **LISTA** y reenvía;
+  kill
+endif
+
+|SISTEMA · activadores|
+:**archivarCerradas()** · a mano, cuando el libro pese\nlo APROBADO pasa a HISTORICO;
+stop
+
+@enduml

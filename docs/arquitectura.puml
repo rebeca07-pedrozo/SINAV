@@ -1,0 +1,87 @@
+@startuml
+title SINAV · Arquitectura del sistema\nNo hay servidor propio ni base de datos: Sheets **es** la base de datos y Apps Script **es** el backend
+
+skinparam shadowing false
+skinparam defaultFontName Verdana
+skinparam defaultFontSize 11
+skinparam componentStyle rectangle
+skinparam roundCorner 8
+skinparam ArrowColor #37474F
+skinparam ArrowFontSize 10
+skinparam NoteBackgroundColor #FFF8E1
+skinparam NoteBorderColor #FFB300
+skinparam RectangleBackgroundColor #FFFFFF
+skinparam nodesep 25
+skinparam ranksep 45
+
+rectangle "**EL EQUIPO**  ·  perfil = rol + nivel" as PERF #FAFAFA {
+  actor "**PROFESIONAL-I**\nHelen · Jesús\nAndrea · Yasneidy\n--\nlo suyo: subir soporte,\nenviar, digitalizar campos" as P1 #E3F2FD
+  actor "**PROFESIONAL-III**\nElizabeth · la jefa\n--\nademás: asignar, revisar,\neditar y enviar ajenas,\nmétricas, ausencias,\nhabilitar vigencia" as P3 #E8F5E9
+  actor "**ADMIN**\nRebeca\n--\nademás: configurar" as ADM #FFF3E0
+}
+
+rectangle "**NAVEGADOR**  ·  no toca las hojas jamás" as NAV #F5FBFF {
+  component "**Aplicación web**  ·  Index.html + App.html\nReact 18 + htm desde CDN · sin build, sin npm\n==\n**Enviar** · subir soporte, revisar el PDF, enviar\n**Respuestas** · lo que contestó la alcaldía\n**Alertas** · lo que se vence\n**Carga** · carga masiva del mes\n**Asignacion** · reasignar responsable\n**Ausencias** · vacaciones y backups\n**Metricas** · el tablero de la jefa\n**Campos** · digitalizar la declaración" as UI #BBDEFB
+}
+
+rectangle "**APPS SCRIPT**  ·  el backend  ·  despliegue «ejecutar como el usuario que accede»" as AS #F3F7F3 {
+
+  component "**Capa api…()**  ·  10_WebApp.gs  ·  la única puerta de entrada\n==\napiInicio · apiYo · apiLogo · apiCambiarEstado · apiVigencias\napiListaEnviar · apiSubirSoporte · apiSoportesParaRevisar · apiMarcarSoporte · apiEnviar\napiRespuestas · apiRevisarRespuestas · apiEnlaceHilo · apiEnlaceSellado · apiEnlaceSoporte\napiAlertas · apiMetricas · apiAsignar · apiListaAsignacion\napiAusencias · apiPrevisualizarAusencia · apiRegistrarAusencia · apiCancelarAusencia\napiCargaPlan · apiPeriodosCarga · apiListaCampos · apiGuardarCampos · apiCamposOpciones" as API #DCEDC8
+
+  component "**Reglas de negocio**\n==\n03_Roles.gs · **exige()** · puedeEnviar()\n06_Estados.gs · **validarPaso()**\n08_Soportes.gs · soporteRevisado()\n04_Normalizar.gs · NITs, correos, textos\n09_Enviar.gs · armado del correo\n11_Respuestas.gs · lectura del hilo\n12_Alertas.gs · 16_Metricas.gs\n18_Asignacion.gs · 20_Ausencias.gs\n21_Calendario.gs · 14_Campos.gs" as REG #E1F5FE
+
+  component "**Acceso a datos**\n==\n02_Hojas.gs · lectura y escritura en bloque\n**LockService** · una escritura a la vez\n00_Constantes.gs · nombres de hoja y columna\n05_Eventos.gs · log append-only" as IO #FFF9C4
+
+  component "**Activadores**  ·  sin nadie conectado\n==\n**cargarMesVigente()** · día 1, 5am\ncerrarAusenciasVencidas()\nrevisarRespuestas()\narchivarCerradas() · a mano" as TRIG #FFE0B2
+
+  component "**Instalación y utilidades**\n==\n01_Instalar.gs · 19_Vigencias.gs\n15_Carga.gs · Carga.gs · Mensuales.gs\n17_Ejemplo.gs · 99_Pruebas.gs" as ADMMOD #ECEFF1
+}
+
+rectangle "**GOOGLE WORKSPACE**  ·  toda la infraestructura, dentro de la cuenta del banco" as GW #FFFDF5 {
+  database "**Google Sheets**  ·  la base de datos\n==\nCALENDARIO · 2.285 filas · cuándo se vence\nPROGRAMACION · 1.269 reglas · quién, a qué correo, qué NIT\n**OBLIGACIONES** · ~1.000 filas · el mes en curso **y el siguiente**\nUSUARIOS · perfiles y backups    ·    AUSENCIAS · traspasos, no se borra\nEVENTOS · el log, append-only    ·    HISTORICO · lo cerrado y archivado\nCONFIG · modo, vigencia, logo    ·    VIGENCIAS · 5 carpetas por año\nROLES · solo documentación" as SHEET #FFF59D
+
+  database "**Drive**\n==\nvigencia / municipio / impuesto\n**Soportes** · el PDF que se envía\n**Sellados** · lo que devuelve\nla alcaldía" as DRIVE #C8E6C9
+
+  queue "**Gmail**\n==\nel buzón de **cada persona**\nsu cuota, su bandeja" as GMAIL #FFCDD2
+}
+
+actor "**Alcaldías**\n315 municipios" as ALC #ECEFF1
+
+note right of API #DCEDC8
+  La interfaz **nunca** toca las hojas.
+  Todo entra por aquí, y aquí se valida
+  el permiso con **exige()**.
+  Esconder un botón no es seguridad:
+  una llamada directa se rechaza igual.
+end note
+
+note right of TRIG
+  Escribe en las hojas con la cuenta
+  de **quien lo instaló**, no con la de
+  quien está mirando la pantalla.
+end note
+
+note right of GMAIL
+  El correo sale del buzón de cada quien,
+  con su cuota, y la respuesta llega a su
+  bandeja. Es la pieza que haría difícil
+  mover esto a otra tecnología.
+end note
+
+P1  -down-> UI
+P3  -down-> UI
+ADM -down-> UI
+
+UI   -down->  API   : **google.script.run**\nasíncrono · un solo origen
+API  -down->  REG   : valida rol, estado y soporte
+REG  -down->  IO    : solo las reglas escriben
+IO   -down->  SHEET : filas en bloque,\nbajo LockService
+API  -down->  DRIVE : apiSubirSoporte\napiEnlaceSoporte · apiEnlaceSellado
+API  -down->  GMAIL : apiEnviar\napiRevisarRespuestas
+TRIG -down->  IO    : la carga mensual y\nel cierre de ausencias
+ADMMOD -down-> IO   : instalación y vigencias
+
+GMAIL -down-> ALC : la declaración + el soporte adjunto
+ALC -up-> GMAIL : la respuesta sellada,\nen **el mismo hilo**
+
+@enduml
