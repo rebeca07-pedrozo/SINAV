@@ -4,9 +4,9 @@ Control de obligaciones tributarias territoriales · Departamento de Impuestos,
 Banco Davivienda. Google Sheets + Apps Script + una aplicación web.
 
 Diagramas de arquitectura, estados y flujos en
-[ARQUITECTURA.md](ARQUITECTURA.md), y los mismos en UML, dibujados, en [Los
-diagramas](#los-diagramas). Contexto de producto en [PRODUCT.md](PRODUCT.md).
-Decisiones visuales en [DESIGN.md](DESIGN.md).
+[ARQUITECTURA.md](ARQUITECTURA.md), y los mismos con más detalle, módulo por
+módulo, en [Los diagramas](#los-diagramas). Contexto de producto en
+[PRODUCT.md](PRODUCT.md). Decisiones visuales en [DESIGN.md](DESIGN.md).
 
 **Si solo vas a leer una sección, lee [Lo que hay que
 vigilar](#lo-que-hay-que-vigilar).**
@@ -977,47 +977,186 @@ pruebas de `leerNombreArchivo` y `emparejarArchivo`.
 
 ## Los diagramas
 
-Los mismos flujos de [ARQUITECTURA.md](ARQUITECTURA.md), pero dibujados en UML.
-Los PNG están en `docs/`, y al lado de cada uno queda su `.puml` para poder
-regenerarlo.
+Los mismos flujos de [ARQUITECTURA.md](ARQUITECTURA.md), con el detalle de qué
+archivo hace cada cosa. Están en Mermaid, que GitHub dibuja solo al abrir este
+archivo; si los ves como texto, es que los estás mirando en un editor sin
+Mermaid.
 
-### La arquitectura
+### La arquitectura, con los módulos por dentro
 
-![Arquitectura de SINAV](docs/arquitectura.png)
+```mermaid
+flowchart TB
+    subgraph EQ["El equipo · perfil = rol + nivel"]
+        P1["PROFESIONAL-I<br/>Helen · Jesús · Andrea · Yasneidy<br/>lo suyo: soporte, envío, campos"]
+        P3["PROFESIONAL-III<br/>Elizabeth, la jefa<br/>+ asignar · revisar · editar ajenas<br/>métricas · ausencias · vigencia"]
+        AD["ADMIN<br/>Rebeca<br/>+ configurar"]
+    end
 
-Las cuatro capas, de arriba abajo: quién usa el sistema, el navegador, Apps
-Script por dentro —la capa `api…()`, las reglas, el acceso a datos y los
-activadores, con los `.gs` que componen cada una— y Google Workspace, con las
-hojas, Drive y Gmail. Abajo, las alcaldías: la declaración sale y la respuesta
-vuelve **por el mismo hilo**.
+    subgraph NAV["Navegador · no toca las hojas jamás"]
+        UI["Aplicación web · Index.html + App.html<br/>React 18 + htm desde CDN · sin build, sin npm"]
+        PANT["Enviar · Respuestas · Alertas · Carga<br/>Asignación · Ausencias · Métricas · Campos"]
+    end
+
+    subgraph AS["Apps Script · «ejecutar como el usuario que accede»"]
+        API["Capa api…() · 10_WebApp<br/>la única puerta de entrada"]
+        REG["Reglas de negocio<br/>03_Roles exige() · 06_Estados validarPaso()<br/>08_Soportes soporteRevisado() · 04_Normalizar<br/>09_Enviar · 11_Respuestas · 16_Metricas · 20_Ausencias"]
+        IO["Acceso a datos<br/>02_Hojas · LockService<br/>00_Constantes · 05_Eventos"]
+        TRIG["Activadores · sin nadie conectado<br/>cargarMesVigente() día 1, 5am<br/>cerrarAusenciasVencidas() · revisarRespuestas()"]
+    end
+
+    subgraph GO["Google · toda la infraestructura"]
+        SH[("Google Sheets · la base de datos<br/>CALENDARIO · PROGRAMACION · OBLIGACIONES<br/>USUARIOS · AUSENCIAS · EVENTOS · CONFIG<br/>VIGENCIAS · ROLES · HISTORICO")]
+        DR[("Drive<br/>vigencia/municipio/impuesto<br/>Soportes · Sellados")]
+        GM["Gmail<br/>el buzón de cada persona,<br/>su cuota, su bandeja"]
+    end
+
+    ALC["Alcaldías<br/>315 municipios"]
+
+    P1 --> UI
+    P3 --> UI
+    AD --> UI
+    UI --- PANT
+    UI -->|google.script.run| API
+    API -->|valida rol, estado y soporte| REG
+    REG -->|solo las reglas escriben| IO
+    IO <-->|filas en bloque, bajo LockService| SH
+    API <-->|subir el soporte · abrir el sellado| DR
+    API <-->|apiEnviar · apiRevisarRespuestas| GM
+    TRIG -->|escribe con la cuenta de quien lo instaló| IO
+    GM -.->|la declaración + el soporte| ALC
+    ALC -.->|la respuesta sellada, en el mismo hilo| GM
+```
+
+La interfaz **nunca** toca las hojas: todo entra por `api…()`, y ahí se valida
+el permiso con `exige()`. Esconder un botón no es seguridad, porque una llamada
+directa a la API se rechaza igual.
 
 ### El flujo, con sus caminos malos
 
-![Flujo de SINAV](docs/flujo.png)
+```mermaid
+flowchart TB
+    subgraph F1["1 · El sistema, sin nadie conectado"]
+        A1["cargarMesVigente()<br/>cruza CALENDARIO con PROGRAMACION"]
+        A2[("OBLIGACIONES<br/>el mes en curso y el siguiente<br/>~1.000 de las 6.320 del año")]
+        A3(["estado = PENDIENTE"])
+        A1 --> A2 --> A3
+    end
 
-Cuatro calles —el sistema, el profesional dueño de la fila, la alcaldía y la
-jefa— y el recorrido completo de una obligación, desde la carga del día 1 hasta
-HISTORICO. Incluye lo que pasa cuando algo sale mal: el estado que no deja tocar
-el soporte, el PDF que no corresponde, `REBOTADO`, `SIN_EVIDENCIA`, `DEVUELTA` y
-la obligación sin `hilo_id`.
+    subgraph F2["2 · El profesional sube el soporte"]
+        B1["arrastra el PDF en su fila"]
+        B2{"¿el estado deja<br/>tocar el soporte?"}
+        B3["la fila dice por qué no se puede<br/>y el servidor rechaza la llamada"]
+        B4["Drive: vigencia/municipio/impuesto<br/>soporte_id · se borra soporte_revisado"]
+        B5(["estado = LISTA"])
+        B1 --> B2
+        B2 -->|"no · solo en PENDIENTE, LISTA, DEVUELTA y REBOTADO"| B3
+        B2 -->|sí| B4 --> B5
+    end
+
+    subgraph F3["3 · La última puerta: revisar el PDF"]
+        C1["«Enviar seleccionadas»<br/>apiSoportesParaRevisar abre el visor,<br/>un PDF a la vez · NO sale ningún correo"]
+        C2{"¿el PDF es el<br/>que corresponde?"}
+        C3["borra soporte_id<br/>y vuelve a PENDIENTE"]
+        C4["soporte_revisado = soporte_id"]
+        C1 --> C2
+        C2 -->|INCORRECTO| C3
+        C2 -->|CORRECTO| C4
+    end
+
+    subgraph F4["4 · Enviar"]
+        D1["se valida en el SERVIDOR<br/>exige · puedeEnviar · validarPaso · soporteRevisado"]
+        D2["Gmail: el correo sale del buzón de la persona<br/>con la declaración y el soporte adjunto"]
+        D3(["estado = ENVIADA<br/>hilo_id + registro en EVENTOS"])
+        D1 --> D2 --> D3
+    end
+
+    subgraph F5["5 · La respuesta de la alcaldía"]
+        E1["revisarRespuestas()<br/>a mano o por activador"]
+        E2{"¿la obligación<br/>tiene hilo_id?"}
+        E3["se ignora: sin hilo no se puede saber<br/>a qué obligación pertenece la respuesta"]
+        E4["se abre ESE hilo de Gmail,<br/>no se busca en la bandeja"]
+        E5{"¿qué pasó<br/>con el hilo?"}
+        E6(["queda en ENVIADA"])
+        E7(["REBOTADO"])
+        E8(["SIN_EVIDENCIA"])
+        E9{"¿trae adjunto?"}
+        E10["Drive: se guarda en Sellados"]
+        E11["se registra solo el texto"]
+        E12(["RESPONDIDA"])
+        E1 --> E2
+        E2 -->|no| E3
+        E2 -->|sí| E4 --> E5
+        E5 -->|sigue sin respuesta| E6
+        E5 -->|el correo no llegó| E7
+        E5 -->|nunca contestaron| E8
+        E5 -->|contestaron| E9
+        E9 -->|sí| E10 --> E12
+        E9 -->|no| E11 --> E12
+    end
+
+    subgraph F6["6 · La jefa revisa"]
+        G1{"¿está bien?"}
+        G2(["REVISADA"])
+        G3(["APROBADA · queda cerrada"])
+        G4(["DEVUELTA"])
+        G1 -->|sí| G2 --> G3
+        G1 -->|no| G4
+    end
+
+    A3 --> B1
+    B5 --> C1
+    C3 -.->|la fila vuelve a pedir soporte| B1
+    C4 --> D1
+    D3 --> E1
+    E8 -.->|si contestan tarde| E12
+    E7 -->|se corrige el correo y vuelve a LISTA| B1
+    E12 --> G1
+    G4 -->|se corrige y se reenvía| B1
+    G3 --> H1["archivarCerradas()<br/>a mano, cuando el libro pese"]
+    H1 --> H2[("HISTORICO")]
+```
+
+`APROBADA` no tiene salida: es el final. Lo que no está en ese grafo **no
+pasa** — `validarPaso()` rechaza cualquier salto que no esté dibujado.
 
 ### Los otros escenarios
 
-![Otros escenarios de SINAV](docs/flujo-escenarios.png)
+```mermaid
+flowchart LR
+    subgraph QUIEN["Quién puede"]
+        J["PROFESIONAL-III<br/>la jefa"]
+        A["ADMIN"]
+    end
 
-Lo que se hace fuera del camino de una declaración: ausencias y backups,
-asignación, carga masiva, métricas y lo que solo puede el admin.
+    subgraph AUS["Ausencias y backups"]
+        U1["apiPrevisualizarAusencia<br/>«Yasneidy, del 1 al 15 de diciembre»"]
+        U2["«23 obligaciones pasarían a Andrea»<br/>se ve ANTES de confirmar"]
+        U3["responsable = Andrea<br/>titular_original = Yasneidy"]
+        U4[("AUSENCIAS<br/>una fila, no se borra nunca")]
+        U5["cerrarAusenciasVencidas()<br/>al vencer las devuelve solas"]
+        U1 --> U2 --> U3 --> U4 --> U5
+    end
 
-### Regenerarlos
+    subgraph OTR["El día a día de la jefa"]
+        O1["Asignación · apiAsignar<br/>repartir lo que no tiene dueño"]
+        O2["Carga masiva · apiCargaPlan<br/>recargar un periodo a mano"]
+        O3["Métricas · apiMetricas<br/>cuánto va, cuánto falta, quién"]
+    end
 
-Hace falta Java y `plantuml.jar`. En este equipo quedaron en
-`~/.jdk/jdk-21.0.13.1+2` y `~/.plantuml/plantuml.jar`, sueltos y sin instalar,
-porque los paquetes de `winget` piden permisos de administrador:
+    subgraph SOLO["Solo ADMIN"]
+        S1["habilitar una vigencia nueva<br/>5 carpetas de Drive · hoja VIGENCIAS"]
+        S2["modo PRUEBA / PRODUCCION en CONFIG"]
+        S3["subir a alguien de nivel,<br/>a mano, en la hoja USUARIOS"]
+    end
 
-```
-cd docs
-J="$HOME/.jdk/jdk-21.0.13.1+2/bin/java.exe"
-"$J" -jar "$HOME/.plantuml/plantuml.jar" -charset UTF-8 -tpng -SdpiScale=2 *.puml
+    BK[("USUARIOS · columna backup<br/>si está vacía: Andrea con Yasneidy<br/>y Jesús con Helen")]
+
+    J --> U1
+    J --> OTR
+    A --> U1
+    A --> OTR
+    A --> SOLO
+    BK -->|la hoja manda sobre el código| U3
 ```
 
 ---
