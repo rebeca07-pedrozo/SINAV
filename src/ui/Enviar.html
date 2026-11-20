@@ -81,8 +81,29 @@ function TarjetasConteo({ conteos, filtro, alFiltrar }) {
   </fieldset>`;
 }
 
+/**
+ * Por que esta fila no se puede enviar, en castellano.
+ *
+ * El servidor manda el motivo tecnico en motivo_no_enviable. Antes solo
+ * vivia en el title del checkbox, o sea invisible: la casilla estaba apagada
+ * y nadie sabia por que. Ahora se escribe en la fila.
+ */
+function motivoLegible(o) {
+  if (o.mia === false) return 'es de otra persona';
+  const m = String(o.motivo_no_enviable || '');
+  if (!m) return '';
+  if (m === 'sin soporte') return 'falta subir el soporte';
+  if (m === 'sin correo de oficina') return 'la alcaldía no tiene correo registrado';
+  if (m === 'requiere_envio no es SI') return 'marcada como que no se envía por correo';
+  if (m.indexOf('no LISTA') >= 0) {
+    return 'está en ' + o.estado + ': solo se envía desde LISTA';
+  }
+  return m;
+}
+
 function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
   const puedo = o.enviable && o.mia !== false;
+  const porque = puedo ? '' : motivoLegible(o);
   const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
 
   return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
@@ -118,8 +139,10 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
 
     <td class="celda-linea2">
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
-      ${o.cadena.soporte && !o.soporte_revisado
-        ? html`<span class="sub porvencer">se revisa al enviar</span>` : null}
+      ${porque
+        ? html`<span class="sub vencido">${'no se puede enviar: ' + porque}</span>`
+        : (o.cadena.soporte && !o.soporte_revisado
+            ? html`<span class="sub porvencer">se revisa al enviar</span>` : null)}
     </td>
 
     <td class="celda-linea2">

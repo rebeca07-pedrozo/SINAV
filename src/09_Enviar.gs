@@ -244,3 +244,66 @@ function apiEnviar(ids) {
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA }
   };
 }
+
+/* ---------------------------------------------------------------------------
+   DIAGNOSTICO
+
+   Cuando una fila no se deja enviar, el motivo lo sabe el servidor pero no
+   siempre es evidente en la pantalla. Esto lo escribe en claro.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Lista las obligaciones que YA tienen soporte y dice, una por una, por que
+ * no se pueden enviar. Se corre desde el menu SINAV, o desde el editor.
+ */
+function porQueNoSeEnvia() {
+  var ix = indices(HOJA.OBLIGACIONES);
+  var todas = filas(HOJA.OBLIGACIONES);
+
+  var conSoporte = 0, listas = 0, motivos = {}, ejemplos = {};
+
+  todas.forEach(function (f) {
+    if (!String(f[ix.soporte_id] || '').trim()) return;
+    conSoporte++;
+
+    var o = {
+      estado: f[ix.estado],
+      soporte_id: f[ix.soporte_id],
+      soporte_revisado: f[ix.soporte_revisado],
+      requiere_envio: f[ix.requiere_envio],
+      correo_oficina: f[ix.correo_oficina]
+    };
+    var e = puedeEnviar(o);
+    var clave = e.ok
+      ? (soporteRevisado(o) ? 'LISTAS PARA ENVIAR' : 'listas, se revisan al enviar')
+      : e.motivo;
+    if (e.ok) listas++;
+
+    motivos[clave] = (motivos[clave] || 0) + 1;
+    if (!ejemplos[clave]) {
+      ejemplos[clave] = String(f[ix.municipio]) + ' · ' + String(f[ix.impuesto]) +
+                        ' · ' + String(f[ix.periodo]);
+    }
+  });
+
+  var lineas = [conSoporte + ' obligaciones tienen soporte cargado.', ''];
+  if (!conSoporte) {
+    lineas.push('Ninguna tiene soporte todavía, así que no hay nada que enviar.');
+  }
+  Object.keys(motivos).sort().forEach(function (k) {
+    lineas.push(motivos[k] + '  ' + k);
+    lineas.push('      p.ej. ' + ejemplos[k]);
+  });
+
+  if (motivos['sin correo de oficina']) {
+    lineas.push('', 'El correo de la oficina sale de la hoja PROGRAMACION, ' +
+      'columna correo_oficina. De 315 municipios solo 98 lo tienen: ' +
+      'escríbelo ahí y vuelve a intentar. Las obligaciones que YA existen ' +
+      'no lo heredan solas, hay que escribirlo también en su fila de ' +
+      'OBLIGACIONES.');
+  }
+
+  var txt = lineas.join('\n');
+  Logger.log(txt);
+  return txt;
+}

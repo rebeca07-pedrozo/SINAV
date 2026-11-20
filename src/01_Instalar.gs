@@ -33,6 +33,7 @@ function onOpen() {
     .addItem('Instalar / verificar', 'instalar')
     .addItem('Migrar columnas', 'migrar')
     .addItem('Correr pruebas', 'pruebas')
+    .addItem('¿Por qué no se envía?', 'porQueNoSeEnviaDesdeMenu')
     .addSeparator()
     .addSubMenu(SpreadsheetApp.getUi().createMenu('Datos de ejemplo')
       .addItem('Sembrar escenario de ejemplo (8 filas)', 'sembrarEjemploDesdeMenu')
@@ -469,4 +470,9 @@ function migrar() {
     Logger.log(resumen);
     return resumen;
   });
+}
+
+function porQueNoSeEnviaDesdeMenu() {
+  SpreadsheetApp.getUi().alert('SINAV · ¿por qué no se envía?', porQueNoSeEnvia(),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
 }
