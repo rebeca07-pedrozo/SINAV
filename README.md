@@ -3,8 +3,12 @@
 Control de obligaciones tributarias territoriales · Departamento de Impuestos,
 Banco Davivienda. Google Sheets + Apps Script + una aplicación web.
 
-Contexto de producto en [PRODUCT.md](PRODUCT.md). Decisiones visuales en
-[DESIGN.md](DESIGN.md).
+Diagramas de arquitectura, estados y flujos en
+[ARQUITECTURA.md](ARQUITECTURA.md). Contexto de producto en
+[PRODUCT.md](PRODUCT.md). Decisiones visuales en [DESIGN.md](DESIGN.md).
+
+**Si solo vas a leer una sección, lee [Lo que hay que
+vigilar](#lo-que-hay-que-vigilar).**
 
 ---
 
@@ -57,6 +61,116 @@ abierto* y queda solo en métricas.
 **Si alguien se va:** su backup recibe las obligaciones del rango de la
 ausencia, con `titular_original` guardado para devolvérselas al regreso (ver
 *Ausencias y backups*).
+
+---
+
+## Lo que hay que vigilar
+
+Diez cosas que, si se rompen, rompen SINAV en silencio. No dan error: dejan
+de funcionar y nadie se entera hasta que una declaración no se presentó.
+
+### 1 · El activador del día 1
+
+Lo corre **la cuenta que lo instaló**, no quien abra el libro. Si esa cuenta
+se desactiva o le quitan permisos, **el activador muere y no avisa**: el 1 de
+diciembre simplemente no aparecen las obligaciones del mes.
+
+**Cómo se comprueba:** `SINAV · Mes → ¿Está programada?`, y en EVENTOS tiene
+que haber un `AVISO` de carga mensual con fecha del día 1. Si no está, se
+reprograma desde otra cuenta.
+
+### 2 · Los 217 municipios sin correo de oficina
+
+De los 315 del calendario, solo **98 tienen correo**. Sin correo la obligación
+se queda en `LISTA` para siempre: el soporte está cargado, pero no sale nada.
+
+**Cómo se comprueba:** `SINAV → ¿Por qué no se envía?`. Los correos se
+escriben en PROGRAMACION, columna `correo_oficina`. Las obligaciones **que ya
+existen no lo heredan solas**: hay que escribirlo también en su fila de
+OBLIGACIONES.
+
+### 3 · `modo` en CONFIG
+
+Mientras diga `PRUEBA`, **todos los correos van al propio usuario** y ninguna
+alcaldía recibe nada. Es el valor por defecto a propósito, y el código no lo
+cambia nunca.
+
+El día que se pase a `PRODUCCION` se edita a mano en CONFIG, y a partir de ese
+segundo los correos salen de verdad. **No hay vuelta atrás para lo ya
+enviado.**
+
+### 4 · La cuota de Gmail
+
+Cada persona manda con su propia cuota: **1.500 correos al día** en Workspace,
+100 en una cuenta normal. Pasado el tope, Gmail rechaza y la obligación queda
+sin enviar.
+
+En un mes de vencimientos fuertes con 500 envíos no hay problema. El riesgo
+real es que una sola persona intente mandar todo lo del equipo.
+
+### 5 · EXOGENA no se envía sola
+
+`cargarProgramacion()` pone `requiere_envio = REVISAR` a todo lo de medios
+magnéticos, a propósito: esas no siempre se mandan por correo. **Hasta que no
+se cambie a `SI`, no se envían**, y la fila lo dice.
+
+### 6 · El `hilo_id`
+
+Si al enviar no se encuentra el hilo, la fila se queda sin `hilo_id` y se
+escribe un `ERROR` en EVENTOS. Esa obligación **nunca va a detectar la
+respuesta sola**: hay que archivar el sellado a mano.
+
+**Cómo se comprueba:** buscar `ERROR` en EVENTOS de vez en cuando.
+
+### 7 · Las columnas nuevas van al final
+
+`asegurarHojas()` reescribe la fila 1 **sin mover los datos de abajo**.
+Insertar una columna en la mitad desalinea todo lo que ya está escrito: los
+valores quedan en la columna de al lado y no hay forma limpia de deshacerlo.
+
+Lo mismo con el orden de `COLS` en `00_Constantes.gs`. Una columna nueva, al
+final, siempre.
+
+### 8 · Los códigos son texto, no números
+
+`cod_dane`, `cod_oficina`, `periodo`, `nit_municipio` y los ids de Drive
+tienen formato `@` en la hoja. Si alguien los pasa a número, **`05001` se
+convierte en `5001`** y deja de emparejar con el calendario: la carga masiva
+no encuentra el municipio y la obligación se queda sin soporte.
+
+### 9 · La hoja CALENDARIO al cambiar de año
+
+El calendario de 2027 se pega **encima** de CALENDARIO, y ahí es donde se
+pierden cosas si no se tiene cuidado: PROGRAMACION **no** se vuelve a cargar,
+porque si se recarga se borran los correos que se fueron llenando a mano
+durante todo el año.
+
+Lo que sí hay que hacer al cambiar de año: habilitar la vigencia nueva en
+VIGENCIAS con los ids de sus carpetas de Drive.
+
+### 10 · Nadie debe editar OBLIGACIONES a mano
+
+Se puede, y a veces hace falta para una prueba. Pero cambiar el `estado` a
+mano se salta `validarPaso()`, y un estado al que no se llegó por el camino
+correcto deja la fila en un sitio del que la aplicación no sabe salir.
+
+Si hay que corregir algo, mejor por la interfaz. Y lo que se toque a mano no
+queda en EVENTOS, así que en una auditoría no hay quién responda por ese
+cambio.
+
+---
+
+### Lo que NO hay que vigilar, porque está cubierto
+
+- **Correr dos veces la carga mensual.** El id de la obligación sale de sus
+  datos, no de un contador: lo que ya existe se salta.
+- **Que se corte por tiempo.** Las cargas se reanudan y lo escrito queda bien
+  escrito.
+- **Dos personas a la vez.** `LockService` serializa las escrituras.
+- **Que alguien entre sin permiso.** Cada `api…()` valida en el servidor.
+  Esconder el botón no es la defensa.
+- **Archivar meses viejos.** `archivarCerradas()` mueve, no borra, y no toca
+  lo que sigue abierto.
 
 ---
 
