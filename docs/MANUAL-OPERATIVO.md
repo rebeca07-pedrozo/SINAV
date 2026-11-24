@@ -72,7 +72,17 @@ correr el `ADMIN`.
 |---|---|---|
 | `cargarMesVigente()` | **SINAV · Mes → Cargar el mes en curso y el siguiente** | Lo hace el activador el día 1. A mano, cuando quieras adelantarlo |
 | `instalarCargaMensual()` | **SINAV · Mes → Programar la carga mensual** | Una vez, para dejar el activador puesto |
+| `refrescarCorreos()` | **SINAV · Mes → Refrescar los correos de oficina** | Cada vez que el equipo llene correos en PROGRAMACION |
+| `arreglarExogena()` | **SINAV · Mes → Arreglar EXOGENA** | Una vez, si el libro se cargó cuando EXOGENA nacía como `REVISAR` |
 | `archivarCerradas()` | **SINAV · Mes → Archivar los meses cerrados** | Cuando el libro se vaya poniendo pesado |
+
+Y en el menú **SINAV**:
+
+| Función | Cómo se corre | Cuándo |
+|---|---|---|
+| `porQueNoSeEnvia()` | **SINAV → ¿Por qué no se envía?** | Cuando una fila con soporte no se deja enviar |
+| `revisarAntesDeProduccion()` | **SINAV → Revisar antes de producción** | Antes de dar el paso. No cambia nada |
+| `pasarAProduccion()` | **SINAV → PASAR A PRODUCCIÓN** | Una vez, el día del lanzamiento |
 
 Las dos cargas **se reanudan**: Apps Script corta a los 6 minutos, y si te dicen
 que quedó algo pendiente, vuelves a darle y sigue. Nada se duplica, porque el id
@@ -203,11 +213,10 @@ El de Elizabeth y los de administración. Ver
 
 ### 9 · Cuando vayas a producción
 
-Edita `modo` en CONFIG y ponlo en cualquier cosa distinta de `PRUEBA`. Mientras
-diga `PRUEBA`, **todos los correos llegan a la bandeja de quien envía**, no a
-las oficinas. El código nunca cambia ese valor solo.
-
-Repasa también [Antes de pasar a producción](#11--antes-de-pasar-a-producción).
+**No edites `modo` a mano.** Usa **SINAV → PASAR A PRODUCCIÓN**, que antes te
+muestra lo que está a punto de salir y se niega si queda algo de prueba. El
+detalle está en [Antes de pasar a
+producción](#11--antes-de-pasar-a-producción).
 
 ---
 
@@ -499,9 +508,18 @@ desde otra cuenta.
 De los 315 del calendario, solo **98 tienen correo**. Sin correo la obligación
 se queda en `LISTA` para siempre: el soporte está cargado, pero no sale nada.
 
-**Cómo se comprueba:** `SINAV → ¿Por qué no se envía?`. Los correos se escriben
-en PROGRAMACION, columna `correo_oficina`. Las obligaciones **que ya existen no
-lo heredan solas**: hay que escribirlo también en su fila de OBLIGACIONES.
+**Cómo se comprueba:** `SINAV → ¿Por qué no se envía?`
+
+Los correos se escriben **en un solo sitio**: PROGRAMACION, columna
+`correo_oficina`. Después, **SINAV · Mes → Refrescar los correos de oficina**
+baja lo nuevo a las obligaciones que ya existen y siguen abiertas, porque esas
+nacieron con el correo vacío y no lo heredan solas.
+
+`refrescarCorreos()` **no pisa** un correo escrito a mano en OBLIGACIONES: si
+no coincide con PROGRAMACION, lo reporta y deja que alguien decida. Las
+`APROBADA` no se tocan. Se puede correr las veces que haga falta, y de paso
+lista los municipios que PROGRAMACION tampoco tiene: esos son los que hay que
+averiguar.
 
 ### 3 · `modo` en CONFIG
 
@@ -509,8 +527,9 @@ Mientras diga `PRUEBA`, **todos los correos van al propio usuario** y ninguna
 alcaldía recibe nada. Es el valor por defecto a propósito, y el código no lo
 cambia nunca.
 
-El día que se pase a `PRODUCCION` se edita a mano en CONFIG, y a partir de ese
-segundo los correos salen de verdad. **No hay vuelta atrás para lo ya enviado.**
+El día del paso se usa **SINAV → PASAR A PRODUCCIÓN**, no la celda: a partir de
+ese segundo los correos salen de verdad y **no hay vuelta atrás para lo ya
+enviado**. `volverAPruebas()` devuelve el modo, pero no desenvía nada.
 
 ### 4 · La cuota de Gmail
 
@@ -521,11 +540,19 @@ sin enviar.
 En un mes de vencimientos fuertes con 500 envíos no hay problema. El riesgo real
 es que una sola persona intente mandar todo lo del equipo.
 
-### 5 · EXOGENA no se envía sola
+### 5 · `requiere_envio` manda sobre el envío
 
-`cargarProgramacion()` pone `requiere_envio = REVISAR` a todo lo de medios
-magnéticos, a propósito: esas no siempre se mandan por correo. **Hasta que no se
-cambie a `SI`, no se envían**, y la fila lo dice.
+Si la fila no dice **`SI`**, no se envía, y la fila lo explica: *«marcada como
+que no se envía por correo»*. Sale de PROGRAMACION, y ahí es donde se cambia.
+
+Todo nace en `SI`, EXOGENA (medios magnéticos) incluida: se adjunta y se manda
+igual que las demás. Si algún municipio concreto no la recibe por correo, se le
+pone **`NO`** a mano en su fila de PROGRAMACION y esa deja de enviarse.
+
+En los libros cargados antes de este cambio, EXOGENA nació como `REVISAR`: se
+arregla con **SINAV · Mes → Arreglar EXOGENA**, que lo pasa a `SI` en
+PROGRAMACION y en las obligaciones abiertas, respetando los `NO` escritos a
+mano.
 
 ### 6 · El `hilo_id`
 
@@ -666,6 +693,29 @@ necesita compilar nada y se pega directo en el editor.
 
 ## 11 · Antes de pasar a producción
 
+El aviso de «ambiente de pruebas» **no se quita del código**: desaparece solo
+cuando `CONFIG.modo` pasa a `PRODUCCION`. Quitar el cartel dejando el modo en
+`PRUEBA` sería lo peor de los dos mundos — los correos seguirían yendo a la
+propia bandeja y nadie se enteraría.
+
+Y al revés: en el segundo en que se pasa a `PRODUCCION`, los correos salen a
+las alcaldías de verdad y lo enviado no se puede desenviar. Por eso no se edita
+la celda a mano:
+
+1. **SINAV → Revisar antes de producción.** No cambia nada. Lista las
+   obligaciones que están en `LISTA` con el correo al que irían, y avisa de lo
+   que huele a prueba: correos inventados (`oficina.*@davivienda.com`) y
+   soportes que no son un PDF de verdad.
+2. Arregla lo que señale.
+3. **SINAV → PASAR A PRODUCCIÓN.** Vuelve a mostrar la lista y pide
+   confirmación. **Se niega** si sigue habiendo datos de prueba en `LISTA`.
+4. Recarga la aplicación: el aviso ya no está.
+
+Queda un `AVISO` en EVENTOS con quién lo hizo y cuándo. Y si hay que parar
+todo: `volverAPruebas()`.
+
+### Lo que conviene dejar listo antes
+
 - **El logo.** Sube el archivo oficial a Drive y pon su id en **Configuración
   del proyecto → Propiedades del script → `logo_id`**. Es cableado del
   despliegue, no un parámetro del negocio, así que no ocupa una fila de CONFIG
@@ -674,5 +724,11 @@ necesita compilar nada y se pega directo en el editor.
   permiso). Se sigue leyendo `CONFIG.logo_id` como respaldo. Mientras no haya
   id, la interfaz muestra el espacio reservado punteado.
 - **Las tres filas de prueba** de `instalar()` y su soporte `.txt` en Drive,
-  incluidos los correos `oficina.*@davivienda.com`, que son inventados.
-- **`modo`** en CONFIG, que sale en `PRUEBA`.
+  incluidos los correos `oficina.*@davivienda.com`, que son inventados. Estas
+  son justo las que bloquean el paso a producción si están en `LISTA`.
+- **Los correos de oficina que falten.** No bloquean: sin correo la obligación
+  se queda en `LISTA` esperando, no se envía a nadie equivocado. Se pueden ir
+  llenando con la herramienta ya en producción.
+- **EXOGENA**, si el libro se cargó antes del cambio: `SINAV · Mes → Arreglar
+  EXOGENA`.
+- **El activador del día 1**: `SINAV · Mes → ¿Está programada?`
