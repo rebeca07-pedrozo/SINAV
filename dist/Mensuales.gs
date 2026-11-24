@@ -378,6 +378,7 @@ function menuMensuales() {
   SpreadsheetApp.getUi().createMenu('SINAV · Mes')
     .addItem('Cargar el mes en curso y el siguiente', 'cargarMesDesdeMenu')
     .addItem('Refrescar los correos de oficina', 'refrescarCorreosDesdeMenu')
+    .addItem('Arreglar EXOGENA (REVISAR → SI)', 'arreglarExogenaDesdeMenu')
     .addSeparator()
     .addItem('Programar la carga mensual (día 1)', 'instalarCargaMensualDesdeMenu')
     .addItem('¿Está programada?', 'estadoCargaMensualDesdeMenu')
@@ -389,6 +390,7 @@ function menuMensuales() {
 
 function cargarMesDesdeMenu() { avisoMensual(cargarMesVigente()); }
 function refrescarCorreosDesdeMenu() { avisoMensual(refrescarCorreos()); }
+function arreglarExogenaDesdeMenu() { avisoMensual(arreglarExogena()); }
 function instalarCargaMensualDesdeMenu() { avisoMensual(instalarCargaMensual()); }
 function estadoCargaMensualDesdeMenu() { avisoMensual(estadoCargaMensual()); }
 function quitarCargaMensualDesdeMenu() { avisoMensual(quitarCargaMensual()); }
@@ -495,6 +497,59 @@ function refrescarCorreos() {
   }
 
   var txt = l.join('\n');
+  Logger.log(txt);
+  return txt;
+}
+
+/**
+ * EXOGENA (medios magnéticos) nacio marcada como REVISAR, por si no se
+ * mandaba por correo. Se manda igual que las demas, asi que esto lo corrige
+ * en PROGRAMACION y en las obligaciones que siguen abiertas.
+ *
+ * Si algun municipio concreto NO la recibe por correo, se le pone NO a mano
+ * en su fila de PROGRAMACION: eso si se respeta y no se toca.
+ */
+function arreglarExogena() {
+  exige('configurar');
+
+  var cambios = [];
+
+  // PROGRAMACION
+  var hp = libro().getSheetByName(HOJA_PROGRAMACION);
+  if (hp && hp.getLastRow() > 1) {
+    var cab = hp.getRange(1, 1, 1, hp.getLastColumn()).getValues()[0];
+    var col = -1;
+    for (var i = 0; i < cab.length; i++) {
+      if (String(cab[i]).trim() === 'requiere_envio') col = i;
+    }
+    if (col >= 0) {
+      var vals = hp.getRange(2, col + 1, hp.getLastRow() - 1, 1).getValues();
+      var n = 0;
+      for (var r = 0; r < vals.length; r++) {
+        if (String(vals[r][0]).trim().toUpperCase() === 'REVISAR') {
+          vals[r][0] = 'SI';
+          n++;
+        }
+      }
+      if (n) hp.getRange(2, col + 1, vals.length, 1).setValues(vals);
+      cambios.push(n + ' reglas de PROGRAMACION pasaron de REVISAR a SI');
+    }
+  }
+
+  // OBLIGACIONES abiertas
+  var ix = indices(HOJA.OBLIGACIONES);
+  var ho = libro().getSheetByName(HOJA.OBLIGACIONES);
+  var abiertas = 0;
+  filas(HOJA.OBLIGACIONES).forEach(function (f, i) {
+    if (String(f[ix.estado] || '').trim().toUpperCase() === ESTADO.APROBADA) return;
+    if (String(f[ix.requiere_envio] || '').trim().toUpperCase() !== 'REVISAR') return;
+    ho.getRange(i + 2, ix.requiere_envio + 1).setValue('SI');
+    abiertas++;
+  });
+  cambios.push(abiertas + ' obligaciones abiertas pasaron de REVISAR a SI');
+
+  registrar('', EVENTO.AVISO, 'EXOGENA: REVISAR -> SI');
+  var txt = cambios.join('\n') + '\n\nLas que tengan NO escrito a mano se quedan como están.';
   Logger.log(txt);
   return txt;
 }

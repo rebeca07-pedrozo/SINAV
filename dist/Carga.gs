@@ -361,7 +361,10 @@ function cargarProgramacion() {
         nit_municipio: normCodigo(g(f, 'NIT')),
         correo_oficina: normCorreos(g(f, 'CORREO') || g(f, 'CORREO OFICINA') || ''),
         responsable: correo,
-        requiere_envio: impuesto === 'EXOGENA' ? 'REVISAR' : 'SI',
+        // EXOGENA se manda igual que las demas: se adjunta y se envia. Si
+        // algun municipio concreto no la recibe por correo, se le pone NO a
+        // mano en su fila y esa deja de enviarse.
+        requiere_envio: 'SI',
         nota: 'Importada del calendario' + (ini && !correo ? ' · ' + ini + ' no está en USUARIOS' : '')
       };
       prog.push(COLS_PROGRAMACION.map(function (c) { return fila[c] || ''; }));
