@@ -35,6 +35,9 @@ function onOpen() {
     .addItem('Correr pruebas', 'pruebas')
     .addItem('¿Por qué no se envía?', 'porQueNoSeEnviaDesdeMenu')
     .addSeparator()
+    .addItem('Revisar antes de producción', 'revisarAntesDeProduccionDesdeMenu')
+    .addItem('PASAR A PRODUCCIÓN', 'pasarAProduccionDesdeMenu')
+    .addSeparator()
     .addSubMenu(SpreadsheetApp.getUi().createMenu('Datos de ejemplo')
       .addItem('Sembrar escenario de ejemplo (8 filas)', 'sembrarEjemploDesdeMenu')
       .addItem('Llenar OBLIGACIONES con datos de prueba', 'generarObligacionesDesdeMenu')
@@ -475,4 +478,32 @@ function migrar() {
 function porQueNoSeEnviaDesdeMenu() {
   SpreadsheetApp.getUi().alert('SINAV · ¿por qué no se envía?', porQueNoSeEnvia(),
                                SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function revisarAntesDeProduccionDesdeMenu() {
+  SpreadsheetApp.getUi().alert('SINAV · antes de producción',
+                               revisarAntesDeProduccion(),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Pasar a produccion manda correos de verdad a las alcaldias, asi que se
+ * pregunta dos veces: primero se muestra lo que esta a punto de salir.
+ */
+function pasarAProduccionDesdeMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.alert('SINAV · pasar a PRODUCCIÓN',
+    revisarAntesDeProduccion() +
+    '\n\n¿Pasar a PRODUCCIÓN? Desde ese momento los correos salen a las ' +
+    'alcaldías de verdad.',
+    ui.ButtonSet.YES_NO);
+  if (r !== ui.Button.YES) {
+    ui.alert('Sigue en PRUEBA. No se cambió nada.');
+    return;
+  }
+  try {
+    ui.alert('SINAV', pasarAProduccion(), ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('SINAV · no se pasó a producción', String(e.message || e), ui.ButtonSet.OK);
+  }
 }

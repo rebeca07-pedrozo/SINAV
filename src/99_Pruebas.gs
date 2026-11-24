@@ -31,6 +31,7 @@ function pruebas() {
   pruebasCarga(esIgual);
   pruebasAusencias(esIgual);
   pruebasCargaMensual(esIgual);
+  pruebasProduccion(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -637,4 +638,35 @@ function pruebasCargaMensual(esIgual) {
 
   esIgual('hay doce nombres de mes', NOMBRE_MES.length, 12);
   esIgual('noviembre es el 11', NOMBRE_MES[10], 'noviembre');
+}
+
+/**
+ * El paso a produccion se niega si hay algo de prueba a punto de salir. Estas
+ * dos funciones son las que lo deciden, asi que se prueban.
+ */
+function pruebasProduccion(esIgual) {
+  // correos inventados por instalar() y por el generador de ejemplo
+  esIgual('oficina.chapinero es inventado',
+          correoInventado('oficina.chapinero@davivienda.com'), true);
+  esIgual('tambien el segundo de una lista',
+          correoInventado('alcaldia@cali.gov.co,oficina.granada@davivienda.com'), true);
+  esIgual('un correo de alcaldia de verdad no',
+          correoInventado('hacienda@barranquilla.gov.co'), false);
+  esIgual('una cuenta del banco que no es oficina.* tampoco',
+          correoInventado('elizabeth@davivienda.com'), false);
+  esIgual('vacio no es inventado', correoInventado(''), false);
+  esIgual('nulo no revienta', correoInventado(null), false);
+
+  // soportes
+  esIgual('el txt de prueba no es real',
+          soporteNoReal('Chapinero RETEICA 2026-09 (prueba).txt'), true);
+  esIgual('cualquier txt tampoco',
+          soporteNoReal('declaracion.txt'), true);
+  esIgual('un PDF si es real',
+          soporteNoReal('05001_ICA_2026-10.pdf'), false);
+  esIgual('un PDF en mayusculas tambien',
+          soporteNoReal('05001_ICA_2026-10.PDF'), false);
+  esIgual('un PDF que se llama prueba, no',
+          soporteNoReal('prueba.pdf'), true);
+  esIgual('sin nombre no es real', soporteNoReal(''), true);
 }
