@@ -567,6 +567,11 @@ dice *se revisa al enviar*. No es un fallo: es que falta mirar el nuevo.
 
 Topes: 10 archivos por obligación y 24 MB en total, por el límite de Gmail.
 
+En **Carga masiva**, varios archivos para la misma obligación ya no son un
+error: el primero de cada obligación reemplaza lo que hubiera y los siguientes
+se añaden. Así, volver a subir un archivo corregido sigue reemplazando, y
+subir la declaración y su anexo de golpe los deja los dos.
+
 ### 6 · `requiere_envio` manda sobre el envío
 
 Si la fila no dice **`SI`**, no se envía, y la fila lo explica: *«marcada como

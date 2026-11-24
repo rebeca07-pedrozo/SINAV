@@ -334,6 +334,12 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
 .acciones-soporte { display: flex; gap: 6px; justify-content: flex-end;
                     flex-wrap: wrap; }
 
+/* un aviso que NO es un error: solo cuenta lo que va a pasar */
+.nota-bloque { margin: var(--gap) var(--pad) 0; padding: 10px 12px;
+               border: 1px solid var(--borde); border-left: 3px solid var(--neutro);
+               border-radius: var(--r-control); background: var(--realce); }
+.nota-bloque p { margin: 0; font-size: var(--fs-chico); color: var(--apagado); }
+
 @media (max-width: 860px) {
   /* align-content: start, o las filas automaticas se estiran y dejan un hueco */
   .armazon { grid-template-columns: 1fr; align-content: start; }

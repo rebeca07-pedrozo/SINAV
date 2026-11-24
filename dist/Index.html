@@ -347,6 +347,12 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
 .acciones-soporte { display: flex; gap: 6px; justify-content: flex-end;
                     flex-wrap: wrap; }
 
+/* un aviso que NO es un error: solo cuenta lo que va a pasar */
+.nota-bloque { margin: var(--gap) var(--pad) 0; padding: 10px 12px;
+               border: 1px solid var(--borde); border-left: 3px solid var(--neutro);
+               border-radius: var(--r-control); background: var(--realce); }
+.nota-bloque p { margin: 0; font-size: var(--fs-chico); color: var(--apagado); }
+
 @media (max-width: 860px) {
   /* align-content: start, o las filas automaticas se estiran y dejan un hueco */
   .armazon { grid-template-columns: 1fr; align-content: start; }
@@ -1493,15 +1499,33 @@ function Carga() {
     ? plan.plan.filter((it) => asignado[it.archivo] && guardados.current[it.archivo])
     : [];
 
-  // dos archivos al mismo destino: lo marcamos antes de subir nada
-  const repetidos = (() => {
-    const vistos = {}, malos = [];
+  /**
+   * Varios archivos a la misma obligación ya no es un problema: una
+   * obligación puede ir con la declaración y sus anexos.
+   *
+   * Dentro de una misma carga, el PRIMER archivo de cada obligación
+   * reemplaza lo que hubiera, y los siguientes se añaden. Así, volver a subir
+   * un archivo corregido sigue reemplazando —que es lo que uno espera— y
+   * subir dos de golpe los deja los dos.
+   */
+  const agregaPorArchivo = (() => {
+    const vistos = {}, mapa = {};
     aCargar.forEach((it) => {
       const id = asignado[it.archivo];
-      if (vistos[id]) malos.push(id);
+      mapa[it.archivo] = !!vistos[id];
       vistos[id] = true;
     });
-    return malos;
+    return mapa;
+  })();
+
+  const conVarios = (() => {
+    const cuenta = {}, salida = {};
+    aCargar.forEach((it) => {
+      const id = asignado[it.archivo];
+      cuenta[id] = (cuenta[id] || 0) + 1;
+    });
+    Object.keys(cuenta).forEach((id) => { if (cuenta[id] > 1) salida[id] = cuenta[id]; });
+    return salida;
   })();
 
   async function subirTodo() {
@@ -1523,7 +1547,8 @@ function Carga() {
           lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
           lector.readAsDataURL(f);
         });
-        await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64);
+        await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64,
+                     agregaPorArchivo[it.archivo]);
         salida[it.archivo] = { ok: true, motivo: '' };
       } catch (e) {
         salida[it.archivo] = { ok: false, motivo: String(e && e.message ? e.message : e) };
@@ -1621,15 +1646,19 @@ function Carga() {
         </tbody>
       </table>
 
-      ${repetidos.length ? html`<div class="error-bloque">
-        <p><b>Dos archivos apuntan a la misma obligación.</b>
-          Solo quedaría el último, y el otro se perdería sin aviso. Cambia uno
-          de los dos antes de cargar.</p>
+      ${Object.keys(conVarios).length ? html`<div class="nota-bloque">
+        <p>${frase([
+          Object.keys(conVarios).length === 1
+            ? 'Una obligación recibe varios archivos'
+            : Object.keys(conVarios).length + ' obligaciones reciben varios archivos',
+          '— la declaración y sus anexos. Se guardan todos y al enviar hay que',
+          'revisarlos uno por uno.'
+        ])}</p>
       </div>` : null}
 
       <div class="pie-form">
         <button class="btn btn-principal"
-          disabled=${!aCargar.length || subiendo || repetidos.length > 0}
+          disabled=${!aCargar.length || subiendo}
           onClick=${() => setConfirmando(true)}>
           ${subiendo
             ? 'Cargando ' + (progreso.hechos + 1) + ' de ' + progreso.total + '…'
