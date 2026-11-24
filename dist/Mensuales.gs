@@ -377,6 +377,7 @@ function archivarCerradas() {
 function menuMensuales() {
   SpreadsheetApp.getUi().createMenu('SINAV · Mes')
     .addItem('Cargar el mes en curso y el siguiente', 'cargarMesDesdeMenu')
+    .addItem('Refrescar los correos de oficina', 'refrescarCorreosDesdeMenu')
     .addSeparator()
     .addItem('Programar la carga mensual (día 1)', 'instalarCargaMensualDesdeMenu')
     .addItem('¿Está programada?', 'estadoCargaMensualDesdeMenu')
@@ -387,6 +388,7 @@ function menuMensuales() {
 }
 
 function cargarMesDesdeMenu() { avisoMensual(cargarMesVigente()); }
+function refrescarCorreosDesdeMenu() { avisoMensual(refrescarCorreos()); }
 function instalarCargaMensualDesdeMenu() { avisoMensual(instalarCargaMensual()); }
 function estadoCargaMensualDesdeMenu() { avisoMensual(estadoCargaMensual()); }
 function quitarCargaMensualDesdeMenu() { avisoMensual(quitarCargaMensual()); }
@@ -395,4 +397,104 @@ function archivarCerradasDesdeMenu() { avisoMensual(archivarCerradas()); }
 function avisoMensual(texto) {
   SpreadsheetApp.getUi().alert('SINAV · Carga mensual', String(texto),
                                SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/* ---------------------------------------------------------------------------
+   REFRESCAR LOS CORREOS DE OFICINA
+
+   De 315 municipios solo 98 tenian correo. El equipo los va llenando en
+   PROGRAMACION, que es la hoja que manda. Pero las obligaciones que YA se
+   crearon se quedaron con el correo vacio: nacieron antes.
+
+   Esto baja el correo de PROGRAMACION a las obligaciones que siguen abiertas,
+   para que nadie tenga que escribirlo dos veces.
+   --------------------------------------------------------------------------- */
+
+/** Las obligaciones ya cerradas no se tocan: su correo es historia. */
+var ESTADOS_CERRADOS_REFRESCO = ['APROBADA'];
+
+/**
+ * Copia correo_oficina (y el NIT, si falta) de PROGRAMACION a las
+ * obligaciones abiertas que lo tengan vacio.
+ *
+ * NO pisa un correo ya escrito: si alguien lo puso a mano en la obligacion,
+ * ese gana, y si no coincide con PROGRAMACION se reporta para que alguien
+ * decida. Se puede correr las veces que haga falta.
+ */
+function refrescarCorreos() {
+  exige('configurar');
+
+  var prog = leerProgramacion();
+  var ix = indices(HOJA.OBLIGACIONES);
+  var h = libro().getSheetByName(HOJA.OBLIGACIONES);
+  var todas = filas(HOJA.OBLIGACIONES);
+
+  var puestos = 0, siguenSin = [], distintos = [], correos = [], nits = [];
+
+  todas.forEach(function (f, i) {
+    var estado = String(f[ix.estado] || '').trim().toUpperCase();
+    if (ESTADOS_CERRADOS_REFRESCO.indexOf(estado) >= 0) return;
+
+    var quien = String(f[ix.municipio]) + ' · ' + String(f[ix.impuesto]) +
+                ' · ' + String(f[ix.periodo]);
+    var clave = [String(f[ix.cod_dane] || '').trim(),
+                 String(f[ix.impuesto] || '').trim(),
+                 String(f[ix.periodicidad] || '').trim(),
+                 String(f[ix.entidad] || '').trim()].join('|');
+    var regla = prog.mapa[clave];
+    var deProg = regla ? normCorreos(regla.correo_oficina) : '';
+    var actual = normCorreos(f[ix.correo_oficina]);
+
+    if (!actual && deProg) {
+      correos.push({ fila: i + 2, valor: deProg });
+      if (!String(f[ix.nit_municipio] || '').trim() && regla.nit_municipio) {
+        nits.push({ fila: i + 2, valor: String(regla.nit_municipio) });
+      }
+      puestos++;
+    } else if (!actual && !deProg) {
+      siguenSin.push(quien);
+    } else if (actual && deProg && actual !== deProg) {
+      distintos.push(quien + ': la obligación dice ' + actual +
+                     ' y PROGRAMACION dice ' + deProg);
+    }
+  });
+
+  if (correos.length) {
+    conCerrojo(function () {
+      correos.forEach(function (c) {
+        h.getRange(c.fila, ix.correo_oficina + 1).setValue(c.valor);
+      });
+      nits.forEach(function (c) {
+        h.getRange(c.fila, ix.nit_municipio + 1).setValue(c.valor);
+      });
+    });
+    registrar('', EVENTO.AVISO, 'correos de oficina refrescados: ' + puestos);
+  }
+
+  var l = [puestos + ' obligaciones recibieron el correo de su oficina.'];
+  if (nits.length) l.push(nits.length + ' recibieron además el NIT que les faltaba.');
+
+  if (siguenSin.length) {
+    l.push('', siguenSin.length + ' siguen sin correo porque PROGRAMACION tampoco');
+    l.push('lo tiene. Esas son las que hay que averiguar y escribir allí:');
+    var vistos = {};
+    siguenSin.forEach(function (x) {
+      var mun = x.split(' · ')[0];
+      if (!vistos[mun]) { vistos[mun] = true; }
+    });
+    Object.keys(vistos).sort().slice(0, 30).forEach(function (m) { l.push('   ' + m); });
+    var n = Object.keys(vistos).length;
+    if (n > 30) l.push('   … y ' + (n - 30) + ' municipios más');
+  }
+
+  if (distintos.length) {
+    l.push('', 'No se tocaron estas, porque ya tenían un correo distinto escrito');
+    l.push('a mano. Decide cuál vale:');
+    distintos.slice(0, 10).forEach(function (x) { l.push('   ' + x); });
+    if (distintos.length > 10) l.push('   … y ' + (distintos.length - 10) + ' más');
+  }
+
+  var txt = l.join('\n');
+  Logger.log(txt);
+  return txt;
 }
