@@ -263,8 +263,27 @@ municipio. Pasa al arrastrar el archivo equivocado o al renombrar mal, y no se
 descubre hasta que la oficina lo recibe.
 
 El visto bueno es **del documento, no de la obligación**: la columna
-`soporte_revisado` guarda el `soporte_id` que se miró, no un SI/NO. Si alguien
-reemplaza el archivo, deja de coincidir y hay que revisarlo otra vez.
+`soporte_revisado` guarda los `soporte_id` que se miraron, no un SI/NO. Si
+alguien reemplaza el archivo, deja de coincidir y hay que revisarlo otra vez.
+
+### Varios archivos en un mismo envío
+
+Una obligación puede ir con **la declaración y sus anexos** — el comprobante
+de pago, el formulario, lo que haga falta. En la fila: *Añadir otro* los suma,
+*Reemplazar* deja solo el nuevo.
+
+Van todos en la misma celda `soporte_id`, separados por coma, no en columnas
+nuevas: el número de anexos no se sabe de antemano y una columna por anexo
+sería adivinar cuántos caben. El primero es la declaración.
+
+El visto bueno es **por archivo**, y hay que tenerlos todos: si se añade un
+anexo después de dar el visto bueno, el envío se vuelve a frenar hasta que se
+mire el nuevo. Marcar *Incorrecto* quita **ese** archivo y deja los otros; si
+era el único, la obligación vuelve a `PENDIENTE`.
+
+Dos topes: **10 archivos** por obligación, y **24 MB** en total, porque Gmail
+corta en 25 MB. Si se pasa, el envío se rechaza con el peso en el mensaje en
+vez de fallar a medias.
 
 Y la revisión **no entra en `puedeEnviar()`**, a propósito: esa función responde
 «¿se puede *seleccionar* esta fila?», y si exigiera la revisión no se podría

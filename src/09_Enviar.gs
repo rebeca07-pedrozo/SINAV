@@ -197,11 +197,22 @@ function apiEnviar(ids) {
     }
 
     try {
-      var adjunto = DriveApp.getFileById(String(o.soporte_id).trim()).getBlob();
+      // todos los soportes de la obligacion: la declaracion y sus anexos
+      var adjuntos = [], bytes = 0;
+      listaSoportes(o.soporte_id).forEach(function (sid) {
+        var f = DriveApp.getFileById(sid);
+        bytes += f.getSize();
+        adjuntos.push(f.getBlob());
+      });
+      if (!adjuntos.length) throw new Error('no se pudo abrir ningún soporte en Drive');
+      if (bytes > MAX_ADJUNTO_MB * 1024 * 1024) {
+        throw new Error('los adjuntos pesan ' + Math.round(bytes / 1024 / 1024) +
+          ' MB y Gmail corta en 25 MB. Junta los archivos en uno más liviano.');
+      }
 
       GmailApp.sendEmail(destinos, asuntoDe(o), cuerpoDe(o, modo), {
         name: remitente,
-        attachments: [adjunto],
+        attachments: adjuntos,
         htmlBody: cuerpoHtmlDe(o, modo)
       });
       sumarCuota(cuantos);

@@ -68,8 +68,8 @@ function decorar(o) {
     // cubriendo mientras esta de vacaciones.
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
-    soporte_revisado: !!String(o.soporte_revisado || '').trim() &&
-      String(o.soporte_revisado).trim() === String(o.soporte_id || '').trim(),
+    soportes: listaSoportes(o.soporte_id).length,
+    soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
     motivo_no_enviable: env.motivo,
     nivel: nivel

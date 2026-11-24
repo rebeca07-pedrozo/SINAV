@@ -6,6 +6,14 @@ var CUOTA_DIARIA = 1500;      // destinatarios por persona por dia
 var CARPETA_RAIZ = 'SINAV';
 var SEGUNDOS_MAX = 270;       // 4m30s del limite de 6 minutos
 
+/**
+ * Cuantos archivos puede llevar un envio. Gmail corta en 25 MB en total, asi
+ * que el tope de verdad es el peso, no la cantidad; esto es para que nadie
+ * suba cuarenta por error.
+ */
+var MAX_SOPORTES = 10;
+var MAX_ADJUNTO_MB = 24;
+
 /** Para escribir fechas en mensajes, sin depender del locale del servidor. */
 var NOMBRE_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre',

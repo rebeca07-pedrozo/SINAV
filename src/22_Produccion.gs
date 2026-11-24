@@ -58,15 +58,14 @@ function revisarAntesDeProduccion() {
     if (correoInventado(correo)) {
       riesgos.push(quien + ': el correo ' + correo + ' es inventado, de los datos de ejemplo');
     }
-    var sid = String(f[ix.soporte_id] || '').trim();
-    if (sid) {
+    listaSoportes(f[ix.soporte_id]).forEach(function (sid) {
       var nombre = '';
       try { nombre = DriveApp.getFileById(sid).getName(); } catch (e) { nombre = ''; }
       if (soporteNoReal(nombre)) {
         riesgos.push(quien + ': el soporte «' + (nombre || 'no se pudo abrir') +
                      '» no parece una declaración real');
       }
-    }
+    });
   });
 
   var l = ['Modo actual: ' + modo, ''];

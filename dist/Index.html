@@ -344,6 +344,9 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
 
 .menu-tel { display: none; }
 
+.acciones-soporte { display: flex; gap: 6px; justify-content: flex-end;
+                    flex-wrap: wrap; }
+
 @media (max-width: 860px) {
   /* align-content: start, o las filas automaticas se estiran y dejan un hueco */
   .armazon { grid-template-columns: 1fr; align-content: start; }
@@ -419,6 +422,7 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
   /* la accion se va al extremo derecho de la linea en la que caiga */
   .celda-accion { margin: 8px 0 0 auto; }
   .celda-accion .btn { height: 40px; }
+  .acciones-soporte { justify-content: flex-start; }
 }
 
 
@@ -970,6 +974,8 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
 
     <td class="celda-linea2">
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
+      ${o.soportes > 1
+        ? html`<span class="sub">${o.soportes + ' archivos adjuntos'}</span>` : null}
       ${porque
         ? html`<span class="sub vencido">${'no se puede enviar: ' + porque}</span>`
         : (o.cadena.soporte && !o.soporte_revisado
@@ -982,9 +988,15 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
 
     <td class="celda-accion der">
       ${o.cadena.soporte
-        ? html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
-            <${Icono} nombre="subir" /> Reemplazar</button>`
-        : html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
+        ? html`<div class="acciones-soporte">
+            <button class="btn" disabled=${subiendo}
+              onClick=${() => alSubir(o.id, true)}>
+              <${Icono} nombre="subir" /> Añadir otro</button>
+            <button class="btn" disabled=${subiendo}
+              onClick=${() => alSubir(o.id, false)}>Reemplazar</button>
+          </div>`
+        : html`<button class="btn" disabled=${subiendo}
+            onClick=${() => alSubir(o.id, false)}>
             <${Icono} nombre="subir" /> ${subiendo ? 'Subiendo…' : 'Subir soporte'}</button>`}
     </td>
   </tr>`;
@@ -1014,7 +1026,8 @@ function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
           <p class="sub">${[
             'DANE ', s.cod_dane, ' · vence ', s.vencimiento || 'sin fecha',
             ' · ', s.nombre || 'sin archivo',
-            s.peso_kb ? ' (' + s.peso_kb + ' KB)' : ''
+            s.peso_kb ? ' (' + s.peso_kb + ' KB)' : '',
+            s.de > 1 ? ' · archivo ' + s.cual + ' de ' + s.de + ' de esta obligación' : ''
           ].join('')}</p>
         </div>
         <span class="rev-cuenta">${i + 1} de ${soportes.length}</span>
@@ -1033,13 +1046,13 @@ function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
 
       <div class="modal-pie">
         <button class="btn btn-principal" disabled=${trabajando}
-          onClick=${async () => { await alMarcar(s.id, true); avanzar(); }}>
+          onClick=${async () => { await alMarcar(s.id, true, s.soporte_id); avanzar(); }}>
           ${s.revisado ? 'Correcto ✓' : 'Correcto'}
         </button>
         <button class="btn btn-malo" disabled=${trabajando}
           onClick=${async () => {
             // marcar incorrecto cierra el visor: lo que sigue es subir otro PDF
-            const r = await alMarcar(s.id, false);
+            const r = await alMarcar(s.id, false, s.soporte_id);
             if (r !== 'cerrado') avanzar();
           }}>
           Incorrecto
@@ -1067,6 +1080,7 @@ function Enviar({ inicio }) {
   const [revision, setRevision] = useState(null);
   const archivo = useRef(null);
   const destino = useRef('');
+  const anadir = useRef(false);        // true = anexo, false = reemplazar
 
   const filas = datos.filas || [];
   const visibles = useMemo(() => filas.filter((o) => aplicaFiltro(o, filtro)),
@@ -1116,8 +1130,9 @@ function Enviar({ inicio }) {
 
   /* -------- subir el soporte: un archivo por llamada -------- */
 
-  function pedirArchivo(id) {
+  function pedirArchivo(id, agregar) {
     destino.current = id;
+    anadir.current = !!agregar;
     archivo.current.value = '';
     archivo.current.click();
   }
@@ -1136,14 +1151,21 @@ function Enviar({ inicio }) {
         lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
         lector.readAsDataURL(f);
       });
-      await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64);
+      const r = await llamar('apiSubirSoporte', id, f.name, f.type,
+                             datosBase64, anadir.current);
       await recargar();
-      setResultado({ clase: '', titulo: 'Soporte cargado: ' + f.name, lineas: [] });
+      setResultado({ clase: '',
+        titulo: (anadir.current ? 'Anexo cargado: ' : 'Soporte cargado: ') + f.name,
+        lineas: r && r.soportes > 1
+          ? ['Esa obligación va con ' + r.soportes + ' archivos adjuntos. ' +
+             'Al enviar hay que revisarlos todos.']
+          : [] });
     } catch (e) {
       setFallo('No se pudo subir ' + f.name + '. ' + (e && e.message ? e.message : e));
     } finally {
       setSubiendo('');
       destino.current = '';
+      anadir.current = false;
     }
   }
 
@@ -1164,12 +1186,12 @@ function Enviar({ inicio }) {
     }
   }
 
-  async function marcarSoporte(id, correcto) {
+  async function marcarSoporte(id, correcto, soporteId) {
     setTrabajando('marcando');
     try {
-      await llamar('apiMarcarSoporte', id, correcto, '');
+      await llamar('apiMarcarSoporte', id, correcto, '', soporteId);
       setRevision((v) => v.map((s) =>
-        s.id === id ? Object.assign({}, s, { revisado: correcto }) : s));
+        s.soporte_id === soporteId ? Object.assign({}, s, { revisado: correcto }) : s));
       if (!correcto) {
         // se cierra el visor y se vuelve a la lista, donde esa fila ya pide
         // «Subir soporte» otra vez

@@ -331,6 +331,9 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
 
 .menu-tel { display: none; }
 
+.acciones-soporte { display: flex; gap: 6px; justify-content: flex-end;
+                    flex-wrap: wrap; }
+
 @media (max-width: 860px) {
   /* align-content: start, o las filas automaticas se estiran y dejan un hueco */
   .armazon { grid-template-columns: 1fr; align-content: start; }
@@ -406,6 +409,7 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
   /* la accion se va al extremo derecho de la linea en la que caiga */
   .celda-accion { margin: 8px 0 0 auto; }
   .celda-accion .btn { height: 40px; }
+  .acciones-soporte { justify-content: flex-start; }
 }
 
 

@@ -11,6 +11,14 @@ var CUOTA_DIARIA = 1500;      // destinatarios por persona por dia
 var CARPETA_RAIZ = 'SINAV';
 var SEGUNDOS_MAX = 270;       // 4m30s del limite de 6 minutos
 
+/**
+ * Cuantos archivos puede llevar un envio. Gmail corta en 25 MB en total, asi
+ * que el tope de verdad es el peso, no la cantidad; esto es para que nadie
+ * suba cuarenta por error.
+ */
+var MAX_SOPORTES = 10;
+var MAX_ADJUNTO_MB = 24;
+
 /** Para escribir fechas en mensajes, sin depender del locale del servidor. */
 var NOMBRE_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre',
@@ -1524,6 +1532,26 @@ function puedeEnviar(fila) {
 }
 
 /**
+ * Los soportes de una obligacion, en orden. El primero es la declaracion; los
+ * demas son anexos (el comprobante de pago, el formulario, lo que haga falta).
+ *
+ * Van todos en la MISMA celda separados por coma, no en columnas nuevas: el
+ * numero de anexos no se sabe de antemano, y una columna por anexo seria
+ * adivinar cuantos caben.
+ */
+function listaSoportes(v) {
+  var crudo = v && typeof v === 'object' ? v.soporte_id : v;
+  var salida = [], vistos = {};
+  String(crudo || '').split(/[,;\s]+/).forEach(function (x) {
+    var s = x.trim();
+    if (!s || vistos[s]) return;
+    vistos[s] = true;
+    salida.push(s);
+  });
+  return salida;
+}
+
+/**
  * El soporte esta revisado: alguien lo MIRO y es el mismo archivo que se vio.
  *
  * Esto NO entra en puedeEnviar() a proposito. puedeEnviar() responde "¿se
@@ -1533,8 +1561,18 @@ function puedeEnviar(fila) {
  */
 function soporteRevisado(fila) {
   var f = fila || {};
-  var sid = String(f.soporte_id || '').trim();
-  return !!sid && String(f.soporte_revisado || '').trim() === sid;
+  var tiene = listaSoportes(f.soporte_id);
+  if (!tiene.length) return false;
+
+  var vistos = {};
+  listaSoportes(f.soporte_revisado).forEach(function (x) { vistos[x] = true; });
+
+  // TODOS los archivos que se van a adjuntar tienen que estar revisados: si se
+  // anade un anexo despues del visto bueno, ese anexo tambien hay que verlo
+  for (var i = 0; i < tiene.length; i++) {
+    if (!vistos[tiene[i]]) return false;
+  }
+  return true;
 }
 
 /**
@@ -1711,8 +1749,8 @@ function decorar(o) {
     // cubriendo mientras esta de vacaciones.
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
-    soporte_revisado: !!String(o.soporte_revisado || '').trim() &&
-      String(o.soporte_revisado).trim() === String(o.soporte_id || '').trim(),
+    soportes: listaSoportes(o.soporte_id).length,
+    soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
     motivo_no_enviable: env.motivo,
     nivel: nivel
@@ -1921,11 +1959,16 @@ function nombreSoporte(val, ix, nombreOriginal) {
 }
 
 /**
- * Sube el soporte de una obligacion. Cualquier tipo de archivo.
+ * Sube un soporte de una obligacion. Cualquier tipo de archivo.
  * El cliente manda base64 porque google.script.run no pasa File.
  * Un archivo por llamada: google.script.run tiene tope de tamano.
+ *
+ * agregar = true lo ANADE a los que ya hay (un anexo). Sin eso, reemplaza:
+ * se quedan solo este. Los dos casos existen de verdad — unas veces el
+ * archivo estaba mal y hay que cambiarlo, otras hay que mandar la declaracion
+ * y ademas el comprobante de pago.
  */
-function apiSubirSoporte(id, nombre, tipo, datosBase64) {
+function apiSubirSoporte(id, nombre, tipo, datosBase64, agregar) {
   if (!id) throw new Error('Falta el id de la obligación.');
   if (!datosBase64) throw new Error('Llegó vacío el archivo ' + nombre);
 
@@ -1958,9 +2001,27 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
     if (!f) throw new Error('No existe la obligación ' + id);
     var ahora = String(h.getRange(f, ix.estado + 1).getValue()).toUpperCase();
 
-    // el visto bueno era del archivo anterior: con uno nuevo hay que volver a
-    // mirarlo, asi que se borra
-    var campos = { soporte_id: archivo.getId(), soporte_revisado: '' };
+    var previos = agregar
+      ? listaSoportes(String(h.getRange(f, ix.soporte_id + 1).getValue() || ''))
+      : [];
+    if (previos.length >= MAX_SOPORTES) {
+      throw new Error('Ya hay ' + previos.length + ' archivos en esa obligación. ' +
+        'Gmail no deja mandar muchos más, y si de verdad hacen falta, mejor ' +
+        'júntalos en un solo PDF.');
+    }
+    var todos = previos.concat([archivo.getId()]);
+
+    // el visto bueno es POR ARCHIVO: los que ya se revisaron siguen revisados,
+    // el nuevo nace sin revisar y por eso el envio se vuelve a frenar
+    var revisadosAntes = {};
+    listaSoportes(String(h.getRange(f, ix.soporte_revisado + 1).getValue() || ''))
+      .forEach(function (x) { revisadosAntes[x] = true; });
+    var siguenBuenos = previos.filter(function (x) { return revisadosAntes[x]; });
+
+    var campos = {
+      soporte_id: todos.join(','),
+      soporte_revisado: siguenBuenos.join(',')
+    };
     // el soporte era lo unico que faltaba: pasa a LISTA
     if (ahora === ESTADO.PENDIENTE || ahora === ESTADO.DEVUELTA ||
         ahora === ESTADO.REBOTADO) {
@@ -1969,12 +2030,13 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
 
     escribirCampos(HOJA.OBLIGACIONES, f, campos);
     registrar(id, EVENTO.SOPORTE_CARGADO,
+              (agregar ? 'anexo ' + todos.length + ': ' : '') +
               archivo.getName() + ' (' + archivo.getId() + ') en ' +
               'vigencia ' + (val[ix.vigencia] || '?') + ' · ' +
               nombreCarpeta(val[ix.municipio]) + '/' + nombreCarpeta(val[ix.impuesto]));
 
     return { id: id, soporte_id: archivo.getId(), nombre: archivo.getName(),
-             estado: campos.estado || ahora };
+             soportes: todos.length, estado: campos.estado || ahora };
   });
 }
 
@@ -1983,8 +2045,9 @@ function apiEnlaceSoporte(id) {
   var o = registros(HOJA.OBLIGACIONES).filter(function (r) {
     return String(r.id) === String(id);
   })[0];
-  if (!o || !o.soporte_id) throw new Error('Esa obligación no tiene soporte.');
-  return 'https://drive.google.com/file/d/' + o.soporte_id + '/view';
+  var l = o ? listaSoportes(o.soporte_id) : [];
+  if (!l.length) throw new Error('Esa obligación no tiene soporte.');
+  return 'https://drive.google.com/file/d/' + l[0] + '/view';
 }
 
 /* ===========================================================================
@@ -2007,34 +2070,43 @@ function apiSoportesParaRevisar(ids) {
   var buscados = {};
   lista.forEach(function (id) { buscados[String(id)] = true; });
 
-  var soportes = registros(HOJA.OBLIGACIONES)
+  var soportes = [];
+  registros(HOJA.OBLIGACIONES)
     .filter(function (o) { return buscados[String(o.id)]; })
-    .map(function (o) {
-      var sid = String(o.soporte_id || '').trim();
-      var nombre = '', pesoKB = 0;
-      if (sid) {
+    .forEach(function (o) {
+      var archivos = listaSoportes(o.soporte_id);
+      var vistos = {};
+      listaSoportes(o.soporte_revisado).forEach(function (x) { vistos[x] = true; });
+
+      // una entrada por ARCHIVO: si la obligacion lleva declaracion y anexo,
+      // hay que ver los dos, uno por uno
+      archivos.forEach(function (sid, k) {
+        var nombre = '', pesoKB = 0;
         try {
           var f = DriveApp.getFileById(sid);
           nombre = f.getName();
           pesoKB = Math.round(f.getSize() / 1024);
         } catch (e) { nombre = '(no se pudo abrir el archivo en Drive)'; }
-      }
-      return {
-        id: String(o.id),
-        municipio: String(o.municipio),
-        cod_dane: String(o.cod_dane),
-        impuesto: String(o.impuesto),
-        periodo: String(o.periodo),
-        vencimiento: fechaTexto(o.vencimiento),
-        correo_oficina: String(o.correo_oficina || ''),
-        soporte_id: sid,
-        nombre: nombre,
-        peso_kb: pesoKB,
-        // la vista previa de Drive se puede incrustar; el enlace es el respaldo
-        vista: sid ? 'https://drive.google.com/file/d/' + sid + '/preview' : '',
-        enlace: sid ? 'https://drive.google.com/file/d/' + sid + '/view' : '',
-        revisado: String(o.soporte_revisado || '').trim() === sid && !!sid
-      };
+
+        soportes.push({
+          id: String(o.id),
+          municipio: String(o.municipio),
+          cod_dane: String(o.cod_dane),
+          impuesto: String(o.impuesto),
+          periodo: String(o.periodo),
+          vencimiento: fechaTexto(o.vencimiento),
+          correo_oficina: String(o.correo_oficina || ''),
+          soporte_id: sid,
+          nombre: nombre,
+          peso_kb: pesoKB,
+          cual: k + 1,
+          de: archivos.length,
+          // la vista previa de Drive se puede incrustar; el enlace es el respaldo
+          vista: 'https://drive.google.com/file/d/' + sid + '/preview',
+          enlace: 'https://drive.google.com/file/d/' + sid + '/view',
+          revisado: !!vistos[sid]
+        });
+      });
     });
 
   return { soportes: soportes };
@@ -2048,7 +2120,7 @@ function apiSoportesParaRevisar(ids) {
  * no es el que debia, dejarlo puesto solo invita a que alguien lo mande sin
  * mirar. La obligacion vuelve a PENDIENTE y pide un archivo nuevo.
  */
-function apiMarcarSoporte(id, correcto, motivo) {
+function apiMarcarSoporte(id, correcto, motivo, soporteId) {
   if (!id) throw new Error('Falta el id de la obligación.');
 
   return conCerrojo(function () {
@@ -2060,24 +2132,51 @@ function apiMarcarSoporte(id, correcto, motivo) {
     var val = h.getRange(fila, 1, 1, h.getLastColumn()).getValues()[0];
     exigeMia(val[ix.responsable], 'editarAjenas');
 
-    var sid = String(val[ix.soporte_id] || '').trim();
-    if (!sid) throw new Error('Esa obligación no tiene soporte que revisar.');
+    var archivos = listaSoportes(val[ix.soporte_id]);
+    if (!archivos.length) throw new Error('Esa obligación no tiene soporte que revisar.');
 
-    if (correcto) {
-      escribirCampos(HOJA.OBLIGACIONES, fila, { soporte_revisado: sid });
-      registrar(id, EVENTO.AVISO, 'soporte revisado y dado por bueno');
-      return { id: id, revisado: true };
+    // sin soporteId se entiende que es el unico que hay; con varios, hay que
+    // decir cual, o se marcaria el equivocado
+    var cual = String(soporteId || '').trim() || archivos[0];
+    if (archivos.indexOf(cual) < 0) {
+      throw new Error('Ese archivo ya no está en la obligación. Recarga la pantalla.');
+    }
+    if (!String(soporteId || '').trim() && archivos.length > 1) {
+      throw new Error('Esa obligación tiene ' + archivos.length + ' archivos: ' +
+                      'hay que decir cuál se está revisando.');
     }
 
+    var revisados = listaSoportes(val[ix.soporte_revisado]);
     var estado = String(val[ix.estado]).toUpperCase();
-    var campos = { soporte_revisado: '', soporte_id: '' };
-    if (estado === ESTADO.LISTA) campos.estado = ESTADO.PENDIENTE;
+
+    if (correcto) {
+      if (revisados.indexOf(cual) < 0) revisados.push(cual);
+      // solo los que siguen adjuntos
+      revisados = revisados.filter(function (x) { return archivos.indexOf(x) >= 0; });
+      escribirCampos(HOJA.OBLIGACIONES, fila, { soporte_revisado: revisados.join(',') });
+      registrar(id, EVENTO.AVISO, 'soporte revisado y dado por bueno (' + cual + ')');
+      return { id: id, revisado: true, soporte_id: cual, quedan: archivos.length };
+    }
+
+    // INCORRECTO quita ESE archivo y su visto bueno. Si era el unico, la
+    // obligacion vuelve a PENDIENTE; si quedan otros, sigue en LISTA y solo
+    // falta reponer el que se cayo.
+    var quedan = archivos.filter(function (x) { return x !== cual; });
+    var campos = {
+      soporte_id: quedan.join(','),
+      soporte_revisado: revisados.filter(function (x) {
+        return x !== cual && quedan.indexOf(x) >= 0;
+      }).join(',')
+    };
+    if (!quedan.length && estado === ESTADO.LISTA) campos.estado = ESTADO.PENDIENTE;
 
     escribirCampos(HOJA.OBLIGACIONES, fila, campos);
     registrar(id, EVENTO.ERROR, 'soporte marcado como INCORRECTO' +
-      (motivo ? ': ' + String(motivo).trim() : '') + '. Hay que subir otro.');
+      (motivo ? ': ' + String(motivo).trim() : '') + '. Hay que subir otro. ' +
+      'Quedan ' + quedan.length + ' archivos.');
 
-    return { id: id, revisado: false, estado: campos.estado || estado };
+    return { id: id, revisado: false, soporte_id: cual, quedan: quedan.length,
+             estado: campos.estado || estado };
   });
 }
 
@@ -2283,11 +2382,22 @@ function apiEnviar(ids) {
     }
 
     try {
-      var adjunto = DriveApp.getFileById(String(o.soporte_id).trim()).getBlob();
+      // todos los soportes de la obligacion: la declaracion y sus anexos
+      var adjuntos = [], bytes = 0;
+      listaSoportes(o.soporte_id).forEach(function (sid) {
+        var f = DriveApp.getFileById(sid);
+        bytes += f.getSize();
+        adjuntos.push(f.getBlob());
+      });
+      if (!adjuntos.length) throw new Error('no se pudo abrir ningún soporte en Drive');
+      if (bytes > MAX_ADJUNTO_MB * 1024 * 1024) {
+        throw new Error('los adjuntos pesan ' + Math.round(bytes / 1024 / 1024) +
+          ' MB y Gmail corta en 25 MB. Junta los archivos en uno más liviano.');
+      }
 
       GmailApp.sendEmail(destinos, asuntoDe(o), cuerpoDe(o, modo), {
         name: remitente,
-        attachments: [adjunto],
+        attachments: adjuntos,
         htmlBody: cuerpoHtmlDe(o, modo)
       });
       sumarCuota(cuantos);
@@ -4671,15 +4781,14 @@ function revisarAntesDeProduccion() {
     if (correoInventado(correo)) {
       riesgos.push(quien + ': el correo ' + correo + ' es inventado, de los datos de ejemplo');
     }
-    var sid = String(f[ix.soporte_id] || '').trim();
-    if (sid) {
+    listaSoportes(f[ix.soporte_id]).forEach(function (sid) {
       var nombre = '';
       try { nombre = DriveApp.getFileById(sid).getName(); } catch (e) { nombre = ''; }
       if (soporteNoReal(nombre)) {
         riesgos.push(quien + ': el soporte «' + (nombre || 'no se pudo abrir') +
                      '» no parece una declaración real');
       }
-    }
+    });
   });
 
   var l = ['Modo actual: ' + modo, ''];
@@ -4799,6 +4908,7 @@ function pruebas() {
   pruebasAusencias(esIgual);
   pruebasCargaMensual(esIgual);
   pruebasProduccion(esIgual);
+  pruebasVariosSoportes(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -5436,4 +5546,41 @@ function pruebasProduccion(esIgual) {
   esIgual('un PDF que se llama prueba, no',
           soporteNoReal('prueba.pdf'), true);
   esIgual('sin nombre no es real', soporteNoReal(''), true);
+}
+
+/**
+ * Una obligacion puede llevar varios archivos: la declaracion y sus anexos,
+ * todos en la misma celda separados por coma. El visto bueno es POR ARCHIVO,
+ * asi que anadir un anexo despues vuelve a frenar el envio.
+ */
+function pruebasVariosSoportes(esIgual) {
+  esIgual('un solo archivo', listaSoportes('abc'), ['abc']);
+  esIgual('dos separados por coma', listaSoportes('abc,def'), ['abc', 'def']);
+  esIgual('con espacios de sobra', listaSoportes(' abc , def '), ['abc', 'def']);
+  esIgual('con punto y coma tambien', listaSoportes('abc;def'), ['abc', 'def']);
+  esIgual('no repite el mismo archivo', listaSoportes('abc,abc'), ['abc']);
+  esIgual('vacio es ninguno', listaSoportes(''), []);
+  esIgual('nulo no revienta', listaSoportes(null), []);
+  esIgual('tambien acepta la fila entera',
+          listaSoportes({ soporte_id: 'abc,def' }), ['abc', 'def']);
+
+  // el visto bueno tiene que cubrirlos TODOS
+  esIgual('los dos revisados, pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a,b' }), true);
+  esIgual('en otro orden, igual pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'b,a' }), true);
+  esIgual('falta revisar el anexo, no pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a' }), false);
+  esIgual('se anadio un anexo despues del visto bueno, no pasa',
+          soporteRevisado({ soporte_id: 'a,b,c', soporte_revisado: 'a,b' }), false);
+  esIgual('un visto bueno de un archivo que ya no esta no cuenta',
+          soporteRevisado({ soporte_id: 'b', soporte_revisado: 'a' }), false);
+  esIgual('sin archivos no hay nada revisado',
+          soporteRevisado({ soporte_id: '', soporte_revisado: 'a' }), false);
+
+  // y el envio sigue abierto a la seleccion con varios archivos
+  esIgual('con dos archivos la fila se puede seleccionar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'a,b',
+                        requiere_envio: 'SI',
+                        correo_oficina: 'x@muni.gov.co' }).ok, true);
 }

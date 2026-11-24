@@ -47,7 +47,7 @@ const filas = [
     estado: 'LISTA', valor: 7905100,
     nota: '', reprocesos: 0, motivo_devuelta: '', fecha_envio: '', fecha_respuesta: '',
     cadena: { soporte: true, envio: false, respuesta: false, sellado: false },
-    soporte_revisado: true,
+    soporte_revisado: false, soportes: 2,
     mia: true, enviable: true, motivo_no_enviable: '', nivel: 'vencido'
   },
   {
@@ -283,17 +283,27 @@ window.google = { script: { run: (function () {
                               filas: D.INICIO.filas, conteos: D.INICIO.conteos,
                               cuota: D.INICIO.cuota, generado: D.INICIO.generado }),
     apiSubirSoporte: () => ({ ok: true }),
+    // una entrada por ARCHIVO, como el servidor: una obligacion puede llevar
+    // la declaracion y sus anexos, y hay que ver todos
     apiSoportesParaRevisar: (ids) => ({
-      soportes: (ids || []).map((id) => {
+      soportes: (ids || []).reduce((acc, id) => {
         const o = D.INICIO.filas.find((f) => f.id === id) || {};
-        return { id: id, municipio: o.municipio || '?', cod_dane: o.cod_dane || '',
-                 impuesto: o.impuesto || '', periodo: o.periodo || '',
-                 vencimiento: o.vencimiento || '', correo_oficina: o.correo_oficina || '',
-                 soporte_id: 'EJEMPLO', nombre: (o.municipio || '') + ' ' +
-                   (o.impuesto || '') + ' ' + (o.periodo || '') + '.pdf',
-                 peso_kb: 142, vista: '', enlace: '#', revisado: false };
-      }) }),
-    apiMarcarSoporte: (id, ok) => ({ id: id, revisado: !!ok }),
+        const cuantos = Math.max(1, Number(o.soportes) || 1);
+        for (let k = 1; k <= cuantos; k++) {
+          acc.push({ id: id, municipio: o.municipio || '?', cod_dane: o.cod_dane || '',
+                     impuesto: o.impuesto || '', periodo: o.periodo || '',
+                     vencimiento: o.vencimiento || '',
+                     correo_oficina: o.correo_oficina || '',
+                     soporte_id: 'EJEMPLO-' + id + '-' + k,
+                     nombre: (o.municipio || '') + ' ' + (o.impuesto || '') + ' ' +
+                       (o.periodo || '') + (k > 1 ? ' anexo ' + (k - 1) : '') + '.pdf',
+                     peso_kb: 142, cual: k, de: cuantos,
+                     vista: '', enlace: '#', revisado: false });
+        }
+        return acc;
+      }, []) }),
+    apiMarcarSoporte: (id, ok, motivo, soporteId) => ({
+      id: id, revisado: !!ok, soporte_id: soporteId, quedan: ok ? 2 : 1 }),
     apiEnviar: (ids) => ({ enviadas: ids.map((id) => ({ id })), rechazadas: [],
                            pendientes: [], modo: 'PRUEBA',
                            cuota: { usada: ids.length, tope: 1500 } }),

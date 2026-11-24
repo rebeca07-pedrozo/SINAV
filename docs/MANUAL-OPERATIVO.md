@@ -540,7 +540,16 @@ sin enviar.
 En un mes de vencimientos fuertes con 500 envíos no hay problema. El riesgo real
 es que una sola persona intente mandar todo lo del equipo.
 
-### 5 · `requiere_envio` manda sobre el envío
+### 5 · Los anexos también se revisan
+
+Una obligación puede llevar varios archivos: *Añadir otro* en su fila. Pero el
+visto bueno es **por archivo**, así que si alguien añade un anexo a una
+obligación que ya estaba revisada, **el envío se frena otra vez** y la fila
+dice *se revisa al enviar*. No es un fallo: es que falta mirar el nuevo.
+
+Topes: 10 archivos por obligación y 24 MB en total, por el límite de Gmail.
+
+### 6 · `requiere_envio` manda sobre el envío
 
 Si la fila no dice **`SI`**, no se envía, y la fila lo explica: *«marcada como
 que no se envía por correo»*. Sale de PROGRAMACION, y ahí es donde se cambia.
@@ -554,7 +563,7 @@ arregla con **SINAV · Mes → Arreglar EXOGENA**, que lo pasa a `SI` en
 PROGRAMACION y en las obligaciones abiertas, respetando los `NO` escritos a
 mano.
 
-### 6 · El `hilo_id`
+### 7 · El `hilo_id`
 
 Si al enviar no se encuentra el hilo, la fila se queda sin `hilo_id` y se
 escribe un `ERROR` en EVENTOS. Esa obligación **nunca va a detectar la respuesta
@@ -562,7 +571,7 @@ sola**: hay que archivar el sellado a mano.
 
 **Cómo se comprueba:** buscar `ERROR` en EVENTOS de vez en cuando.
 
-### 7 · Las columnas nuevas van al final
+### 8 · Las columnas nuevas van al final
 
 `asegurarHojas()` reescribe la fila 1 **sin mover los datos de abajo**. Insertar
 una columna en la mitad desalinea todo lo que ya está escrito: los valores
@@ -571,14 +580,14 @@ quedan en la columna de al lado y no hay forma limpia de deshacerlo.
 Lo mismo con el orden de `COLS` en `00_Constantes.gs`. Una columna nueva, al
 final, siempre.
 
-### 8 · Los códigos son texto, no números
+### 9 · Los códigos son texto, no números
 
 `cod_dane`, `cod_oficina`, `periodo`, `nit_municipio` y los ids de Drive tienen
 formato `@` en la hoja. Si alguien los pasa a número, **`05001` se convierte en
 `5001`** y deja de emparejar con el calendario: la carga masiva no encuentra el
 municipio y la obligación se queda sin soporte.
 
-### 9 · La hoja CALENDARIO al cambiar de año
+### 10 · La hoja CALENDARIO al cambiar de año
 
 El calendario del año nuevo se pega **encima** de CALENDARIO, y ahí es donde se
 pierden cosas si no se tiene cuidado: PROGRAMACION **no** se vuelve a cargar,
@@ -589,7 +598,7 @@ Lo que sí hay que hacer al cambiar de año: habilitar la vigencia nueva en
 VIGENCIAS con los ids de sus carpetas de Drive, con
 `habilitarVigencia("2027")`.
 
-### 10 · Nadie debe editar OBLIGACIONES a mano
+### 11 · Nadie debe editar OBLIGACIONES a mano
 
 Se puede, y a veces hace falta para una prueba. Pero cambiar el `estado` a mano
 se salta `validarPaso()`, y un estado al que no se llegó por el camino correcto

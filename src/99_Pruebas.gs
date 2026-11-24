@@ -32,6 +32,7 @@ function pruebas() {
   pruebasAusencias(esIgual);
   pruebasCargaMensual(esIgual);
   pruebasProduccion(esIgual);
+  pruebasVariosSoportes(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -669,4 +670,41 @@ function pruebasProduccion(esIgual) {
   esIgual('un PDF que se llama prueba, no',
           soporteNoReal('prueba.pdf'), true);
   esIgual('sin nombre no es real', soporteNoReal(''), true);
+}
+
+/**
+ * Una obligacion puede llevar varios archivos: la declaracion y sus anexos,
+ * todos en la misma celda separados por coma. El visto bueno es POR ARCHIVO,
+ * asi que anadir un anexo despues vuelve a frenar el envio.
+ */
+function pruebasVariosSoportes(esIgual) {
+  esIgual('un solo archivo', listaSoportes('abc'), ['abc']);
+  esIgual('dos separados por coma', listaSoportes('abc,def'), ['abc', 'def']);
+  esIgual('con espacios de sobra', listaSoportes(' abc , def '), ['abc', 'def']);
+  esIgual('con punto y coma tambien', listaSoportes('abc;def'), ['abc', 'def']);
+  esIgual('no repite el mismo archivo', listaSoportes('abc,abc'), ['abc']);
+  esIgual('vacio es ninguno', listaSoportes(''), []);
+  esIgual('nulo no revienta', listaSoportes(null), []);
+  esIgual('tambien acepta la fila entera',
+          listaSoportes({ soporte_id: 'abc,def' }), ['abc', 'def']);
+
+  // el visto bueno tiene que cubrirlos TODOS
+  esIgual('los dos revisados, pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a,b' }), true);
+  esIgual('en otro orden, igual pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'b,a' }), true);
+  esIgual('falta revisar el anexo, no pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a' }), false);
+  esIgual('se anadio un anexo despues del visto bueno, no pasa',
+          soporteRevisado({ soporte_id: 'a,b,c', soporte_revisado: 'a,b' }), false);
+  esIgual('un visto bueno de un archivo que ya no esta no cuenta',
+          soporteRevisado({ soporte_id: 'b', soporte_revisado: 'a' }), false);
+  esIgual('sin archivos no hay nada revisado',
+          soporteRevisado({ soporte_id: '', soporte_revisado: 'a' }), false);
+
+  // y el envio sigue abierto a la seleccion con varios archivos
+  esIgual('con dos archivos la fila se puede seleccionar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'a,b',
+                        requiere_envio: 'SI',
+                        correo_oficina: 'x@muni.gov.co' }).ok, true);
 }
