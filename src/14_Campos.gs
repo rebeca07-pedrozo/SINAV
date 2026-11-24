@@ -157,6 +157,11 @@ function apiGuardarCampos(id, campos) {
   });
   if (!claves.length) throw new Error('No llegó ningún campo editable.');
 
+  // las columnas nuevas pueden no existir todavia en un libro creado antes:
+  // mejor decirlo que escribir en la columna de al lado
+  var ixHoja = indices(HOJA.OBLIGACIONES);
+  claves.forEach(function (k) { exigeColumna(ixHoja, k); });
+
   return conCerrojo(function () {
     var fila = buscarFila(id);
     if (!fila) throw new Error('No existe la obligación ' + id);

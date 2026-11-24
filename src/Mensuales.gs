@@ -427,6 +427,7 @@ function refrescarCorreos() {
 
   var prog = leerProgramacion();
   var ix = indices(HOJA.OBLIGACIONES);
+  exigeColumna(ix, 'correo_oficina');
   var h = libro().getSheetByName(HOJA.OBLIGACIONES);
   var todas = filas(HOJA.OBLIGACIONES);
 
@@ -659,6 +660,7 @@ function repartirAdhesivos(anio, mes) {
 
   // repartir entre las obligaciones que vencen en ese mes
   var ix = indices(HOJA.OBLIGACIONES);
+  exigeColumna(ix, 'adhesivo');
   var ho = libro().getSheetByName(HOJA.OBLIGACIONES);
   var puestos = 0, yaTenian = 0, sinPareja = {};
 

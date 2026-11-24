@@ -174,6 +174,13 @@ Esto deja hecho, en este orden:
 
 ### 4 · Correr `migrar()`
 
+> **Quien crea las columnas que falten es `instalar()`, no `migrar()`.**
+> `instalar()` pone los encabezados al día sin tocar los datos; `migrar()`
+> arregla los valores que ya están escritos. Después de pegar código nuevo,
+> siempre en ese orden: primero **Instalar / verificar**, después **Migrar
+> columnas**.
+
+
 Menú **SINAV → Migrar columnas**. Hace falta siempre que vengas de una versión
 anterior, aunque creas que el libro está limpio: además de repartir columnas,
 convierte el rol `JEFE`, que ya no existe, en `PROFESIONAL` nivel `III`.

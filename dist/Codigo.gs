@@ -957,6 +957,21 @@ function guardarConfig(clave, valor) {
   });
 }
 
+/**
+ * Corta con un mensaje util si a la hoja le falta una columna.
+ *
+ * Sin esto, escribir en una columna que no existe da «La columna inicial del
+ * intervalo es demasiado pequena», que no dice ni que columna ni que hacer.
+ * Pasa siempre por lo mismo: se pego codigo nuevo y no se corrio instalar().
+ */
+function exigeColumna(ix, nombre, hojaNombre) {
+  if (ix && typeof ix[nombre] === 'number') return ix[nombre];
+  throw new Error('A la hoja ' + (hojaNombre || HOJA.OBLIGACIONES) +
+    ' le falta la columna «' + nombre + '».\n\n' +
+    'Corre SINAV → Instalar / verificar: crea las columnas que falten sin ' +
+    'tocar los datos que ya están escritos.');
+}
+
 function hoy() {
   return new Date();
 }
@@ -3144,6 +3159,11 @@ function apiGuardarCampos(id, campos) {
     return editables[k];
   });
   if (!claves.length) throw new Error('No llegó ningún campo editable.');
+
+  // las columnas nuevas pueden no existir todavia en un libro creado antes:
+  // mejor decirlo que escribir en la columna de al lado
+  var ixHoja = indices(HOJA.OBLIGACIONES);
+  claves.forEach(function (k) { exigeColumna(ixHoja, k); });
 
   return conCerrojo(function () {
     var fila = buscarFila(id);
