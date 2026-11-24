@@ -23,7 +23,8 @@ const codigo = puros.map((f) => readFileSync(join(raiz, 'src', f + '.gs'), 'utf8
   .join('\n;\n');
 const S = new Function(codigo +
   '\n;return { agruparMetricas, apiCamposOpciones, leerNombreArchivo,' +
-  ' emparejarArchivo, agruparAlertas, ESTADO, ESTADOS_ADMITEN_SOPORTE };')();
+  ' emparejarArchivo, agruparAlertas, camposDelCorreo, faltaParaElCorreo,' +
+  ' ESTADO, ESTADOS_ADMITEN_SOPORTE };')();
 
 const dia = (n) => {
   const d = new Date();
@@ -123,7 +124,11 @@ const inicio = {
   ventanas: { mes: 3, proximo: 5, vencidas: 1, abiertas: 6, todo: 9 },
   filas: filas.filter((o) => o.requiere_envio === 'SI' &&
     ['PENDIENTE', 'LISTA', 'DEVUELTA', 'REBOTADO'].indexOf(o.estado) >= 0),
-  conteos, generado: ahora
+  conteos, generado: ahora,
+  // la digitalizacion vive dentro de Enviar: las definiciones salen de
+  // 14_Campos.gs de verdad, no de una copia escrita a mano aqui
+  campos: S.apiCamposOpciones(),
+  orden_campos: S.camposDelCorreo()
 };
 inicio.conteos = inicio.filas.reduce((c, o) => {
   c.todas++;
@@ -281,7 +286,10 @@ window.google = { script: { run: (function () {
     apiLogo: () => '',
     apiListaEnviar: (v) => ({ ventana: v || 'mes', ventanas: D.INICIO.ventanas,
                               filas: D.INICIO.filas, conteos: D.INICIO.conteos,
-                              cuota: D.INICIO.cuota, generado: D.INICIO.generado }),
+                              cuota: D.INICIO.cuota,
+                              campos: D.INICIO.campos,
+                              orden_campos: D.INICIO.orden_campos,
+                              generado: D.INICIO.generado }),
     apiSubirSoporte: () => ({ ok: true }),
     // una entrada por ARCHIVO, como el servidor: una obligacion puede llevar
     // la declaracion y sus anexos, y hay que ver todos

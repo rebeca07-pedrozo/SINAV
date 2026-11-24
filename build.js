@@ -124,6 +124,17 @@ const codigo = fs.readFileSync(path.join(dist, 'Codigo.gs'), 'utf8');
   fs.writeFileSync(tmp, bloques.join('\n;\n'), 'utf8');
   const r = child.spawnSync(process.execPath, ['--check', tmp], { encoding: 'utf8' });
   fs.unlinkSync(tmp);
+  // htm NO entiende <>...</> como fragmento: crea una etiqueta con el nombre
+  // vacio y React tumba la pagina entera, en blanco y sin decir nada. El
+  // fragmento se escribe <${React.Fragment}> ... <//>. Ya paso una vez.
+  const fragmentoMalo = bloques.join('\n').match(/html`\s*<>/);
+  if (fragmentoMalo) {
+    console.error('Hay un html`<> en src/ui: htm no lo entiende como fragmento,');
+    console.error('crea una etiqueta con el nombre vacio y la pagina sale EN BLANCO.');
+    console.error('Escribelo asi:  html`<${React.Fragment}> ... <//>`');
+    process.exit(1);
+  }
+
   if (r.status !== 0) {
     console.error('El javascript de src/ui no parsea:');
     console.error((r.stderr || '').split('\n').slice(0, 12).join('\n'));

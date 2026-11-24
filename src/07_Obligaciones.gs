@@ -231,6 +231,10 @@ function apiInicio() {
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
     filas: lista,
     conteos: conteos(lista),
+    // la digitalizacion se hace dentro de Enviar, asi que las definiciones
+    // tienen que venir en la PRIMERA carga, no solo al refrescar la lista
+    campos: apiCamposOpciones(),
+    orden_campos: camposDelCorreo(),
     generado: fechaHoraTexto(new Date())
   };
 }

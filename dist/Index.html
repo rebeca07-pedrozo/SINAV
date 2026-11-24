@@ -960,7 +960,10 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo,
   const falta = o.falta_correo || [];
   const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
 
-  return html`<>
+  // OJO: htm no entiende <>...</> como fragmento — crea una etiqueta con el
+  // nombre vacio y React tumba la pagina entera. El fragmento se escribe
+  // nombrando React.Fragment, y se cierra con <//>.
+  return html`<${React.Fragment}>
   <tr data-elegida=${elegida ? 'si' : 'no'}>
     <td class="celda-casilla">
       <input type="checkbox" checked=${elegida} disabled=${!puedo}
@@ -1032,11 +1035,9 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo,
   ${abierto ? html`<tr class="fila-datos">
     <td colSpan="8">
       <div class="panel-datos">
-        <p class="sub">${frase([
-          'Esto es lo que va en el correo a la oficina:',
-          'el valor que tiene que girar, el sticker con el que viaja el sobre',
-          'y el consecutivo de giro.'
-        ])}</p>
+        <p class="sub">Esto es lo que va en el correo a la oficina: el valor
+          que tiene que girar, el sticker con el que viaja el sobre y el
+          consecutivo de giro.</p>
         <div class="rejilla-campos">
           ${(orden || []).map((k) => campos && campos[k]
             ? html`<${CampoEdit} key=${k} clave=${k} def=${campos[k]}
@@ -1055,7 +1056,7 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo,
       </div>
     </td>
   </tr>` : null}
-  </>`;
+  <//>`;
 }
 
 /**
