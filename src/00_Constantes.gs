@@ -80,7 +80,22 @@ var COLS = {
     'soporte_revisado',
     // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
     // Vacio = Banco Davivienda, que es el caso normal.
-    'entidad'
+    'entidad',
+    // --- lo que se agrego despues va SIEMPRE aqui abajo, nunca en la mitad:
+    // asegurarHojas() reescribe la fila 1 sin mover los datos, y una columna
+    // insertada en medio desalinea todo lo que ya esta escrito.
+    //
+    // El envio FISICO por correspondencia interna, que no es lo mismo que el
+    // correo: 'fecha_envio' la escribe SINAV cuando sale el correo,
+    // 'fecha_despacho' la escribe la persona y es cuando se despacho el sobre.
+    'fecha_despacho',
+    // El numero del adhesivo de correspondencia (55285303). Es por municipio,
+    // impuesto y MES: cambia en cada periodo, por eso vive en la obligacion y
+    // no en PROGRAMACION.
+    'adhesivo',
+    // El consecutivo de giro del pago (LR-09-74). Va en el asunto y en el
+    // cuerpo del correo.
+    'consecutivo_giro'
   ],
   EVENTOS: ['fecha', 'id_obligacion', 'actor', 'que_paso', 'detalle']
 };
@@ -272,7 +287,13 @@ var CONFIG_BASE = [
   ['nombre_remitente', 'Impuestos Davivienda'],
   ['carpeta_territoriales', CARPETA_TERRITORIALES],
   ['vigencia_actual', '2026'],
-  ['dias_aviso', '10,4,2,0'],
+  ['dias_aviso', '7,4,2,0'],
+  // Lo que es igual en todos los correos. Si cambia, se cambia aqui una vez.
+  ['egreso', '25'],
+  ['codigo_departamento', '9413'],
+  ['nombre_recibe', 'Liliana Ramirez'],
+  ['copias_fijas', ''],
+  ['dominio_oficinas', 'davivienda.com'],
   ['modo', 'PRUEBA'],
   ['rol_defecto', 'PROFESIONAL'],
   ['area_defecto', 'MUNICIPALES'],

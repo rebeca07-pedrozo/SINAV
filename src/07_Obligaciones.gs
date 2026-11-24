@@ -47,6 +47,10 @@ function decorar(o) {
     exogena: String(o.exogena || ''),
     incluye_retencion: String(o.incluye_retencion || ''),
     presentacion_fecha: fechaTexto(o.presentacion_fecha),
+    // el envio fisico por correspondencia, que el correo necesita nombrar
+    fecha_despacho: fechaTexto(o.fecha_despacho),
+    adhesivo: String(o.adhesivo || ''),
+    consecutivo_giro: String(o.consecutivo_giro || ''),
     revision_fecha: fechaTexto(o.revision_fecha),
     revision_por: String(o.revision_por || ''),
     estado: String(o.estado),
@@ -69,6 +73,8 @@ function decorar(o) {
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
     soportes: listaSoportes(o.soporte_id).length,
+    // lo que hay que digitalizar antes de que el correo tenga sentido
+    falta_correo: faltaParaElCorreo(o),
     sellados: listaIds(o.sellado_id).length,
     soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
@@ -239,6 +245,10 @@ function apiListaEnviar(ventana) {
     filas: lista,
     conteos: conteos(lista),
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
+    // la digitalizacion vive dentro de esta pantalla: se llena justo antes de
+    // enviar, que es cuando la persona tiene los datos delante
+    campos: apiCamposOpciones(),
+    orden_campos: camposDelCorreo(),
     generado: fechaHoraTexto(new Date())
   };
 }

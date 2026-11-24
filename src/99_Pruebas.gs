@@ -34,6 +34,7 @@ function pruebas() {
   pruebasProduccion(esIgual);
   pruebasVariosSoportes(esIgual);
   pruebasVariosSellados(esIgual);
+  pruebasCorreoOficina(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -733,4 +734,88 @@ function pruebasVariosSellados(esIgual) {
           estadosEsperanRespuesta().indexOf(ESTADO.SIN_EVIDENCIA) >= 0, true);
   esIgual('APROBADA ya no',
           estadosEsperanRespuesta().indexOf(ESTADO.APROBADA) >= 0, false);
+}
+
+/**
+ * El correo a la oficina. Lo que se prueba aqui no es la redaccion sino los
+ * datos que la oficina necesita para girar la plata: a quien va, cuanto es y
+ * con que consecutivo.
+ */
+function pruebasCorreoOficina(esIgual) {
+  var base = {
+    id: '25488|AUTORRETEICA|GENERAL|2026-11',
+    municipio: 'Nilo', cod_dane: '25488', cod_oficina: '1689',
+    impuesto: 'AUTORRETEICA', periodicidad: 'MENSUAL', periodo: '2026-11',
+    valor: 1773000, nit_municipio: '8999997078', consecutivo_giro: 'LR-09-74',
+    paga_quien: 'OFICINA', tipo_presentacion: 'OFICINA',
+    adhesivo: '55622944', correo_oficina: '', vigencia: '2026'
+  };
+  var con = function (extra) {
+    var o = {};
+    Object.keys(base).forEach(function (k) { o[k] = base[k]; });
+    Object.keys(extra || {}).forEach(function (k) { o[k] = extra[k]; });
+    return o;
+  };
+
+  // la dependencia pierde el cero de relleno: director851@, no director0851@
+  esIgual('dependencia sin cero', dependenciaDe({ cod_oficina: '0851' }), '851');
+  esIgual('dependencia de cuatro cifras', dependenciaDe({ cod_oficina: '1689' }), '1689');
+  esIgual('sin oficina, nada', dependenciaDe({ cod_oficina: '' }), '');
+
+  // los pesos del asunto: sin decimales y con punto de mil
+  esIgual('el valor se escribe como lo escriben ellos',
+          pesosCortos(1773000), '$1.773.000');
+  esIgual('un valor chico', pesosCortos(5000), '$5.000');
+  esIgual('sin valor no revienta', pesosCortos(''), '$0');
+
+  esIgual('la fecha en letras', fechaLarga(new Date(2026, 10, 24)),
+          '24 de noviembre de 2026');
+  esIgual('sin fecha lo dice', fechaLarga(''), 'sin fecha');
+
+  // el asunto, con el formato del equipo
+  var asunto = asuntoOficina(con({}));
+  esIgual('el asunto empieza por la dependencia', asunto.indexOf('1689 -') === 0, true);
+  esIgual('nombra el impuesto largo',
+          asunto.indexOf('Declaración Autorretención de ICA NILO') > 0, true);
+  esIgual('lleva la periodicidad', asunto.indexOf('MENSUAL') > 0, true);
+  esIgual('lleva el valor', asunto.indexOf('$1.773.000') > 0, true);
+  esIgual('lleva el consecutivo de giro', asunto.indexOf('LR-09-74') > 0, true);
+  esIgual('y la marca, que es como se encuentra el hilo',
+          asunto.indexOf('[SINAV-') > 0, true);
+
+  // lo que falta para que el correo tenga sentido
+  esIgual('completa no falta nada', faltaParaElCorreo(con({})).length, 0);
+  esIgual('sin valor falta el valor',
+          faltaParaElCorreo(con({ valor: '' })).length, 1);
+  esIgual('un valor en cero tampoco sirve',
+          faltaParaElCorreo(con({ valor: 0 })).length, 1);
+  esIgual('sin adhesivo falta el sticker',
+          faltaParaElCorreo(con({ adhesivo: '' }))[0], 'Sticker de correspondencia');
+  esIgual('sin giro falta el giro',
+          faltaParaElCorreo(con({ consecutivo_giro: '' }))[0], 'Consecutivo de giro');
+
+  // la dependencia vale como destinatario: es lo que desbloquea los
+  // municipios que nunca tuvieron correo escrito
+  esIgual('con dependencia se puede enviar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '1689' }).ok, true);
+  esIgual('sin correo NI dependencia, no',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).ok, false);
+  esIgual('y lo dice',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).motivo,
+          'sin correo ni dependencia');
+
+  // los adhesivos del archivo de correspondencia
+  esIgual('ADHESIVO Sept es septiembre', mesDeEncabezado('ADHESIVO Sept'), 9);
+  esIgual('con espacio al final tambien', mesDeEncabezado('ADHESIVO Agosto '), 8);
+  esIgual('Label Febrero tambien cuenta', mesDeEncabezado('Label Febrero '), 2);
+  esIgual('una columna que no es de adhesivos, no',
+          mesDeEncabezado('DESCRIPCION CARTERO'), 0);
+  esIgual('un numero de adhesivo', adhesivoValido('55285303.0'), '55285303');
+  esIgual('REGISTRADO EN CARTERO no es un adhesivo',
+          adhesivoValido('REGISTRADO EN CARTERO'), '');
+  esIgual('#N/A tampoco', adhesivoValido('#N/A'), '');
+  esIgual('vacio tampoco', adhesivoValido(''), '');
 }

@@ -44,9 +44,50 @@ function camposEditables() {
                        norm: 'normSiNoCampo', solo: 'AUTORRETEICA' },
   valor:             { et: 'Valor liquidado', tipo: 'valor', norm: 'normValor' },
   presentacion_fecha:{ et: 'Fecha de presentación', tipo: 'fecha', norm: 'normFecha' },
+  // El envio FISICO por correspondencia, con su adhesivo. No es la fecha en
+  // que sale el correo: esa la pone SINAV sola.
+  fecha_despacho:    { et: 'Fecha de despacho', tipo: 'fecha', vacio: true,
+                       norm: 'normFecha' },
+  adhesivo:          { et: 'Sticker de correspondencia', tipo: 'texto',
+                       norm: 'normTexto' },
+  consecutivo_giro:  { et: 'Consecutivo de giro', tipo: 'texto', norm: 'normTexto' },
     nota:              { et: 'Nota', tipo: 'texto', norm: 'normTexto' }
   };
   return _camposEditables;
+}
+
+/**
+ * Lo que el correo a la oficina necesita SI O SI, en el orden en que se pide.
+ *
+ * No es una regla de la maquina de estados: una obligacion sin valor existe
+ * perfectamente. Es que el correo quedaria diciendo "por el valor de $0", y
+ * eso lo lee un director de oficina que tiene que girar esa plata.
+ */
+function camposDelCorreo() {
+  return ['valor', 'paga_quien', 'forma_pago', 'adhesivo', 'consecutivo_giro',
+          'fecha_despacho', 'tipo_presentacion'];
+}
+
+/** Los que no pueden ir vacios. forma_pago y fecha_despacho si pueden. */
+function camposObligatoriosDelCorreo() {
+  return ['valor', 'paga_quien', 'adhesivo', 'consecutivo_giro'];
+}
+
+/**
+ * Que le falta a una obligacion para poder mandar el correo.
+ * Pura: recibe la fila y devuelve las etiquetas de lo que falta.
+ */
+function faltaParaElCorreo(fila) {
+  var f = fila || {};
+  var mapa = camposEditables();
+  var falta = [];
+  camposObligatoriosDelCorreo().forEach(function (k) {
+    var v = f[k];
+    var vacio = v === null || v === undefined || String(v).trim() === '' ||
+                (k === 'valor' && !Number(v));
+    if (vacio) falta.push(mapa[k] ? mapa[k].et : k);
+  });
+  return falta;
 }
 
 /* los normalizadores que solo usa esta pantalla */

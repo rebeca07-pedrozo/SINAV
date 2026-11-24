@@ -93,7 +93,9 @@ function motivoLegible(o) {
   const m = String(o.motivo_no_enviable || '');
   if (!m) return '';
   if (m === 'sin soporte') return 'falta subir el soporte';
-  if (m === 'sin correo de oficina') return 'la alcaldía no tiene correo registrado';
+  if (m === 'sin correo ni dependencia') {
+    return 'sin correo de oficina y sin dependencia: no hay a quién mandarlo';
+  }
   if (m === 'requiere_envio no es SI') return 'marcada como que no se envía por correo';
   if (m.indexOf('no LISTA') >= 0) {
     return 'está en ' + o.estado + ': solo se envía desde LISTA';
@@ -101,12 +103,16 @@ function motivoLegible(o) {
   return m;
 }
 
-function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
+function Fila({ o, elegida, alElegir, alSubir, subiendo,
+                campos, orden, abierto, alAbrir, borrador, alCambiar,
+                alGuardar, guardando }) {
   const puedo = o.enviable && o.mia !== false;
   const porque = puedo ? '' : motivoLegible(o);
+  const falta = o.falta_correo || [];
   const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
 
-  return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
+  return html`<>
+  <tr data-elegida=${elegida ? 'si' : 'no'}>
     <td class="celda-casilla">
       <input type="checkbox" checked=${elegida} disabled=${!puedo}
         aria-label=${puedo
@@ -152,6 +158,14 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
     </td>
 
     <td class="celda-accion der">
+      <div class="acciones-soporte">
+        <button class="btn" aria-expanded=${abierto ? 'true' : 'false'}
+          onClick=${() => alAbrir(abierto ? '' : o.id)}>
+          ${falta.length
+            ? 'Digitalizar (faltan ' + falta.length + ')'
+            : (abierto ? 'Cerrar datos' : 'Datos ✓')}
+        </button>
+      </div>
       ${o.cadena.soporte
         ? html`<div class="acciones-soporte">
             <button class="btn" disabled=${subiendo}
@@ -164,7 +178,35 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
             onClick=${() => alSubir(o.id, false)}>
             <${Icono} nombre="subir" /> ${subiendo ? 'Subiendo…' : 'Subir soporte'}</button>`}
     </td>
-  </tr>`;
+  </tr>
+
+  ${abierto ? html`<tr class="fila-datos">
+    <td colSpan="8">
+      <div class="panel-datos">
+        <p class="sub">${frase([
+          'Esto es lo que va en el correo a la oficina:',
+          'el valor que tiene que girar, el sticker con el que viaja el sobre',
+          'y el consecutivo de giro.'
+        ])}</p>
+        <div class="rejilla-campos">
+          ${(orden || []).map((k) => campos && campos[k]
+            ? html`<${CampoEdit} key=${k} clave=${k} def=${campos[k]}
+                valor=${borrador[k] !== undefined ? borrador[k] : o[k]}
+                alCambiar=${alCambiar} />`
+            : null)}
+        </div>
+        <div class="pie-form">
+          <button class="btn btn-principal" disabled=${guardando}
+            onClick=${() => alGuardar(o.id)}>
+            ${guardando ? 'Guardando…' : 'Guardar datos'}</button>
+          ${falta.length
+            ? html`<span class="sub vencido">${'Falta: ' + falta.join(', ')}</span>`
+            : html`<span class="sub aldia">No falta ningún dato del correo.</span>`}
+        </div>
+      </div>
+    </td>
+  </tr>` : null}
+  </>`;
 }
 
 /**
@@ -243,6 +285,8 @@ function Enviar({ inicio }) {
   const [resultado, setResultado] = useState(null);
   const [fallo, setFallo] = useState('');
   const [revision, setRevision] = useState(null);
+  const [editando, setEditando] = useState('');     // la fila con los datos abiertos
+  const [borrador, setBorrador] = useState({});
   const archivo = useRef(null);
   const destino = useRef('');
   const anadir = useRef(false);        // true = anexo, false = reemplazar
@@ -293,6 +337,34 @@ function Enviar({ inicio }) {
     setConfirmando(false);
   }
 
+  /* -------- digitalizar, aquí mismo y no en otra pantalla -------- */
+
+  function abrirDatos(id) {
+    setEditando(id);
+    setBorrador({});
+    setResultado(null);
+  }
+
+  function cambiarCampo(clave, valor) {
+    setBorrador((v) => Object.assign({}, v, { [clave]: valor }));
+  }
+
+  async function guardarDatos(id) {
+    if (!Object.keys(borrador).length) { setEditando(''); return; }
+    setTrabajando('guardando');
+    setFallo('');
+    try {
+      await llamar('apiGuardarCampos', id, borrador);
+      setBorrador({});
+      setEditando('');
+      await recargar();
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+    } finally {
+      setTrabajando('');
+    }
+  }
+
   /* -------- subir el soporte: un archivo por llamada -------- */
 
   function pedirArchivo(id, agregar) {
@@ -337,6 +409,23 @@ function Enviar({ inicio }) {
   /* -------- revisar los soportes: obligatorio antes de enviar -------- */
 
   async function abrirRevision() {
+    // el correo nombra el valor, el sticker y el giro: sin eso saldria
+    // diciendo "por el valor de $0" a un director que tiene que girar
+    const cojas = elegidasVivas
+      .map((id) => filas.find((f) => f.id === id))
+      .filter((o) => o && (o.falta_correo || []).length);
+    if (cojas.length) {
+      setResultado({ clase: 'malo',
+        titulo: 'Faltan datos para el correo',
+        lineas: cojas.slice(0, 6).map((o) =>
+          o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ': falta ' +
+          o.falta_correo.join(', '))
+          .concat(cojas.length > 6 ? ['… y ' + (cojas.length - 6) + ' más'] : [])
+          .concat(['Se abre la primera para que la completes.']) });
+      abrirDatos(cojas[0].id);
+      return;
+    }
+
     setTrabajando('revisando');
     setFallo('');
     try {
@@ -516,7 +605,14 @@ function Enviar({ inicio }) {
               ${visibles.map((o) => html`<${Fila} key=${o.id} o=${o}
                 elegida=${elegidas.indexOf(o.id) >= 0}
                 subiendo=${subiendo === o.id}
-                alElegir=${alternar} alSubir=${pedirArchivo} />`)}
+                alElegir=${alternar} alSubir=${pedirArchivo}
+                campos=${datos.campos} orden=${datos.orden_campos}
+                abierto=${editando === o.id}
+                alAbrir=${abrirDatos}
+                borrador=${editando === o.id ? borrador : {}}
+                alCambiar=${cambiarCampo}
+                alGuardar=${guardarDatos}
+                guardando=${trabajando === 'guardando'} />`)}
             </tbody>`}
       </table>
 

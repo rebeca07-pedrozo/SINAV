@@ -29,46 +29,8 @@ function etiqueta() {
   return GmailApp.getUserLabelByName(ETIQUETA) || GmailApp.createLabel(ETIQUETA);
 }
 
-function asuntoDe(o) {
-  return 'Declaración ' + o.impuesto + ' ' + o.periodo + ' - ' + o.municipio +
-         ' - Banco Davivienda S.A. [' + marcador(o.id) + ']';
-}
-
-function pesos(v) {
-  if (v === '' || v === null || v === undefined) return '-';
-  return '$' + Number(v).toLocaleString('es-CO', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
-  });
-}
-
-function cuerpoDe(o, modo) {
-  var lineas = [
-    'Buen día,',
-    '',
-    'Adjuntamos la declaración de ' + o.impuesto + ' del periodo ' + o.periodo +
-      ' para que sea presentada y pagada en el municipio de ' + o.municipio + '.',
-    '',
-    'Municipio: ' + o.municipio + ' (DANE ' + o.cod_dane + ')',
-    'Oficina: ' + (o.cod_oficina || '-'),
-    'Impuesto: ' + o.impuesto + ' - régimen ' + o.regimen,
-    'Periodo: ' + o.periodo + ' (' + o.periodicidad + ')',
-    'Vence: ' + fechaTexto(o.vencimiento),
-    'NIT del municipio: ' + (o.nit_municipio || '-'),
-    'Presentación: ' + o.tipo_presentacion + ' - paga ' + textoPago(o),
-    'Valor: ' + pesos(o.valor),
-    '',
-    'Por favor RESPONDA SOBRE ESTE MISMO CORREO, no abra uno nuevo, y adjunte el',
-    'soporte sellado por el municipio. Así queda asociado automáticamente a esta',
-    'obligación y no hay que buscarlo después.',
-    '',
-    'Gracias,',
-    config('nombre_remitente')
-  ];
-  if (modo === 'PRUEBA') {
-    lineas.unshift('[MODO PRUEBA] Este correo iba para: ' + (o.correo_oficina || '-'), '');
-  }
-  return lineas.join('\n');
-}
+/* El asunto y el cuerpo del correo viven en 23_Correo.gs: no son mecanica de
+   envio, son una instruccion de trabajo para la oficina. */
 
 /**
  * Como se lee el pago en el correo. Son dos datos: quien paga y con que.
@@ -85,40 +47,6 @@ function textoPago(o) {
   var forma = ETIQUETA_PAGO[String(o.forma_pago || '').trim()] || '';
   if (!quien) return 'sin definir';
   return forma ? quien + ' (' + forma + ')' : quien;
-}
-
-function cuerpoHtmlDe(o, modo) {
-  var fila = function (k, v) {
-    return '<tr><td style="padding:2px 12px 2px 0;color:#5f6368">' + k +
-           '</td><td style="padding:2px 0;color:#111">' + v + '</td></tr>';
-  };
-  var aviso = modo === 'PRUEBA'
-    ? '<p style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;' +
-      'padding:8px 10px;margin:0 0 16px">MODO PRUEBA. Este correo iba para: ' +
-      (o.correo_oficina || '-') + '</p>'
-    : '';
-  return '<div style="font:14px/1.5 Arial,sans-serif;color:#111;max-width:640px">' +
-    aviso +
-    '<p>Buen día,</p>' +
-    '<p>Adjuntamos la declaración de <b>' + o.impuesto + '</b> del periodo <b>' +
-      o.periodo + '</b> para que sea presentada y pagada en el municipio de <b>' +
-      o.municipio + '</b>.</p>' +
-    '<table style="border-collapse:collapse;font-size:14px;margin:16px 0">' +
-      fila('Municipio', o.municipio + ' (DANE ' + o.cod_dane + ')') +
-      fila('Oficina', o.cod_oficina || '-') +
-      fila('Impuesto', o.impuesto + ' &middot; régimen ' + o.regimen) +
-      fila('Periodo', o.periodo + ' (' + o.periodicidad + ')') +
-      fila('Vence', fechaTexto(o.vencimiento)) +
-      fila('NIT del municipio', o.nit_municipio || '-') +
-      fila('Presentación', o.tipo_presentacion + ' &middot; paga ' + textoPago(o)) +
-      fila('Valor', pesos(o.valor)) +
-    '</table>' +
-    '<p style="background:#f2f2f2;padding:10px 12px;margin:16px 0">' +
-      '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte el ' +
-      'soporte sellado por el municipio. Así queda asociado automáticamente a esta ' +
-      'obligación y no hay que buscarlo después.</p>' +
-    '<p>Gracias,<br>' + config('nombre_remitente') + '</p>' +
-    '</div>';
 }
 
 /**
@@ -186,8 +114,10 @@ function apiEnviar(ids) {
       continue;
     }
 
-    var destinos = modo === 'PRUEBA' ? miCorreo : normCorreos(o.correo_oficina);
-    var cuantos = destinos.split(',').length;
+    var destinos = modo === 'PRUEBA' ? miCorreo : destinatariosDe(o);
+    var copias = modo === 'PRUEBA' ? '' : copiasFijas();
+    var cuantos = destinos.split(',').length +
+                  (copias ? copias.split(',').length : 0);
 
     if (cuotaUsada() + cuantos > CUOTA_DIARIA) {
       pendientes = ids.slice(i).map(String);
@@ -210,11 +140,16 @@ function apiEnviar(ids) {
           ' MB y Gmail corta en 25 MB. Junta los archivos en uno más liviano.');
       }
 
-      GmailApp.sendEmail(destinos, asuntoDe(o), cuerpoDe(o, modo), {
+      var opciones = {
         name: remitente,
         attachments: adjuntos,
-        htmlBody: cuerpoHtmlDe(o, modo)
-      });
+        htmlBody: cuerpoHtmlOficina(o, modo)
+      };
+      if (copias) opciones.cc = copias;
+      var logo = blobDelLogo();
+      if (logo) opciones.inlineImages = { logo: logo };
+
+      GmailApp.sendEmail(destinos, asuntoOficina(o), cuerpoOficina(o, modo), opciones);
       sumarCuota(cuantos);
 
       var hilo = hiloDelEnvio(o.id);
@@ -306,12 +241,12 @@ function porQueNoSeEnvia() {
     lineas.push('      p.ej. ' + ejemplos[k]);
   });
 
-  if (motivos['sin correo de oficina']) {
-    lineas.push('', 'El correo de la oficina sale de la hoja PROGRAMACION, ' +
-      'columna correo_oficina. De 315 municipios solo 98 lo tienen: ' +
-      'escríbelo ahí y vuelve a intentar. Las obligaciones que YA existen ' +
-      'no lo heredan solas, hay que escribirlo también en su fila de ' +
-      'OBLIGACIONES.');
+  if (motivos['sin correo ni dependencia']) {
+    lineas.push('', 'Esas no tienen a quién mandarse. El correo sale de dos sitios: ' +
+      'de correo_oficina si está escrito, y si no, de la dependencia ' +
+      '(cod_oficina), con la que se arman director<dep>@ y subdirector<dep>@. ' +
+      'Sin ninguno de los dos no hay destinatario: escribe el código de ' +
+      'dependencia en PROGRAMACION y corre «Refrescar los correos de oficina».');
   }
 
   var txt = lineas.join('\n');

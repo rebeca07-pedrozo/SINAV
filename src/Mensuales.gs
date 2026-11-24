@@ -376,6 +376,7 @@ function menuMensuales() {
     .addItem('Cargar el mes en curso y el siguiente', 'cargarMesDesdeMenu')
     .addItem('Refrescar los correos de oficina', 'refrescarCorreosDesdeMenu')
     .addItem('Arreglar EXOGENA (REVISAR → SI)', 'arreglarExogenaDesdeMenu')
+    .addItem('Repartir los adhesivos del mes', 'repartirAdhesivosDesdeMenu')
     .addSeparator()
     .addItem('Programar la carga mensual (día 1)', 'instalarCargaMensualDesdeMenu')
     .addItem('¿Está programada?', 'estadoCargaMensualDesdeMenu')
@@ -388,6 +389,7 @@ function menuMensuales() {
 function cargarMesDesdeMenu() { avisoMensual(cargarMesVigente()); }
 function refrescarCorreosDesdeMenu() { avisoMensual(refrescarCorreos()); }
 function arreglarExogenaDesdeMenu() { avisoMensual(arreglarExogena()); }
+function repartirAdhesivosDesdeMenu() { avisoMensual(repartirAdhesivos()); }
 function instalarCargaMensualDesdeMenu() { avisoMensual(instalarCargaMensual()); }
 function estadoCargaMensualDesdeMenu() { avisoMensual(estadoCargaMensual()); }
 function quitarCargaMensualDesdeMenu() { avisoMensual(quitarCargaMensual()); }
@@ -547,6 +549,149 @@ function arreglarExogena() {
 
   registrar('', EVENTO.AVISO, 'EXOGENA: REVISAR -> SI');
   var txt = cambios.join('\n') + '\n\nLas que tengan NO escrito a mano se quedan como están.';
+  Logger.log(txt);
+  return txt;
+}
+
+/* ---------------------------------------------------------------------------
+   LOS ADHESIVOS DE CORRESPONDENCIA
+
+   El archivo de correspondencia trae, por municipio e impuesto, una columna
+   por mes con el numero del adhesivo con el que viaja el sobre:
+
+     MUNICIPIO | PERIODICIDAD | DEPENDENCIA | CONCEPTO | ADHESIVO Ene | ...
+     AMAGA     | BIMESTRAL    | 3974        | AUTORRE. | 55285088     | ...
+
+   Se pega esa hoja en una pestana llamada ADHESIVOS y esto reparte la columna
+   del mes que toque entre las obligaciones de ese mes.
+   --------------------------------------------------------------------------- */
+
+var HOJA_ADHESIVOS = 'ADHESIVOS';
+
+/** Como se llama cada impuesto en la hoja de correspondencia. */
+var CONCEPTO_IMPUESTO = {
+  'RETEICA': 'RETEICA',
+  'RETENCION ICA': 'RETEICA',
+  'AUTORRETENCION ICA': 'AUTORRETEICA',
+  'AUTORRETEICA': 'AUTORRETEICA',
+  'ICA': 'ICA',
+  'ICA ANUAL': 'ICA',
+  'MEDIOS MAGNETICOS': 'EXOGENA',
+  'EXOGENA': 'EXOGENA'
+};
+
+/** 'ADHESIVO Sept' -> 9. Devuelve 0 si el encabezado no nombra un mes. */
+function mesDeEncabezado(texto) {
+  var t = limpiar(texto);
+  if (t.indexOf('ADHESIVO') < 0 && t.indexOf('LABEL') < 0) return 0;
+  var meses = [
+    ['ENE', 1], ['FEB', 2], ['MAR', 3], ['ABR', 4], ['MAY', 5], ['JUN', 6],
+    ['JUL', 7], ['AGO', 8], ['SEP', 9], ['OCT', 10], ['NOV', 11], ['DIC', 12]
+  ];
+  for (var i = 0; i < meses.length; i++) {
+    if (t.indexOf(meses[i][0]) >= 0) return meses[i][1];
+  }
+  return 0;
+}
+
+/** Un adhesivo de verdad es un numero largo, no 'REGISTRADO EN CARTERO'. */
+function adhesivoValido(v) {
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  if (!s) return '';
+  if (s.indexOf('#N/A') >= 0) return '';
+  var soloDigitos = s.replace(/\.0+$/, '').replace(/[^\d]/g, '');
+  if (soloDigitos.length < 6) return '';
+  return soloDigitos;
+}
+
+/**
+ * Reparte los adhesivos de un mes entre las obligaciones de ese mes.
+ *
+ *   repartirAdhesivos()        el mes en curso
+ *   repartirAdhesivos(2026, 11) uno concreto
+ *
+ * Cruza por municipio + impuesto. No pisa un adhesivo ya escrito: si alguien
+ * lo corrigio a mano, ese gana.
+ */
+function repartirAdhesivos(anio, mes) {
+  exige('configurar');
+
+  var hoy = new Date();
+  var a = Number(anio) || hoy.getFullYear();
+  var m = Number(mes) || (hoy.getMonth() + 1);
+
+  var h = libro().getSheetByName(HOJA_ADHESIVOS);
+  if (!h || h.getLastRow() < 2) {
+    throw new Error('Falta la hoja ' + HOJA_ADHESIVOS + ' o está vacía. Pega ahí ' +
+      'la hoja del archivo de correspondencia, con sus encabezados en la fila 1 ' +
+      '(MUNICIPIO, CONCEPTO y una columna ADHESIVO por mes).');
+  }
+
+  var todo = h.getRange(1, 1, h.getLastRow(), h.getLastColumn()).getValues();
+  var cab = todo[0];
+
+  var colMun = -1, colConcepto = -1, colMes = -1;
+  for (var i = 0; i < cab.length; i++) {
+    var k = limpiar(cab[i]);
+    if (colMun < 0 && k.indexOf('MUNICIPIO') >= 0) colMun = i;
+    if (colConcepto < 0 && (k === 'CONCEPTO' || k === 'IMPUESTO')) colConcepto = i;
+    if (colMes < 0 && mesDeEncabezado(cab[i]) === m) colMes = i;
+  }
+  if (colMun < 0) throw new Error('No encontré la columna del municipio en ' + HOJA_ADHESIVOS + '.');
+  if (colMes < 0) {
+    throw new Error('No hay una columna de adhesivos para ' + NOMBRE_MES[m - 1] +
+      ' en ' + HOJA_ADHESIVOS + '. Los encabezados tienen que decir, por ejemplo, ' +
+      '«ADHESIVO ' + NOMBRE_MES[m - 1].slice(0, 3) + '».');
+  }
+
+  // municipio|impuesto -> adhesivo
+  var mapa = {}, sinConcepto = 0;
+  for (var r = 1; r < todo.length; r++) {
+    var mun = limpiar(todo[r][colMun]);
+    if (!mun) continue;
+    var adh = adhesivoValido(todo[r][colMes]);
+    if (!adh) continue;
+    var imp = colConcepto >= 0
+      ? (CONCEPTO_IMPUESTO[limpiar(todo[r][colConcepto])] || '') : '';
+    if (!imp) sinConcepto++;
+    mapa[mun + '|' + imp] = adh;
+  }
+
+  // repartir entre las obligaciones que vencen en ese mes
+  var ix = indices(HOJA.OBLIGACIONES);
+  var ho = libro().getSheetByName(HOJA.OBLIGACIONES);
+  var puestos = 0, yaTenian = 0, sinPareja = {};
+
+  filas(HOJA.OBLIGACIONES).forEach(function (f, k) {
+    var vence = f[ix.vencimiento];
+    if (!venceEnElMes(vence instanceof Date ? vence : normFecha(vence), a, m)) return;
+    if (String(f[ix.estado] || '').trim().toUpperCase() === ESTADO.APROBADA) return;
+    if (String(f[ix.adhesivo] || '').trim()) { yaTenian++; return; }
+
+    var mun = limpiar(f[ix.municipio]);
+    var imp = String(f[ix.impuesto] || '').trim();
+    var adh = mapa[mun + '|' + imp] || mapa[mun + '|'];
+    if (!adh) { sinPareja[mun + ' · ' + imp] = true; return; }
+
+    ho.getRange(k + 2, ix.adhesivo + 1).setValue(adh);
+    puestos++;
+  });
+
+  if (puestos) registrar('', EVENTO.AVISO, 'adhesivos repartidos: ' + puestos);
+
+  var l = [NOMBRE_MES[m - 1] + ' de ' + a + ': ' + puestos + ' adhesivos escritos.'];
+  if (yaTenian) l.push(yaTenian + ' ya tenían uno y no se tocaron.');
+  if (sinConcepto) {
+    l.push(sinConcepto + ' filas de ' + HOJA_ADHESIVOS + ' no dicen de qué impuesto ' +
+           'son; valen para cualquiera de ese municipio.');
+  }
+  var faltan = Object.keys(sinPareja);
+  if (faltan.length) {
+    l.push('', faltan.length + ' obligaciones del mes se quedaron sin adhesivo:');
+    faltan.sort().slice(0, 25).forEach(function (x) { l.push('   ' + x); });
+    if (faltan.length > 25) l.push('   … y ' + (faltan.length - 25) + ' más');
+  }
+  var txt = l.join('\n');
   Logger.log(txt);
   return txt;
 }

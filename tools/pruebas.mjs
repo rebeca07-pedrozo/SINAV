@@ -12,7 +12,7 @@ const archivos = ['00_Constantes.gs', '03_Roles.gs', '04_Normalizar.gs',
                  '06_Estados.gs', '09_Enviar.gs', '15_Carga.gs',
                  '16_Metricas.gs',
                  '11_Respuestas.gs', '20_Ausencias.gs', '21_Calendario.gs',
-                 '22_Produccion.gs',
+                 '22_Produccion.gs', '23_Correo.gs', '14_Campos.gs',
                  'Carga.gs', 'Mensuales.gs', '99_Pruebas.gs'];
 
 const codigo = archivos
@@ -62,7 +62,24 @@ if (!orden.ok) {
 }
 console.log('PASA  los ' + orden.orden + ' archivos .gs cargan en cualquier orden\n');
 
-const correr = new Function(codigo + '\n;return pruebas();');
+/**
+ * Lo que en Apps Script sale del libro y aqui no existe. Son valores fijos a
+ * proposito: si una prueba empieza a depender de lo que diga CONFIG, deja de
+ * ser una prueba del codigo y pasa a ser una prueba de la hoja.
+ */
+const CONFIG_PRUEBAS = {
+  egreso: '25',
+  codigo_departamento: '9413',
+  nombre_recibe: 'Liliana Ramirez',
+  nombre_remitente: 'Impuestos Davivienda',
+  dominio_oficinas: 'davivienda.com',
+  copias_fijas: '',
+  modo: 'PRUEBA'
+};
+const preludio = 'function config(k) { return (' +
+  JSON.stringify(CONFIG_PRUEBAS) + ')[k] || ""; }\n;';
+
+const correr = new Function(preludio + codigo + '\n;return pruebas();');
 const r = correr();
 
 console.log(r.resumen);

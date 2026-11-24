@@ -24,8 +24,11 @@ function puedeEnviar(fila) {
   if (String(f.estado || '').toUpperCase() !== ESTADO.LISTA) {
     return { ok: false, motivo: 'el estado es ' + (f.estado || 'vacio') + ', no LISTA' };
   }
-  if (!normCorreos(f.correo_oficina)) {
-    return { ok: false, motivo: 'sin correo de oficina' };
+  // vale el correo escrito a mano, o la dependencia: de ella se arman
+  // director<dep>@ y subdirector<dep>@, que es el patron del banco
+  if (!normCorreos(f.correo_oficina) &&
+      !String(f.cod_oficina || '').trim().replace(/^0+/, '')) {
+    return { ok: false, motivo: 'sin correo ni dependencia' };
   }
   return { ok: true, motivo: '' };
 }

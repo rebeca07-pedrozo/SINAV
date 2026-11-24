@@ -85,7 +85,22 @@ var COLS = {
     'soporte_revisado',
     // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
     // Vacio = Banco Davivienda, que es el caso normal.
-    'entidad'
+    'entidad',
+    // --- lo que se agrego despues va SIEMPRE aqui abajo, nunca en la mitad:
+    // asegurarHojas() reescribe la fila 1 sin mover los datos, y una columna
+    // insertada en medio desalinea todo lo que ya esta escrito.
+    //
+    // El envio FISICO por correspondencia interna, que no es lo mismo que el
+    // correo: 'fecha_envio' la escribe SINAV cuando sale el correo,
+    // 'fecha_despacho' la escribe la persona y es cuando se despacho el sobre.
+    'fecha_despacho',
+    // El numero del adhesivo de correspondencia (55285303). Es por municipio,
+    // impuesto y MES: cambia en cada periodo, por eso vive en la obligacion y
+    // no en PROGRAMACION.
+    'adhesivo',
+    // El consecutivo de giro del pago (LR-09-74). Va en el asunto y en el
+    // cuerpo del correo.
+    'consecutivo_giro'
   ],
   EVENTOS: ['fecha', 'id_obligacion', 'actor', 'que_paso', 'detalle']
 };
@@ -277,7 +292,13 @@ var CONFIG_BASE = [
   ['nombre_remitente', 'Impuestos Davivienda'],
   ['carpeta_territoriales', CARPETA_TERRITORIALES],
   ['vigencia_actual', '2026'],
-  ['dias_aviso', '10,4,2,0'],
+  ['dias_aviso', '7,4,2,0'],
+  // Lo que es igual en todos los correos. Si cambia, se cambia aqui una vez.
+  ['egreso', '25'],
+  ['codigo_departamento', '9413'],
+  ['nombre_recibe', 'Liliana Ramirez'],
+  ['copias_fijas', ''],
+  ['dominio_oficinas', 'davivienda.com'],
   ['modo', 'PRUEBA'],
   ['rol_defecto', 'PROFESIONAL'],
   ['area_defecto', 'MUNICIPALES'],
@@ -1525,8 +1546,11 @@ function puedeEnviar(fila) {
   if (String(f.estado || '').toUpperCase() !== ESTADO.LISTA) {
     return { ok: false, motivo: 'el estado es ' + (f.estado || 'vacio') + ', no LISTA' };
   }
-  if (!normCorreos(f.correo_oficina)) {
-    return { ok: false, motivo: 'sin correo de oficina' };
+  // vale el correo escrito a mano, o la dependencia: de ella se arman
+  // director<dep>@ y subdirector<dep>@, que es el patron del banco
+  if (!normCorreos(f.correo_oficina) &&
+      !String(f.cod_oficina || '').trim().replace(/^0+/, '')) {
+    return { ok: false, motivo: 'sin correo ni dependencia' };
   }
   return { ok: true, motivo: '' };
 }
@@ -1732,6 +1756,10 @@ function decorar(o) {
     exogena: String(o.exogena || ''),
     incluye_retencion: String(o.incluye_retencion || ''),
     presentacion_fecha: fechaTexto(o.presentacion_fecha),
+    // el envio fisico por correspondencia, que el correo necesita nombrar
+    fecha_despacho: fechaTexto(o.fecha_despacho),
+    adhesivo: String(o.adhesivo || ''),
+    consecutivo_giro: String(o.consecutivo_giro || ''),
     revision_fecha: fechaTexto(o.revision_fecha),
     revision_por: String(o.revision_por || ''),
     estado: String(o.estado),
@@ -1754,6 +1782,8 @@ function decorar(o) {
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
     soportes: listaSoportes(o.soporte_id).length,
+    // lo que hay que digitalizar antes de que el correo tenga sentido
+    falta_correo: faltaParaElCorreo(o),
     sellados: listaIds(o.sellado_id).length,
     soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
@@ -1924,6 +1954,10 @@ function apiListaEnviar(ventana) {
     filas: lista,
     conteos: conteos(lista),
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
+    // la digitalizacion vive dentro de esta pantalla: se llena justo antes de
+    // enviar, que es cuando la persona tiene los datos delante
+    campos: apiCamposOpciones(),
+    orden_campos: camposDelCorreo(),
     generado: fechaHoraTexto(new Date())
   };
 }
@@ -2219,46 +2253,8 @@ function etiqueta() {
   return GmailApp.getUserLabelByName(ETIQUETA) || GmailApp.createLabel(ETIQUETA);
 }
 
-function asuntoDe(o) {
-  return 'Declaración ' + o.impuesto + ' ' + o.periodo + ' - ' + o.municipio +
-         ' - Banco Davivienda S.A. [' + marcador(o.id) + ']';
-}
-
-function pesos(v) {
-  if (v === '' || v === null || v === undefined) return '-';
-  return '$' + Number(v).toLocaleString('es-CO', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
-  });
-}
-
-function cuerpoDe(o, modo) {
-  var lineas = [
-    'Buen día,',
-    '',
-    'Adjuntamos la declaración de ' + o.impuesto + ' del periodo ' + o.periodo +
-      ' para que sea presentada y pagada en el municipio de ' + o.municipio + '.',
-    '',
-    'Municipio: ' + o.municipio + ' (DANE ' + o.cod_dane + ')',
-    'Oficina: ' + (o.cod_oficina || '-'),
-    'Impuesto: ' + o.impuesto + ' - régimen ' + o.regimen,
-    'Periodo: ' + o.periodo + ' (' + o.periodicidad + ')',
-    'Vence: ' + fechaTexto(o.vencimiento),
-    'NIT del municipio: ' + (o.nit_municipio || '-'),
-    'Presentación: ' + o.tipo_presentacion + ' - paga ' + textoPago(o),
-    'Valor: ' + pesos(o.valor),
-    '',
-    'Por favor RESPONDA SOBRE ESTE MISMO CORREO, no abra uno nuevo, y adjunte el',
-    'soporte sellado por el municipio. Así queda asociado automáticamente a esta',
-    'obligación y no hay que buscarlo después.',
-    '',
-    'Gracias,',
-    config('nombre_remitente')
-  ];
-  if (modo === 'PRUEBA') {
-    lineas.unshift('[MODO PRUEBA] Este correo iba para: ' + (o.correo_oficina || '-'), '');
-  }
-  return lineas.join('\n');
-}
+/* El asunto y el cuerpo del correo viven en 23_Correo.gs: no son mecanica de
+   envio, son una instruccion de trabajo para la oficina. */
 
 /**
  * Como se lee el pago en el correo. Son dos datos: quien paga y con que.
@@ -2275,40 +2271,6 @@ function textoPago(o) {
   var forma = ETIQUETA_PAGO[String(o.forma_pago || '').trim()] || '';
   if (!quien) return 'sin definir';
   return forma ? quien + ' (' + forma + ')' : quien;
-}
-
-function cuerpoHtmlDe(o, modo) {
-  var fila = function (k, v) {
-    return '<tr><td style="padding:2px 12px 2px 0;color:#5f6368">' + k +
-           '</td><td style="padding:2px 0;color:#111">' + v + '</td></tr>';
-  };
-  var aviso = modo === 'PRUEBA'
-    ? '<p style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;' +
-      'padding:8px 10px;margin:0 0 16px">MODO PRUEBA. Este correo iba para: ' +
-      (o.correo_oficina || '-') + '</p>'
-    : '';
-  return '<div style="font:14px/1.5 Arial,sans-serif;color:#111;max-width:640px">' +
-    aviso +
-    '<p>Buen día,</p>' +
-    '<p>Adjuntamos la declaración de <b>' + o.impuesto + '</b> del periodo <b>' +
-      o.periodo + '</b> para que sea presentada y pagada en el municipio de <b>' +
-      o.municipio + '</b>.</p>' +
-    '<table style="border-collapse:collapse;font-size:14px;margin:16px 0">' +
-      fila('Municipio', o.municipio + ' (DANE ' + o.cod_dane + ')') +
-      fila('Oficina', o.cod_oficina || '-') +
-      fila('Impuesto', o.impuesto + ' &middot; régimen ' + o.regimen) +
-      fila('Periodo', o.periodo + ' (' + o.periodicidad + ')') +
-      fila('Vence', fechaTexto(o.vencimiento)) +
-      fila('NIT del municipio', o.nit_municipio || '-') +
-      fila('Presentación', o.tipo_presentacion + ' &middot; paga ' + textoPago(o)) +
-      fila('Valor', pesos(o.valor)) +
-    '</table>' +
-    '<p style="background:#f2f2f2;padding:10px 12px;margin:16px 0">' +
-      '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte el ' +
-      'soporte sellado por el municipio. Así queda asociado automáticamente a esta ' +
-      'obligación y no hay que buscarlo después.</p>' +
-    '<p>Gracias,<br>' + config('nombre_remitente') + '</p>' +
-    '</div>';
 }
 
 /**
@@ -2376,8 +2338,10 @@ function apiEnviar(ids) {
       continue;
     }
 
-    var destinos = modo === 'PRUEBA' ? miCorreo : normCorreos(o.correo_oficina);
-    var cuantos = destinos.split(',').length;
+    var destinos = modo === 'PRUEBA' ? miCorreo : destinatariosDe(o);
+    var copias = modo === 'PRUEBA' ? '' : copiasFijas();
+    var cuantos = destinos.split(',').length +
+                  (copias ? copias.split(',').length : 0);
 
     if (cuotaUsada() + cuantos > CUOTA_DIARIA) {
       pendientes = ids.slice(i).map(String);
@@ -2400,11 +2364,16 @@ function apiEnviar(ids) {
           ' MB y Gmail corta en 25 MB. Junta los archivos en uno más liviano.');
       }
 
-      GmailApp.sendEmail(destinos, asuntoDe(o), cuerpoDe(o, modo), {
+      var opciones = {
         name: remitente,
         attachments: adjuntos,
-        htmlBody: cuerpoHtmlDe(o, modo)
-      });
+        htmlBody: cuerpoHtmlOficina(o, modo)
+      };
+      if (copias) opciones.cc = copias;
+      var logo = blobDelLogo();
+      if (logo) opciones.inlineImages = { logo: logo };
+
+      GmailApp.sendEmail(destinos, asuntoOficina(o), cuerpoOficina(o, modo), opciones);
       sumarCuota(cuantos);
 
       var hilo = hiloDelEnvio(o.id);
@@ -2496,12 +2465,12 @@ function porQueNoSeEnvia() {
     lineas.push('      p.ej. ' + ejemplos[k]);
   });
 
-  if (motivos['sin correo de oficina']) {
-    lineas.push('', 'El correo de la oficina sale de la hoja PROGRAMACION, ' +
-      'columna correo_oficina. De 315 municipios solo 98 lo tienen: ' +
-      'escríbelo ahí y vuelve a intentar. Las obligaciones que YA existen ' +
-      'no lo heredan solas, hay que escribirlo también en su fila de ' +
-      'OBLIGACIONES.');
+  if (motivos['sin correo ni dependencia']) {
+    lineas.push('', 'Esas no tienen a quién mandarse. El correo sale de dos sitios: ' +
+      'de correo_oficina si está escrito, y si no, de la dependencia ' +
+      '(cod_oficina), con la que se arman director<dep>@ y subdirector<dep>@. ' +
+      'Sin ninguno de los dos no hay destinatario: escribe el código de ' +
+      'dependencia en PROGRAMACION y corre «Refrescar los correos de oficina».');
   }
 
   var txt = lineas.join('\n');
@@ -3063,9 +3032,50 @@ function camposEditables() {
                        norm: 'normSiNoCampo', solo: 'AUTORRETEICA' },
   valor:             { et: 'Valor liquidado', tipo: 'valor', norm: 'normValor' },
   presentacion_fecha:{ et: 'Fecha de presentación', tipo: 'fecha', norm: 'normFecha' },
+  // El envio FISICO por correspondencia, con su adhesivo. No es la fecha en
+  // que sale el correo: esa la pone SINAV sola.
+  fecha_despacho:    { et: 'Fecha de despacho', tipo: 'fecha', vacio: true,
+                       norm: 'normFecha' },
+  adhesivo:          { et: 'Sticker de correspondencia', tipo: 'texto',
+                       norm: 'normTexto' },
+  consecutivo_giro:  { et: 'Consecutivo de giro', tipo: 'texto', norm: 'normTexto' },
     nota:              { et: 'Nota', tipo: 'texto', norm: 'normTexto' }
   };
   return _camposEditables;
+}
+
+/**
+ * Lo que el correo a la oficina necesita SI O SI, en el orden en que se pide.
+ *
+ * No es una regla de la maquina de estados: una obligacion sin valor existe
+ * perfectamente. Es que el correo quedaria diciendo "por el valor de $0", y
+ * eso lo lee un director de oficina que tiene que girar esa plata.
+ */
+function camposDelCorreo() {
+  return ['valor', 'paga_quien', 'forma_pago', 'adhesivo', 'consecutivo_giro',
+          'fecha_despacho', 'tipo_presentacion'];
+}
+
+/** Los que no pueden ir vacios. forma_pago y fecha_despacho si pueden. */
+function camposObligatoriosDelCorreo() {
+  return ['valor', 'paga_quien', 'adhesivo', 'consecutivo_giro'];
+}
+
+/**
+ * Que le falta a una obligacion para poder mandar el correo.
+ * Pura: recibe la fila y devuelve las etiquetas de lo que falta.
+ */
+function faltaParaElCorreo(fila) {
+  var f = fila || {};
+  var mapa = camposEditables();
+  var falta = [];
+  camposObligatoriosDelCorreo().forEach(function (k) {
+    var v = f[k];
+    var vacio = v === null || v === undefined || String(v).trim() === '' ||
+                (k === 'valor' && !Number(v));
+    if (vacio) falta.push(mapa[k] ? mapa[k].et : k);
+  });
+  return falta;
 }
 
 /* los normalizadores que solo usa esta pantalla */
@@ -4897,6 +4907,273 @@ function volverAPruebas() {
 }
 
 
+// ═════ 23_Correo.gs ═════
+
+/**
+ * SINAV · el correo que recibe la oficina.
+ *
+ * El texto no es decorativo: es una instrucción de trabajo. Dice qué egreso
+ * elaborar, con qué consecutivo de giro, a qué código devolver el sellado y
+ * qué pasa si no lo devuelven (evento SARO). Por eso vive en su propio archivo
+ * y no mezclado con la mecánica del envío.
+ *
+ * Lo que cambia por obligación sale de la fila. Lo que es igual en todos los
+ * correos (el egreso, el código del departamento, a nombre de quién se manda,
+ * las copias) sale de CONFIG y se cambia una sola vez.
+ */
+
+/** Los nombres largos, como los escribe el equipo en el asunto. */
+var IMPUESTO_LARGO = {
+  ICA: 'Industria y Comercio',
+  RETEICA: 'Retención de Industria y Comercio',
+  AUTORRETEICA: 'Autorretención de Industria y comercio',
+  EXOGENA: 'Medios magnéticos'
+};
+
+var IMPUESTO_ASUNTO = {
+  ICA: 'Declaración de ICA',
+  RETEICA: 'Declaración Retención de ICA',
+  AUTORRETEICA: 'Declaración Autorretención de ICA',
+  EXOGENA: 'Medios magnéticos'
+};
+
+/**
+ * La dependencia, sin el cero de relleno.
+ *
+ * En la hoja el codigo de oficina se guarda con cuatro posiciones ('0851')
+ * porque es un codigo y no un numero, pero las direcciones de correo no lo
+ * llevan: director851@, no director0851@.
+ */
+function dependenciaDe(o) {
+  var c = String(o.cod_oficina || '').trim().replace(/^0+/, '');
+  return c;
+}
+
+/**
+ * A quien va el correo.
+ *
+ * Si la obligacion tiene correo_oficina escrito, manda ese: alguien lo puso a
+ * proposito. Si no, se arma desde la dependencia, que es el patron del banco:
+ * director<dep>@ y subdirector<dep>@.
+ *
+ * Esto es lo que permite enviar a los municipios que nunca tuvieron correo
+ * escrito, que eran la mayoria.
+ */
+function destinatariosDe(o) {
+  var escrito = normCorreos(o.correo_oficina);
+  if (escrito) return escrito;
+
+  var dep = dependenciaDe(o);
+  if (!dep) return '';
+  var dominio = config('dominio_oficinas') || 'davivienda.com';
+  return ['director' + dep + '@' + dominio,
+          'subdirector' + dep + '@' + dominio].join(',');
+}
+
+/** Las copias fijas de CONFIG. Vacio si no hay. */
+function copiasFijas() {
+  return normCorreos(config('copias_fijas'));
+}
+
+/**
+ * El asunto, con el formato que usa el equipo:
+ *   1689 -Declaración Autorretención de ICA NILO - MENSUAL - $1.773.000 -
+ *   EGRESO 25 No - LR-09-74
+ *
+ * Al final va la marca SINAV-..., que es con la que luego se encuentra el
+ * hilo. Sin eso la respuesta de la oficina no se detecta sola.
+ */
+function asuntoOficina(o) {
+  var partes = [
+    dependenciaDe(o) + ' -' + (IMPUESTO_ASUNTO[o.impuesto] || o.impuesto) +
+      ' ' + String(o.municipio || '').toUpperCase(),
+    String(o.periodicidad || '').toUpperCase(),
+    pesosCortos(o.valor)
+  ];
+  var egreso = String(config('egreso') || '').trim();
+  var giro = String(o.consecutivo_giro || '').trim();
+  if (egreso) partes.push('EGRESO ' + egreso + ' No');
+  if (giro) partes.push(giro);
+  return partes.join(' - ') + ' [' + marcador(o.id) + ']';
+}
+
+/** $1.773.000 — sin decimales, que es como lo escriben en el asunto. */
+function pesosCortos(v) {
+  if (v === '' || v === null || v === undefined) return '$0';
+  var n = Math.round(Number(v) || 0);
+  return '$' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/** El mes y el ano en letras: "24 de noviembre de 2026". */
+function fechaLarga(v) {
+  var d = v instanceof Date ? v : normFecha(v);
+  if (!d) return 'sin fecha';
+  return d.getDate() + ' de ' + NOMBRE_MES[d.getMonth()] + ' de ' + d.getFullYear();
+}
+
+/**
+ * El parrafo de apertura. Es el que lleva los datos del envio fisico: el
+ * adhesivo con el que viaja el sobre, el valor, el NIT y la dependencia.
+ */
+function parrafoEnvio(o) {
+  var adhesivo = String(o.adhesivo || '').trim();
+  return 'Reciban un cordial saludo, les informo que enviamos por correo interno ' +
+    (adhesivo ? 'con el sticker No ' + adhesivo + ' ' : '') +
+    'la ' + (IMPUESTO_LARGO[o.impuesto] || o.impuesto) + ' ' +
+    String(o.periodicidad || '').toUpperCase() + ' del ' +
+    (o.vigencia || new Date().getFullYear()) + ', del Municipio ' +
+    String(o.municipio || '').toUpperCase() + ', por el valor de ' +
+    pesosCortos(o.valor) + ' con el NIT ' + (o.nit_municipio || '-') +
+    ' a la dependencia ' + (dependenciaDe(o) || '-') + '.';
+}
+
+/** El parrafo de instrucciones de pago. */
+function parrafoPago(o) {
+  var egreso = String(config('egreso') || '25').trim();
+  var giro = String(o.consecutivo_giro || '').trim();
+  return 'Favor realizar el pago por contingencia elaborando egreso ' + egreso +
+    (giro ? ', de acuerdo al consecutivo de giro asignado para este pago No ' + giro : '') +
+    ', realizar la presentación y el pago una vez reciban el soporte. Si el Banco ' +
+    'posee recaudo con el Municipio, timbrar en efectivo con abono a cuenta del ' +
+    'Municipio sin olvidar enviar el correo a GRP Conceptos Especiales; si no ' +
+    'poseemos recaudo con ellos elaborar el cheque con el mismo egreso ' + egreso +
+    ' y concepto 40 para pagar en otra entidad, o en la alcaldía.';
+}
+
+/** Los cuatro puntos de «aspectos a tener en cuenta». */
+function aspectos(o) {
+  var codigo = String(config('codigo_departamento') || '').trim();
+  var recibe = String(config('nombre_recibe') || '').trim();
+  return [
+    'Por favor una vez presentada la declaración (ante la entidad recaudadora y ' +
+      'sellada con fecha de recibido), enviar por este medio imagen del pago y ' +
+      'enviar la declaración con el sello de recibido a Dpto. de impuestos' +
+      (codigo ? ', código ' + codigo : '') +
+      (recibe ? ' a nombre de ' + recibe : '') +
+      '. Si el departamento de impuestos no es notificado mediante correo ' +
+      'electrónico, se reportará como evento SARO.',
+    'Si por alguna eventualidad el día anterior a la fecha del vencimiento de la ' +
+      'declaración no ha recibido en su oficina el formulario, por favor ' +
+      'comunicarse conmigo con carácter urgente. Solicitamos una vez recibido el ' +
+      'correo tramitar el pago del mismo, no es necesario esperar a la fecha de ' +
+      'vencimiento, para evitar sanciones tributarias; que de generarse, serán ' +
+      'cargadas a la oficina responsable del trámite.',
+    'Es responsabilidad de la oficina y/o área administrativa llevar a cabo el ' +
+      'trámite satisfactorio.',
+    'Sugerimos tomar fotocopia del recibido de la declaración y archivar para la ' +
+      'oficina. Recuerde que esta documentación es soporte si a futuro se requiere.'
+  ];
+}
+
+/** El correo en texto plano, para quien lea sin HTML. */
+function cuerpoOficina(o, modo) {
+  var l = [];
+  if (modo === 'PRUEBA') {
+    l.push('[MODO PRUEBA] Este correo iba para: ' + (destinatariosDe(o) || '-'), '');
+  }
+  l.push('Buenos días,', '', parrafoEnvio(o), '', parrafoPago(o), '',
+         'Fecha de vencimiento el ' + fechaLarga(o.vencimiento) + '.', '',
+         'ASPECTOS A TENER EN CUENTA:');
+  aspectos(o).forEach(function (a) { l.push('• ' + a); });
+  l.push('',
+    'Por favor RESPONDA SOBRE ESTE MISMO CORREO, no abra uno nuevo, y adjunte',
+    'la declaración sellada. Así queda archivada sola y no hay que buscarla después.',
+    '', 'Cordialmente,', config('nombre_remitente'));
+  return l.join('\n');
+}
+
+/**
+ * El correo en HTML, con el logo del banco arriba.
+ *
+ * El logo se incrusta como imagen en linea (cid) desde el archivo de Drive que
+ * apunta logo_id. Se incrusta y no se enlaza porque Gmail bloquea las imagenes
+ * remotas hasta que el que lee da permiso, y entonces el correo llega roto.
+ */
+function cuerpoHtmlOficina(o, modo) {
+  var rojo = '#e30518';
+  var p = function (txt) {
+    return '<p style="margin:0 0 14px">' + txt + '</p>';
+  };
+  var aviso = modo === 'PRUEBA'
+    ? '<p style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;' +
+      'padding:8px 10px;margin:0 0 16px;font-size:13px">MODO PRUEBA. ' +
+      'Este correo iba para: ' + (destinatariosDe(o) || '-') + '</p>'
+    : '';
+
+  var fila = function (k, v) {
+    return '<tr><td style="padding:3px 16px 3px 0;color:#5f6368;' +
+           'white-space:nowrap">' + k + '</td>' +
+           '<td style="padding:3px 0;color:#111"><b>' + v + '</b></td></tr>';
+  };
+
+  var puntos = aspectos(o).map(function (a) {
+    return '<li style="margin:0 0 8px">' + a + '</li>';
+  }).join('');
+
+  return '<div style="font:14px/1.55 Arial,Helvetica,sans-serif;color:#111;' +
+      'max-width:660px">' +
+    aviso +
+    (tieneLogo() ? '<div style="padding:0 0 12px"><img src="cid:logo" ' +
+      'alt="Davivienda" style="height:34px"></div>' : '') +
+    '<div style="border-top:3px solid ' + rojo + ';padding-top:16px">' +
+    p('Buenos días,') +
+    p(parrafoEnvio(o)) +
+    '<table style="border-collapse:collapse;font-size:13px;margin:0 0 16px;' +
+      'background:#f9f9f9;padding:8px">' +
+      fila('Municipio', o.municipio + ' (DANE ' + o.cod_dane + ')') +
+      fila('Dependencia', dependenciaDe(o) || '-') +
+      fila('Impuesto', (IMPUESTO_LARGO[o.impuesto] || o.impuesto) + ' &middot; ' +
+           String(o.periodicidad || '').toLowerCase()) +
+      fila('Periodo', o.periodo) +
+      fila('Valor', pesosCortos(o.valor)) +
+      fila('NIT del municipio', o.nit_municipio || '-') +
+      fila('Presentación', (o.tipo_presentacion || '-') + ' &middot; paga ' + textoPago(o)) +
+      (String(o.adhesivo || '').trim() ? fila('Sticker', o.adhesivo) : '') +
+      (String(o.consecutivo_giro || '').trim()
+        ? fila('Consecutivo de giro', o.consecutivo_giro) : '') +
+    '</table>' +
+    p(parrafoPago(o)) +
+    '<p style="margin:0 0 14px;padding:10px 12px;background:#fce9e9;' +
+      'border-left:3px solid ' + rojo + '">Fecha de vencimiento el <b>' +
+      fechaLarga(o.vencimiento) + '</b>.</p>' +
+    '<p style="margin:0 0 6px"><b>ASPECTOS A TENER EN CUENTA:</b></p>' +
+    '<ul style="margin:0 0 16px;padding-left:18px">' + puntos + '</ul>' +
+    '<p style="background:#f2f2f2;padding:10px 12px;margin:0 0 16px">' +
+      '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte la ' +
+      'declaración sellada. Así queda archivada sola y no hay que buscarla después.</p>' +
+    p('Cordialmente,<br>' + config('nombre_remitente')) +
+    '</div></div>';
+}
+
+/** Hay logo configurado y se puede abrir. */
+function tieneLogo() {
+  return !!blobDelLogo();
+}
+
+/**
+ * El logo como blob, para incrustarlo en el correo. Se cachea en memoria
+ * durante la ejecucion: en un envio de 50 correos seria abrir Drive 50 veces.
+ */
+var _blobLogo;
+var _blobLogoBuscado = false;
+
+function blobDelLogo() {
+  if (_blobLogoBuscado) return _blobLogo;
+  _blobLogoBuscado = true;
+  _blobLogo = null;
+  // idLogo() ya resuelve las propiedades del script, CONFIG y el enlace
+  // completo de Drive. No se repite aqui.
+  var id = idLogo();
+  if (!id) return null;
+  try {
+    _blobLogo = DriveApp.getFileById(id).getBlob().setName('logo');
+  } catch (e) {
+    _blobLogo = null;                 // sin logo el correo sale igual, sin imagen
+  }
+  return _blobLogo;
+}
+
+
 // ═════ 99_Pruebas.gs ═════
 
 /**
@@ -4935,6 +5212,7 @@ function pruebas() {
   pruebasProduccion(esIgual);
   pruebasVariosSoportes(esIgual);
   pruebasVariosSellados(esIgual);
+  pruebasCorreoOficina(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -5634,4 +5912,88 @@ function pruebasVariosSellados(esIgual) {
           estadosEsperanRespuesta().indexOf(ESTADO.SIN_EVIDENCIA) >= 0, true);
   esIgual('APROBADA ya no',
           estadosEsperanRespuesta().indexOf(ESTADO.APROBADA) >= 0, false);
+}
+
+/**
+ * El correo a la oficina. Lo que se prueba aqui no es la redaccion sino los
+ * datos que la oficina necesita para girar la plata: a quien va, cuanto es y
+ * con que consecutivo.
+ */
+function pruebasCorreoOficina(esIgual) {
+  var base = {
+    id: '25488|AUTORRETEICA|GENERAL|2026-11',
+    municipio: 'Nilo', cod_dane: '25488', cod_oficina: '1689',
+    impuesto: 'AUTORRETEICA', periodicidad: 'MENSUAL', periodo: '2026-11',
+    valor: 1773000, nit_municipio: '8999997078', consecutivo_giro: 'LR-09-74',
+    paga_quien: 'OFICINA', tipo_presentacion: 'OFICINA',
+    adhesivo: '55622944', correo_oficina: '', vigencia: '2026'
+  };
+  var con = function (extra) {
+    var o = {};
+    Object.keys(base).forEach(function (k) { o[k] = base[k]; });
+    Object.keys(extra || {}).forEach(function (k) { o[k] = extra[k]; });
+    return o;
+  };
+
+  // la dependencia pierde el cero de relleno: director851@, no director0851@
+  esIgual('dependencia sin cero', dependenciaDe({ cod_oficina: '0851' }), '851');
+  esIgual('dependencia de cuatro cifras', dependenciaDe({ cod_oficina: '1689' }), '1689');
+  esIgual('sin oficina, nada', dependenciaDe({ cod_oficina: '' }), '');
+
+  // los pesos del asunto: sin decimales y con punto de mil
+  esIgual('el valor se escribe como lo escriben ellos',
+          pesosCortos(1773000), '$1.773.000');
+  esIgual('un valor chico', pesosCortos(5000), '$5.000');
+  esIgual('sin valor no revienta', pesosCortos(''), '$0');
+
+  esIgual('la fecha en letras', fechaLarga(new Date(2026, 10, 24)),
+          '24 de noviembre de 2026');
+  esIgual('sin fecha lo dice', fechaLarga(''), 'sin fecha');
+
+  // el asunto, con el formato del equipo
+  var asunto = asuntoOficina(con({}));
+  esIgual('el asunto empieza por la dependencia', asunto.indexOf('1689 -') === 0, true);
+  esIgual('nombra el impuesto largo',
+          asunto.indexOf('Declaración Autorretención de ICA NILO') > 0, true);
+  esIgual('lleva la periodicidad', asunto.indexOf('MENSUAL') > 0, true);
+  esIgual('lleva el valor', asunto.indexOf('$1.773.000') > 0, true);
+  esIgual('lleva el consecutivo de giro', asunto.indexOf('LR-09-74') > 0, true);
+  esIgual('y la marca, que es como se encuentra el hilo',
+          asunto.indexOf('[SINAV-') > 0, true);
+
+  // lo que falta para que el correo tenga sentido
+  esIgual('completa no falta nada', faltaParaElCorreo(con({})).length, 0);
+  esIgual('sin valor falta el valor',
+          faltaParaElCorreo(con({ valor: '' })).length, 1);
+  esIgual('un valor en cero tampoco sirve',
+          faltaParaElCorreo(con({ valor: 0 })).length, 1);
+  esIgual('sin adhesivo falta el sticker',
+          faltaParaElCorreo(con({ adhesivo: '' }))[0], 'Sticker de correspondencia');
+  esIgual('sin giro falta el giro',
+          faltaParaElCorreo(con({ consecutivo_giro: '' }))[0], 'Consecutivo de giro');
+
+  // la dependencia vale como destinatario: es lo que desbloquea los
+  // municipios que nunca tuvieron correo escrito
+  esIgual('con dependencia se puede enviar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '1689' }).ok, true);
+  esIgual('sin correo NI dependencia, no',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).ok, false);
+  esIgual('y lo dice',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).motivo,
+          'sin correo ni dependencia');
+
+  // los adhesivos del archivo de correspondencia
+  esIgual('ADHESIVO Sept es septiembre', mesDeEncabezado('ADHESIVO Sept'), 9);
+  esIgual('con espacio al final tambien', mesDeEncabezado('ADHESIVO Agosto '), 8);
+  esIgual('Label Febrero tambien cuenta', mesDeEncabezado('Label Febrero '), 2);
+  esIgual('una columna que no es de adhesivos, no',
+          mesDeEncabezado('DESCRIPCION CARTERO'), 0);
+  esIgual('un numero de adhesivo', adhesivoValido('55285303.0'), '55285303');
+  esIgual('REGISTRADO EN CARTERO no es un adhesivo',
+          adhesivoValido('REGISTRADO EN CARTERO'), '');
+  esIgual('#N/A tampoco', adhesivoValido('#N/A'), '');
+  esIgual('vacio tampoco', adhesivoValido(''), '');
 }

@@ -74,6 +74,7 @@ correr el `ADMIN`.
 | `instalarCargaMensual()` | **SINAV · Mes → Programar la carga mensual** | Una vez, para dejar el activador puesto |
 | `refrescarCorreos()` | **SINAV · Mes → Refrescar los correos de oficina** | Cada vez que el equipo llene correos en PROGRAMACION |
 | `arreglarExogena()` | **SINAV · Mes → Arreglar EXOGENA** | Una vez, si el libro se cargó cuando EXOGENA nacía como `REVISAR` |
+| `repartirAdhesivos()` | **SINAV · Mes → Repartir los adhesivos del mes** | Cada mes, después de pegar la hoja ADHESIVOS |
 | `archivarCerradas()` | **SINAV · Mes → Archivar los meses cerrados** | Cuando el libro se vaya poniendo pesado |
 
 Y en el menú **SINAV**:
@@ -572,7 +573,31 @@ error: el primero de cada obligación reemplaza lo que hubiera y los siguientes
 se añaden. Así, volver a subir un archivo corregido sigue reemplazando, y
 subir la declaración y su anexo de golpe los deja los dos.
 
-### 6 · `requiere_envio` manda sobre el envío
+### 6 · Las tres fechas, que no son la misma
+
+| Columna | Qué es | Quién la escribe |
+|---|---|---|
+| `vencimiento` | Cuándo hay que presentar. **Sale del CALENDARIO** | La carga mensual |
+| `fecha_despacho` | Cuándo salió el sobre físico con su sticker | La persona, al digitalizar |
+| `fecha_envio` | Cuándo salió el correo | SINAV, sola |
+| `presentacion_fecha` | Cuándo se presentó ante el municipio | La persona |
+
+Confundirlas es fácil y caro: el vencimiento nunca se toca a mano, porque es
+el dato del que cuelga todo lo demás.
+
+### 7 · El correo necesita cuatro datos o no sale
+
+El correo a la oficina dice cuánto girar, con qué sticker viaja el sobre y con
+qué consecutivo de giro. Sin eso saldría *«por el valor de $0»* a un director
+que tiene que mover esa plata. Por eso SINAV no deja enviar sin:
+
+**Valor · Quién paga · Sticker de correspondencia · Consecutivo de giro**
+
+Se llenan en la misma pantalla de Enviar, con el botón **Digitalizar** de cada
+fila. Al darle a *Enviar seleccionadas*, si falta algo te lo dice y te abre la
+primera fila coja.
+
+### 8 · `requiere_envio` manda sobre el envío
 
 Si la fila no dice **`SI`**, no se envía, y la fila lo explica: *«marcada como
 que no se envía por correo»*. Sale de PROGRAMACION, y ahí es donde se cambia.
@@ -586,7 +611,7 @@ arregla con **SINAV · Mes → Arreglar EXOGENA**, que lo pasa a `SI` en
 PROGRAMACION y en las obligaciones abiertas, respetando los `NO` escritos a
 mano.
 
-### 7 · El `hilo_id`
+### 9 · El `hilo_id`
 
 Si al enviar no se encuentra el hilo, la fila se queda sin `hilo_id` y se
 escribe un `ERROR` en EVENTOS. Esa obligación **nunca va a detectar la respuesta
@@ -594,7 +619,7 @@ sola**: hay que archivar el sellado a mano.
 
 **Cómo se comprueba:** buscar `ERROR` en EVENTOS de vez en cuando.
 
-### 8 · Las columnas nuevas van al final
+### 10 · Las columnas nuevas van al final
 
 `asegurarHojas()` reescribe la fila 1 **sin mover los datos de abajo**. Insertar
 una columna en la mitad desalinea todo lo que ya está escrito: los valores
@@ -603,14 +628,14 @@ quedan en la columna de al lado y no hay forma limpia de deshacerlo.
 Lo mismo con el orden de `COLS` en `00_Constantes.gs`. Una columna nueva, al
 final, siempre.
 
-### 9 · Los códigos son texto, no números
+### 11 · Los códigos son texto, no números
 
 `cod_dane`, `cod_oficina`, `periodo`, `nit_municipio` y los ids de Drive tienen
 formato `@` en la hoja. Si alguien los pasa a número, **`05001` se convierte en
 `5001`** y deja de emparejar con el calendario: la carga masiva no encuentra el
 municipio y la obligación se queda sin soporte.
 
-### 10 · La hoja CALENDARIO al cambiar de año
+### 12 · La hoja CALENDARIO al cambiar de año
 
 El calendario del año nuevo se pega **encima** de CALENDARIO, y ahí es donde se
 pierden cosas si no se tiene cuidado: PROGRAMACION **no** se vuelve a cargar,
@@ -621,7 +646,7 @@ Lo que sí hay que hacer al cambiar de año: habilitar la vigencia nueva en
 VIGENCIAS con los ids de sus carpetas de Drive, con
 `habilitarVigencia("2027")`.
 
-### 11 · Nadie debe editar OBLIGACIONES a mano
+### 13 · Nadie debe editar OBLIGACIONES a mano
 
 Se puede, y a veces hace falta para una prueba. Pero cambiar el `estado` a mano
 se salta `validarPaso()`, y un estado al que no se llegó por el camino correcto
@@ -643,6 +668,59 @@ queda en EVENTOS, así que en una auditoría no hay quién responda por ese camb
   que sigue abierto.
 
 ---
+
+## 8b · El correo a la oficina
+
+No es un aviso: es una instrucción de trabajo. Dice qué egreso elaborar, con
+qué consecutivo de giro, a qué código devolver el sellado y que si no lo
+devuelven se reporta como evento SARO. Vive en `src/23_Correo.gs`.
+
+### A quién llega
+
+| Si la obligación tiene… | Va a… |
+|---|---|
+| `correo_oficina` escrito | ese correo, tal cual |
+| solo la dependencia (`cod_oficina`) | `director<dep>@` y `subdirector<dep>@` |
+| ninguno de los dos | no se envía, y la fila lo dice |
+
+Esto es lo que desbloquea los municipios que nunca tuvieron correo escrito: la
+dependencia ya estaba en los datos. El cero de relleno se quita, así que la
+oficina `0851` va a `director851@`, no a `director0851@`.
+
+Las copias fijas (Elizabeth, GRP Conceptos Especiales…) se escriben una vez en
+**CONFIG → `copias_fijas`**, separadas por coma.
+
+### Lo que sale de CONFIG y lo que sale de la obligación
+
+| De CONFIG, se cambia una vez | De la obligación, se digitaliza |
+|---|---|
+| `egreso` (25) | `valor` |
+| `codigo_departamento` (9413) | `adhesivo` |
+| `nombre_recibe` | `consecutivo_giro` |
+| `copias_fijas` | `fecha_despacho` |
+| `dominio_oficinas` | `paga_quien` |
+
+### El logo
+
+Sale de `logo_id` (Propiedades del script) y se **incrusta** en el correo, no
+se enlaza: Gmail bloquea las imágenes remotas hasta que quien lee da permiso,
+y entonces el correo llega roto. Si no hay logo, el correo sale igual, sin
+imagen.
+
+## 8c · Los adhesivos de correspondencia
+
+El número del sticker (`55285303`) es por municipio, impuesto y **mes**. Entra
+de dos formas:
+
+1. **A mano**, en el botón *Digitalizar* de la fila.
+2. **En bloque**: pega la hoja del archivo de correspondencia en una pestaña
+   llamada **ADHESIVOS** y corre **SINAV · Mes → Repartir los adhesivos del
+   mes**.
+
+El repartidor busca la columna del mes por su encabezado (*ADHESIVO Sept*,
+*Label Febrero*…), cruza por municipio + impuesto y **no pisa** un adhesivo ya
+escrito. Lo que diga `REGISTRADO EN CARTERO` o `#N/A` no es un número y se
+ignora. Al final lista las obligaciones del mes que se quedaron sin adhesivo.
 
 ## 9 · Si algo sale mal
 
