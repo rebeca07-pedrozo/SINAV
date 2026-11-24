@@ -69,6 +69,7 @@ function decorar(o) {
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
     soportes: listaSoportes(o.soporte_id).length,
+    sellados: listaIds(o.sellado_id).length,
     soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
     motivo_no_enviable: env.motivo,

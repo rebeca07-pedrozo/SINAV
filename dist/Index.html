@@ -2877,6 +2877,8 @@ function FilaRespuesta({ o, veTodo, alAbrir, abriendo }) {
     </td>
     <td class="celda-linea2">
       <${Cadena} cadena=${o.cadena} trabada=${!o.cadena.sellado} />
+      ${o.sellados > 1
+        ? html`<span class="sub">${o.sellados + ' documentos guardados'}</span>` : null}
     </td>
     <td class="celda-linea2"><${Pildora} estado=${o.estado} /></td>
     ${veTodo ? html`<td class="celda-linea2">

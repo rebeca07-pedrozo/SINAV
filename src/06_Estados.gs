@@ -39,9 +39,13 @@ function puedeEnviar(fila) {
  * adivinar cuantos caben.
  */
 function listaSoportes(v) {
-  var crudo = v && typeof v === 'object' ? v.soporte_id : v;
+  return listaIds(v && typeof v === 'object' ? v.soporte_id : v);
+}
+
+/** Varios ids de Drive en una celda, separados por coma. Sin repetidos. */
+function listaIds(v) {
   var salida = [], vistos = {};
-  String(crudo || '').split(/[,;\s]+/).forEach(function (x) {
+  String(v || '').split(/[,;\s]+/).forEach(function (x) {
     var s = x.trim();
     if (!s || vistos[s]) return;
     vistos[s] = true;

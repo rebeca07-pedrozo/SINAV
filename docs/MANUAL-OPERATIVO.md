@@ -445,6 +445,24 @@ cambió de manos.
 Al enviar, SINAV guarda el **`hilo_id`** de Gmail. La pestaña **Respuestas** lee
 **ese hilo y nada más**.
 
+### Si contestan sin adjuntar nada
+
+Pasa a menudo: la oficina responde con una queja, una pregunta o un «recibido»
+y el sellado llega después, en otro correo del mismo hilo.
+
+Eso está cubierto. La obligación pasa a `RESPONDIDA` y **sigue mirando el
+hilo**: cada vez que se revisan las respuestas se leen solo los mensajes
+nuevos, y el adjunto se guarda cuando aparezca, en el mensaje cinco o en el
+quince. Lo que ya se leyó no se vuelve a procesar, porque la columna
+`ultimo_mensaje` recuerda dónde iba.
+
+Los adjuntos **se suman**, no se reemplazan: si mandan el sellado y más tarde
+el recibo de pago, quedan los dos en la carpeta de Sellados, numerados. La
+pantalla dice *«2 documentos guardados»*.
+
+Deja de mirar el hilo cuando la obligación llega a `REVISADA` o `APROBADA`:
+ahí ya se cerró y lo que llegue después es otra conversación.
+
 ### Qué hace el botón «Revisar respuestas ahora»
 
 1. Recorre las obligaciones enviadas que tengan `hilo_id`.

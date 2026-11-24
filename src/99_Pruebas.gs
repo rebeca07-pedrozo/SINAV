@@ -33,6 +33,7 @@ function pruebas() {
   pruebasCargaMensual(esIgual);
   pruebasProduccion(esIgual);
   pruebasVariosSoportes(esIgual);
+  pruebasVariosSellados(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -707,4 +708,29 @@ function pruebasVariosSoportes(esIgual) {
           puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'a,b',
                         requiere_envio: 'SI',
                         correo_oficina: 'x@muni.gov.co' }).ok, true);
+}
+
+/**
+ * La oficina puede mandar primero una queja sin nada, despues el sellado, y
+ * mas tarde el recibo en otro correo del mismo hilo. Cada adjunto es
+ * evidencia y se SUMA: ninguno pisa al anterior.
+ */
+function pruebasVariosSellados(esIgual) {
+  esIgual('un sellado', listaIds('abc'), ['abc']);
+  esIgual('dos sellados', listaIds('abc,def'), ['abc', 'def']);
+  esIgual('sin sellado todavia', listaIds(''), []);
+  esIgual('nulo no revienta', listaIds(null), []);
+  esIgual('no cuenta dos veces el mismo archivo',
+          listaIds('abc,abc,def').length, 2);
+
+  // RESPONDIDA sigue en la lista de estados que miran el hilo: por eso una
+  // respuesta sin adjunto no cierra la puerta al sellado que venga despues
+  esIgual('ENVIADA mira el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.ENVIADA) >= 0, true);
+  esIgual('RESPONDIDA SIGUE mirando el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.RESPONDIDA) >= 0, true);
+  esIgual('SIN_EVIDENCIA tambien, por si contestan tarde',
+          estadosEsperanRespuesta().indexOf(ESTADO.SIN_EVIDENCIA) >= 0, true);
+  esIgual('APROBADA ya no',
+          estadosEsperanRespuesta().indexOf(ESTADO.APROBADA) >= 0, false);
 }

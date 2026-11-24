@@ -1540,9 +1540,13 @@ function puedeEnviar(fila) {
  * adivinar cuantos caben.
  */
 function listaSoportes(v) {
-  var crudo = v && typeof v === 'object' ? v.soporte_id : v;
+  return listaIds(v && typeof v === 'object' ? v.soporte_id : v);
+}
+
+/** Varios ids de Drive en una celda, separados por coma. Sin repetidos. */
+function listaIds(v) {
   var salida = [], vistos = {};
-  String(crudo || '').split(/[,;\s]+/).forEach(function (x) {
+  String(v || '').split(/[,;\s]+/).forEach(function (x) {
     var s = x.trim();
     if (!s || vistos[s]) return;
     vistos[s] = true;
@@ -1750,6 +1754,7 @@ function decorar(o) {
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
     soportes: listaSoportes(o.soporte_id).length,
+    sellados: listaIds(o.sellado_id).length,
     soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
     motivo_no_enviable: env.motivo,
@@ -2739,22 +2744,37 @@ function revisarRespuestas() {
 
     var campos = { ultimo_mensaje: r.ultimo };
 
-    // el adjunto va a Sellados, en la carpeta del municipio y el impuesto
-    var guardado = null;
+    // Los adjuntos van a Sellados, en la carpeta del municipio y el impuesto.
+    // TODOS los que vengan, y se SUMAN a los que ya hubiera: la oficina puede
+    // mandar primero una queja sin nada, luego el sellado, y mas tarde el
+    // recibo de pago en otro correo del mismo hilo. Cada uno es evidencia.
+    var guardados = [];
     if (r.adjuntos.length) {
+      var yaHabia = listaIds(o.sellado_id);
       try {
         var dir = carpetaSellado(o.vigencia, o.municipio, o.impuesto);
-        var a = r.adjuntos[r.adjuntos.length - 1];   // el ultimo que mandaron
-        var ext = a.getName().indexOf('.') > 0
-          ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
-        var nombre = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
-          .replace(/[\\/:*?"<>|]/g, '-') + ext;
-        guardado = dir.createFile(a.copyBlob().setName(nombre));
-        campos.sellado_id = guardado.getId();
-        conSellado++;
+        var base = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
+          .replace(/[\\/:*?"<>|]/g, '-');
+        for (var k = 0; k < r.adjuntos.length; k++) {
+          var a = r.adjuntos[k];
+          var ext = a.getName().indexOf('.') > 0
+            ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
+          var cuantos = yaHabia.length + guardados.length;
+          var nombre = base + (cuantos ? ' ' + (cuantos + 1) : '') + ext;
+          guardados.push(dir.createFile(a.copyBlob().setName(nombre)));
+        }
+        campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+          return f.getId();
+        })).join(',');
+        conSellado += guardados.length;
       } catch (e) {
         registrar(o.id, EVENTO.ERROR, 'no se pudo guardar el sellado: ' + e.message);
         errores.push(o.municipio + ' ' + o.impuesto + ': ' + e.message);
+        if (guardados.length) {
+          campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+            return f.getId();
+          })).join(',');
+        }
       }
     }
 
@@ -2764,8 +2784,10 @@ function revisarRespuestas() {
       escribirCampos(HOJA.OBLIGACIONES, o._fila, campos);
       registrar(o.id, EVENTO.RESPONDIDA,
         r.respuestas + ' mensaje(s) de ' + r.de +
-        (guardado ? ' · sellado guardado: ' + guardado.getName()
-                  : ' · sin adjunto'));
+        (guardados.length
+          ? ' · ' + guardados.length + ' adjunto(s) guardado(s): ' +
+            guardados.map(function (f) { return f.getName(); }).join(', ')
+          : ' · sin adjunto'));
 
       // ENVIADA pasa a RESPONDIDA; lo que ya estaba RESPONDIDA se queda,
       // porque una respuesta mas no cambia el estado, solo suma evidencia
@@ -2793,11 +2815,14 @@ function apiEnlaceSellado(id) {
   var o = registros(HOJA.OBLIGACIONES).filter(function (r) {
     return String(r.id) === String(id);
   })[0];
-  if (!o || !String(o.sellado_id || '').trim()) {
+  var cuales = o ? listaIds(o.sellado_id) : [];
+  if (!cuales.length) {
     throw new Error('Esa obligación todavía no tiene sellado.');
   }
   exigeMia(o.responsable, 'editarAjenas');
-  return 'https://drive.google.com/file/d/' + String(o.sellado_id).trim() + '/view';
+  // si guardaron varios, se abre el primero; los demas estan en la misma
+  // carpeta de Sellados, y el hilo de Gmail los tiene todos
+  return 'https://drive.google.com/file/d/' + cuales[0] + '/view';
 }
 
 /** El enlace al hilo de Gmail, para leer la conversación entera. */
@@ -4909,6 +4934,7 @@ function pruebas() {
   pruebasCargaMensual(esIgual);
   pruebasProduccion(esIgual);
   pruebasVariosSoportes(esIgual);
+  pruebasVariosSellados(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -5583,4 +5609,29 @@ function pruebasVariosSoportes(esIgual) {
           puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'a,b',
                         requiere_envio: 'SI',
                         correo_oficina: 'x@muni.gov.co' }).ok, true);
+}
+
+/**
+ * La oficina puede mandar primero una queja sin nada, despues el sellado, y
+ * mas tarde el recibo en otro correo del mismo hilo. Cada adjunto es
+ * evidencia y se SUMA: ninguno pisa al anterior.
+ */
+function pruebasVariosSellados(esIgual) {
+  esIgual('un sellado', listaIds('abc'), ['abc']);
+  esIgual('dos sellados', listaIds('abc,def'), ['abc', 'def']);
+  esIgual('sin sellado todavia', listaIds(''), []);
+  esIgual('nulo no revienta', listaIds(null), []);
+  esIgual('no cuenta dos veces el mismo archivo',
+          listaIds('abc,abc,def').length, 2);
+
+  // RESPONDIDA sigue en la lista de estados que miran el hilo: por eso una
+  // respuesta sin adjunto no cierra la puerta al sellado que venga despues
+  esIgual('ENVIADA mira el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.ENVIADA) >= 0, true);
+  esIgual('RESPONDIDA SIGUE mirando el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.RESPONDIDA) >= 0, true);
+  esIgual('SIN_EVIDENCIA tambien, por si contestan tarde',
+          estadosEsperanRespuesta().indexOf(ESTADO.SIN_EVIDENCIA) >= 0, true);
+  esIgual('APROBADA ya no',
+          estadosEsperanRespuesta().indexOf(ESTADO.APROBADA) >= 0, false);
 }

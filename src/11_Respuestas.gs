@@ -143,22 +143,37 @@ function revisarRespuestas() {
 
     var campos = { ultimo_mensaje: r.ultimo };
 
-    // el adjunto va a Sellados, en la carpeta del municipio y el impuesto
-    var guardado = null;
+    // Los adjuntos van a Sellados, en la carpeta del municipio y el impuesto.
+    // TODOS los que vengan, y se SUMAN a los que ya hubiera: la oficina puede
+    // mandar primero una queja sin nada, luego el sellado, y mas tarde el
+    // recibo de pago en otro correo del mismo hilo. Cada uno es evidencia.
+    var guardados = [];
     if (r.adjuntos.length) {
+      var yaHabia = listaIds(o.sellado_id);
       try {
         var dir = carpetaSellado(o.vigencia, o.municipio, o.impuesto);
-        var a = r.adjuntos[r.adjuntos.length - 1];   // el ultimo que mandaron
-        var ext = a.getName().indexOf('.') > 0
-          ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
-        var nombre = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
-          .replace(/[\\/:*?"<>|]/g, '-') + ext;
-        guardado = dir.createFile(a.copyBlob().setName(nombre));
-        campos.sellado_id = guardado.getId();
-        conSellado++;
+        var base = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
+          .replace(/[\\/:*?"<>|]/g, '-');
+        for (var k = 0; k < r.adjuntos.length; k++) {
+          var a = r.adjuntos[k];
+          var ext = a.getName().indexOf('.') > 0
+            ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
+          var cuantos = yaHabia.length + guardados.length;
+          var nombre = base + (cuantos ? ' ' + (cuantos + 1) : '') + ext;
+          guardados.push(dir.createFile(a.copyBlob().setName(nombre)));
+        }
+        campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+          return f.getId();
+        })).join(',');
+        conSellado += guardados.length;
       } catch (e) {
         registrar(o.id, EVENTO.ERROR, 'no se pudo guardar el sellado: ' + e.message);
         errores.push(o.municipio + ' ' + o.impuesto + ': ' + e.message);
+        if (guardados.length) {
+          campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+            return f.getId();
+          })).join(',');
+        }
       }
     }
 
@@ -168,8 +183,10 @@ function revisarRespuestas() {
       escribirCampos(HOJA.OBLIGACIONES, o._fila, campos);
       registrar(o.id, EVENTO.RESPONDIDA,
         r.respuestas + ' mensaje(s) de ' + r.de +
-        (guardado ? ' · sellado guardado: ' + guardado.getName()
-                  : ' · sin adjunto'));
+        (guardados.length
+          ? ' · ' + guardados.length + ' adjunto(s) guardado(s): ' +
+            guardados.map(function (f) { return f.getName(); }).join(', ')
+          : ' · sin adjunto'));
 
       // ENVIADA pasa a RESPONDIDA; lo que ya estaba RESPONDIDA se queda,
       // porque una respuesta mas no cambia el estado, solo suma evidencia
@@ -197,11 +214,14 @@ function apiEnlaceSellado(id) {
   var o = registros(HOJA.OBLIGACIONES).filter(function (r) {
     return String(r.id) === String(id);
   })[0];
-  if (!o || !String(o.sellado_id || '').trim()) {
+  var cuales = o ? listaIds(o.sellado_id) : [];
+  if (!cuales.length) {
     throw new Error('Esa obligación todavía no tiene sellado.');
   }
   exigeMia(o.responsable, 'editarAjenas');
-  return 'https://drive.google.com/file/d/' + String(o.sellado_id).trim() + '/view';
+  // si guardaron varios, se abre el primero; los demas estan en la misma
+  // carpeta de Sellados, y el hilo de Gmail los tiene todos
+  return 'https://drive.google.com/file/d/' + cuales[0] + '/view';
 }
 
 /** El enlace al hilo de Gmail, para leer la conversación entera. */
