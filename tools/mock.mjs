@@ -102,10 +102,8 @@ filas.push({
 // el adhesivo lo trae el repartidor desde la hoja ADHESIVOS: a unas si, a
 // otras todavia no, que es justo lo que distingue los dos casos en pantalla
 filas.forEach((o, k) => {
-  // a casi todas les llego el adhesivo; a la primera no, que es el caso raro
-  // que hay que poder ver en pantalla
-  if (k) o.adhesivo = String(55285300 + k);
-  if (k % 2) o.consecutivo_giro = 'LR-09-' + (70 + k);
+  o.adhesivo = String(55285300 + k);
+  o.consecutivo_giro = 'LR-11-' + (70 + k);
   // lo que falta para el correo lo calcula el servidor de verdad
   o.falta_correo = S.faltaParaElCorreo(o);
 });
@@ -310,9 +308,22 @@ window.google = { script: { run: (function () {
         const cuantos = Math.max(1, Number(o.soportes) || 1);
         for (let k = 1; k <= cuantos; k++) {
           acc.push({ id: id, municipio: o.municipio || '?', cod_dane: o.cod_dane || '',
+                     cod_oficina: o.cod_oficina || '',
                      impuesto: o.impuesto || '', periodo: o.periodo || '',
                      vencimiento: o.vencimiento || '',
                      correo_oficina: o.correo_oficina || '',
+                     nit_municipio: o.nit_municipio || '',
+                     valor_texto: o.valor
+                       ? '$' + String(o.valor).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+                       : '$0',
+                     consecutivo_giro: o.consecutivo_giro || '',
+                     adhesivo: o.adhesivo || '',
+                     pago_texto: (o.paga_quien || '—') +
+                       (o.forma_pago ? ' (' + o.forma_pago + ')' : ''),
+                     destinatarios: o.correo_oficina ||
+                       ('director' + String(o.cod_oficina || '').replace(/^0+/, '') +
+                        '@davivienda.com'),
+                     copias: 'copias', copias_cuantas: 7,
                      soporte_id: 'EJEMPLO-' + id + '-' + k,
                      nombre: (o.municipio || '') + ' ' + (o.impuesto || '') + ' ' +
                        (o.periodo || '') + (k > 1 ? ' anexo ' + (k - 1) : '') + '.pdf',
@@ -413,7 +424,11 @@ window.google = { script: { run: (function () {
 let doc = readFileSync(join(ui, 'Index.html'), 'utf8');
 doc = doc.replace(/<\?!=\s*include\('ui\/(\w+)'\);?\s*\?>/g,
   (_, n) => readFileSync(join(ui, n + '.html'), 'utf8'));
-doc = doc.replace('<div id="raiz"></div>', '<div id="raiz"></div>\n  ' + stub);
+// OJO con replace() y una cadena de reemplazo: $' , $& y $` son patrones
+// especiales, asi que un '$' dentro del stub se comia medio archivo y la
+// pagina salia en blanco. Con una funcion, el texto entra tal cual.
+doc = doc.replace('<div id="raiz"></div>',
+                  () => '<div id="raiz"></div>\n  ' + stub);
 
 const salida = join(raiz, '.taste-skill', 'mock');
 mkdirSync(salida, { recursive: true });

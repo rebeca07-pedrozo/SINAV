@@ -64,13 +64,11 @@ function camposEditables() {
  * eso lo lee un director de oficina que tiene que girar esa plata.
  */
 function camposDelCorreo() {
-  // el adhesivo NO esta aqui a proposito: lo trae repartirAdhesivos() de la
-  // hoja ADHESIVOS y ya vive en la columna. Pedirlo a mano seria hacer dos
-  // veces un trabajo que ya se hizo.
-  // el consecutivo de giro tampoco: lo asigna el envio con las iniciales de
-  // quien manda, el mes del periodo y la cuenta de ese mes
-  return ['valor', 'paga_quien', 'forma_pago', 'fecha_despacho',
-          'tipo_presentacion'];
+  // Solo el valor. Todo lo demas esta definido en los datos y no se vuelve a
+  // preguntar: quien paga, la forma de pago y el tipo de presentacion los
+  // carga Concepto25.gs; el adhesivo, repartirAdhesivos(); el consecutivo
+  // sale de la tabla de conceptos; y la fecha de despacho la pone el envio.
+  return ['valor'];
 }
 
 /**
@@ -82,7 +80,7 @@ function camposDelCorreo() {
  * el correo no sale sin el.
  */
 function camposObligatoriosDelCorreo() {
-  return ['valor', 'paga_quien', 'adhesivo'];
+  return ['valor', 'adhesivo'];
 }
 
 /**

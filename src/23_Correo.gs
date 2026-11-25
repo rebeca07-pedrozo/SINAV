@@ -459,6 +459,13 @@ function giroPara(o, nombreQuienEnvia) {
   var ya = String(o.consecutivo_giro || '').trim();
   if (ya) return ya;
 
+  // LO NORMAL: el numero que ese municipio tiene definido, con el mes de su
+  // periodo. Revisoria busca estos numeros, asi que no se inventan.
+  if (String(config('giro_sigue_al_remitente') || 'NO').toUpperCase() !== 'SI') {
+    var deTabla = consecutivoDe(o.municipio, o.impuesto, o.periodo);
+    if (deTabla) return deTabla;
+  }
+
   var ini = inicialesDe(nombreQuienEnvia);
   if (!ini) return '';
   var mes = mesDelPeriodo(o.periodo);

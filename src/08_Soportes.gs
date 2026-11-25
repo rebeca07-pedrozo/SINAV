@@ -160,14 +160,30 @@ function apiSoportesParaRevisar(ids) {
           pesoKB = Math.round(f.getSize() / 1024);
         } catch (e) { nombre = '(no se pudo abrir el archivo en Drive)'; }
 
+        var destinos = '';
+        try { destinos = destinatariosDe(o); } catch (e) { destinos = ''; }
+        var copias = '';
+        try { copias = copiasFijas(); } catch (e) { copias = ''; }
+
         soportes.push({
           id: String(o.id),
           municipio: String(o.municipio),
           cod_dane: String(o.cod_dane),
+          cod_oficina: String(o.cod_oficina || ''),
           impuesto: String(o.impuesto),
           periodo: String(o.periodo),
           vencimiento: fechaTexto(o.vencimiento),
           correo_oficina: String(o.correo_oficina || ''),
+          // lo que va a leer la oficina, para verlo junto al documento
+          nit_municipio: String(o.nit_municipio || ''),
+          valor_texto: pesosCortos(o.valor),
+          consecutivo_giro: String(o.consecutivo_giro || '') ||
+            consecutivoDe(o.municipio, o.impuesto, o.periodo),
+          adhesivo: String(o.adhesivo || ''),
+          pago_texto: textoPago(o),
+          destinatarios: destinos,
+          copias: copias,
+          copias_cuantas: copias ? copias.split(',').length : 0,
           soporte_id: sid,
           nombre: nombre,
           peso_kb: pesoKB,

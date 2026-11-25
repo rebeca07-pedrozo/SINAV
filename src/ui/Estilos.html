@@ -335,6 +335,25 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
                     flex-wrap: wrap; }
 
 /* un aviso que NO es un error: solo cuenta lo que va a pasar */
+/* la ventana de envio: los datos a la izquierda, el documento a la derecha */
+.modal-envio { max-width: 1100px; width: 94vw; }
+.envio-cuerpo { display: grid; grid-template-columns: 300px 1fr; gap: 16px;
+                align-items: stretch; }
+.envio-datos { display: flex; flex-direction: column; gap: 10px;
+               padding-right: 4px; max-height: 58vh; overflow: auto; }
+.envio-titulo { margin: 0 0 2px; text-transform: uppercase;
+                letter-spacing: .04em; font-size: var(--fs-meta); }
+.ficha { border-left: 2px solid var(--borde); padding: 2px 0 2px 10px; }
+.ficha b { display: block; font-size: var(--fs-cuerpo);
+           font-variant-numeric: tabular-nums; word-break: break-word; }
+.envio-vista { min-height: 58vh; }
+.envio-vista .rev-vista { height: 58vh; }
+@media (max-width: 860px) {
+  .envio-cuerpo { grid-template-columns: 1fr; }
+  .envio-datos { max-height: none; }
+  .envio-vista, .envio-vista .rev-vista { min-height: 44vh; height: 44vh; }
+}
+
 /* los datos del correo, primer paso del envio */
 /* el valor liquidado se escribe en la propia tabla, sin abrir nada */
 .celda-valor { white-space: nowrap; }

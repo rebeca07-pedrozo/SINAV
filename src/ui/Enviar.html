@@ -213,106 +213,6 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo, alGuardarValor,
 }
 
 /**
- * PASO 1 del envio: los datos que el correo necesita nombrar.
- *
- * Antes esto era una pestana aparte. Se trajo aqui porque es el momento en
- * que la persona tiene los datos delante: esta a punto de mandar la
- * declaracion y sabe por cuanto es y con que giro se paga.
- *
- * El sticker NO se escribe si ya esta: lo trajo el repartidor desde la hoja
- * de correspondencia y se muestra tal cual. Solo se pide cuando falta.
- */
-function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
-                          alGuardar, alTerminar, alCancelar, trabajando, fallo }) {
-  const [i, setI] = useState(0);
-  const o = obligaciones[i];
-  if (!o) return null;
-
-  const falta = o.falta_correo || [];
-  const b = borradores[o.id] || {};
-  const valorDe = (k) => (b[k] !== undefined ? b[k] : o[k]);
-
-  // el sticker sale de la columna ADHESIVO: se ensena, nunca se pide
-  const sticker = String(o.adhesivo || '').trim();
-  const aPedir = (orden || []).filter((k) => campos && campos[k]);
-
-  return html`<div class="velo">
-    <div class="modal modal-ancho" role="dialog" aria-modal="true"
-      aria-labelledby="t-datos">
-      <div class="rev-cab">
-        <div>
-          <h2 id="t-datos">${o.municipio} · ${o.impuesto} · ${o.periodo}</h2>
-          <p class="sub">${'Vence ' + (o.vencimiento || 'sin fecha') +
-            ' · dependencia ' + (o.cod_oficina || '—') +
-            ' · NIT ' + (o.nit_municipio || '—')}</p>
-        </div>
-        <span class="rev-cuenta">${i + 1} de ${obligaciones.length}</span>
-      </div>
-
-      <p class="sub rev-nota">
-        Información que se incluirá en la comunicación a la oficina: valor a
-        girar, sticker de correspondencia y consecutivo de giro.
-      </p>
-
-      <p class="dato-fijo">
-        <span class="sub">Consecutivo de giro</span>
-        <b class="dato-tel">${o.consecutivo_giro || 'se asigna al enviar'}</b>
-        <span class="sub">${o.consecutivo_giro
-          ? 'Asignado previamente. No se renumera.'
-          : 'Se compone de las iniciales del remitente, el mes del periodo y ' +
-            'el consecutivo correspondiente.'}</span>
-      </p>
-
-      ${sticker ? html`<p class="dato-fijo">
-        <span class="sub">Sticker de correspondencia</span>
-        <b class="dato-tel">${sticker}</b>
-        <span class="sub">Tomado de la columna ADHESIVO. No se edita aquí.</span>
-      </p>` : html`<div class="dato-fijo sin-dato">
-        <span class="sub">Sticker de correspondencia</span>
-        <b>Pendiente. El envío no se habilita sin este dato.</b>
-        <span class="sub">
-          Se obtiene con <b>SINAV · Mes → Repartir los adhesivos del mes</b>.
-          Si el municipio no figura en la hoja de correspondencia, puede
-          registrarse manualmente a continuación:
-        </span>
-        <${CampoEdit} clave="adhesivo" def=${campos && campos.adhesivo}
-          valor=${valorDe('adhesivo')}
-          alCambiar=${(clave, valor) => alCambiar(o.id, clave, valor)} />
-      </div>`}
-
-      <div class="rejilla-campos">
-        ${aPedir.map((k) => html`<${CampoEdit} key=${k} clave=${k}
-          def=${campos[k]} valor=${valorDe(k)}
-          alCambiar=${(clave, valor) => alCambiar(o.id, clave, valor)} />`)}
-      </div>
-
-      ${fallo ? html`<p class="sub vencido">${fallo}</p>` : null}
-
-      <div class="modal-pie">
-        <button class="btn" disabled=${!i || !!trabajando}
-          onClick=${() => setI(i - 1)}>Anterior</button>
-        <button class="btn btn-principal" disabled=${!!trabajando}
-          onClick=${async () => {
-            const ok = await alGuardar(o.id);
-            if (!ok) return;
-            if (i + 1 < obligaciones.length) setI(i + 1);
-            else alTerminar();          // la última: pasa a revisar los PDF
-          }}>
-          ${trabajando ? 'Guardando…'
-            : (i + 1 < obligaciones.length
-                ? 'Guardar y continuar' : 'Guardar y revisar los soportes')}
-        </button>
-        ${falta.length
-          ? html`<span class="sub vencido">${'Datos pendientes: ' + falta.join(', ')}</span>`
-          : html`<span class="sub aldia">Información completa.</span>`}
-        <button class="btn" style=${{ marginLeft: 'auto' }}
-          disabled=${!!trabajando} onClick=${alCancelar}>Cancelar</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-/**
  * La revision del soporte, obligatoria antes de enviar.
  *
  * Un PDF con el nombre correcto puede tener dentro la declaracion de otro
@@ -326,51 +226,68 @@ function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
   if (!s) return null;
 
   const avanzar = () => setI((n) => Math.min(n + 1, soportes.length - 1));
+  const todoListo = listos === soportes.length;
+
+  const dato = (et, valor, nota) => html`<div class="ficha" key=${et}>
+    <span class="sub">${et}</span>
+    <b>${valor || '—'}</b>
+    ${nota ? html`<span class="sub">${nota}</span>` : null}
+  </div>`;
 
   return html`<div class="velo">
-    <div class="modal modal-ancho" role="dialog" aria-modal="true"
+    <div class="modal modal-envio" role="dialog" aria-modal="true"
       aria-labelledby="t-rev">
       <div class="rev-cab">
         <div>
           <h2 id="t-rev">${s.municipio} · ${s.impuesto} · ${s.periodo}</h2>
-          <p class="sub">${[
-            'DANE ', s.cod_dane, ' · vence ', s.vencimiento || 'sin fecha',
-            ' · ', s.nombre || 'sin archivo',
-            s.peso_kb ? ' (' + s.peso_kb + ' KB)' : '',
-            s.de > 1 ? ' · archivo ' + s.cual + ' de ' + s.de + ' de esta obligación' : ''
-          ].join('')}</p>
+          <p class="sub">${'Vence ' + (s.vencimiento || 'sin fecha') +
+            ' · dependencia ' + (s.cod_oficina || '—')}</p>
         </div>
         <span class="rev-cuenta">${i + 1} de ${soportes.length}</span>
       </div>
 
-      ${s.vista
-        ? html`<iframe class="rev-vista" src=${s.vista} title=${'Soporte de ' + s.municipio}></iframe>`
-        : html`<p class="vacio">Esta obligación no tiene soporte.</p>`}
+      <div class="envio-cuerpo">
+        <aside class="envio-datos">
+          <p class="sub envio-titulo">Esto es lo que va en la comunicación</p>
+          ${dato('Valor a girar', s.valor_texto)}
+          ${dato('NIT del municipio', s.nit_municipio)}
+          ${dato('Consecutivo de giro', s.consecutivo_giro)}
+          ${dato('Sticker de correspondencia', s.adhesivo)}
+          ${dato('Forma de pago', s.pago_texto)}
+          ${dato('Destinatarios', s.destinatarios,
+                 s.copias ? 'con copia a ' + s.copias_cuantas + ' más' : '')}
+          ${dato('Archivo', s.nombre, s.peso_kb ? s.peso_kb + ' KB' : '')}
+        </aside>
 
-      <p class="sub rev-nota">
-        Verifique que el documento corresponda a <b>este municipio y a este
-        periodo</b>. En caso contrario márquelo como incorrecto: el archivo se
-        retira y deberá cargarse el que corresponda.
-        ${' '}<a href=${s.enlace} target="_blank" rel="noopener">Abrir en Drive</a>
-      </p>
+        <div class="envio-vista">
+          ${s.vista
+            ? html`<iframe class="rev-vista" src=${s.vista}
+                title=${'Soporte de ' + s.municipio}></iframe>`
+            : html`<p class="vacio">Esta obligación no tiene soporte.</p>`}
+        </div>
+      </div>
 
       <div class="modal-pie">
-        <button class="btn btn-principal" disabled=${trabajando}
+        <button class=${'btn ' + (s.revisado ? '' : 'btn-principal')}
+          disabled=${trabajando}
           onClick=${async () => { await alMarcar(s.id, true, s.soporte_id); avanzar(); }}>
-          ${s.revisado ? 'Correcto ✓' : 'Correcto'}
+          ${s.revisado ? 'Verificado ✓' : 'El documento es correcto'}
         </button>
         <button class="btn btn-malo" disabled=${trabajando}
           onClick=${async () => {
-            // marcar incorrecto cierra el visor: lo que sigue es subir otro PDF
             const r = await alMarcar(s.id, false, s.soporte_id);
             if (r !== 'cerrado') avanzar();
           }}>
-          Incorrecto
+          No corresponde
         </button>
         <span class="sub">${listos} de ${soportes.length} verificados</span>
-        <button class="btn" style=${{ marginLeft: 'auto' }}
+        <button class=${'btn ' + (todoListo ? 'btn-principal' : '')}
+          style=${{ marginLeft: 'auto' }}
           disabled=${trabajando} onClick=${alCerrar}>
-          ${listos === soportes.length ? 'Continuar' : 'Cancelar'}
+          ${todoListo
+            ? 'Autorizar el envío de ' + soportes.length +
+              (soportes.length === 1 ? ' comunicación' : ' comunicaciones')
+            : 'Cancelar'}
         </button>
       </div>
     </div>
@@ -389,8 +306,6 @@ function Enviar({ inicio }) {
   const [fallo, setFallo] = useState('');
   const [revision, setRevision] = useState(null);
   // el asistente de envio: datos -> revisar los PDF -> confirmar
-  const [datosPaso, setDatosPaso] = useState(null);   // obligaciones a completar
-  const [borradores, setBorradores] = useState({});   // {id: {campo: valor}}
   const [valorEnCurso, setValorEnCurso] = useState('');
   const archivo = useRef(null);
   const destino = useRef('');
@@ -469,46 +384,6 @@ function Enviar({ inicio }) {
 
   /* -------- paso 1: los datos que el correo nombra -------- */
 
-  function cambiarCampo(id, clave, valor) {
-    setBorradores((v) => Object.assign({}, v, {
-      [id]: Object.assign({}, v[id] || {}, { [clave]: valor })
-    }));
-  }
-
-  /** Guarda lo escrito de una obligación. Devuelve true si quedó completa. */
-  async function guardarDatos(id) {
-    const cambios = borradores[id] || {};
-    setTrabajando('guardando');
-    setFallo('');
-    try {
-      if (Object.keys(cambios).length) await llamar('apiGuardarCampos', id, cambios);
-      const d = await llamar('apiListaEnviar', ventana);
-      setDatos((v) => Object.assign({}, v, d));
-      // la lista nueva manda: si todavía falta algo, se queda donde está
-      const fresca = (d.filas || []).find((f) => f.id === id);
-      const sigueCoja = fresca && (fresca.falta_correo || []).length;
-      setDatosPaso((lista) => (lista || []).map((o) => (o.id === id && fresca ? fresca : o)));
-      if (sigueCoja) {
-        setFallo('Todavía falta: ' + fresca.falta_correo.join(', '));
-        return false;
-      }
-      return true;
-    } catch (e) {
-      setFallo(String(e && e.message ? e.message : e));
-      return false;
-    } finally {
-      setTrabajando('');
-    }
-  }
-
-  /** Del paso de datos al de revisar los PDF. */
-  async function cerrarDatos(seguir) {
-    setDatosPaso(null);
-    setBorradores({});
-    setFallo('');
-    if (seguir) await abrirRevision();
-  }
-
   /* -------- subir el soporte: un archivo por llamada -------- */
 
   function pedirArchivo(id, agregar) {
@@ -552,18 +427,23 @@ function Enviar({ inicio }) {
 
   /* -------- revisar los soportes: obligatorio antes de enviar -------- */
 
-  /** El botón de enviar. Arranca el asistente por donde haga falta. */
+  /**
+   * El botón de enviar. Si a alguna le falta un dato que el correo nombra, lo
+   * dice y no abre nada: esos datos se corrigen en los datos, no aquí.
+   */
   function empezarEnvio() {
     setResultado(null);
     setFallo('');
-    // el correo nombra el valor, el sticker y el giro: sin eso saldría
-    // diciendo "por el valor de $0" a un director que tiene que girar
     const cojas = elegidasVivas
       .map((id) => filas.find((f) => f.id === id))
       .filter((o) => o && (o.falta_correo || []).length);
     if (cojas.length) {
-      setBorradores({});
-      setDatosPaso(cojas);
+      setResultado({ clase: 'malo',
+        titulo: 'Hay datos pendientes',
+        lineas: cojas.slice(0, 8).map((o) =>
+          o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ': ' +
+          o.falta_correo.join(', '))
+          .concat(cojas.length > 8 ? ['… y ' + (cojas.length - 8) + ' más'] : []) });
       return;
     }
     abrirRevision();
@@ -574,9 +454,9 @@ function Enviar({ inicio }) {
     setFallo('');
     try {
       const r = await llamar('apiSoportesParaRevisar', elegidasVivas);
-      // las que ya se revisaron y no han cambiado no hay que volver a mirarlas
-      if (r.soportes.every((s) => s.revisado)) setConfirmando(true);
-      else setRevision(r.soportes);
+      // El visor se abre siempre, aunque ya estén verificados: es la pantalla
+      // donde se ven los datos que van en la comunicación y donde se autoriza.
+      setRevision(r.soportes);
     } catch (e) {
       setFallo(String(e && e.message ? e.message : e));
     } finally {
@@ -615,11 +495,20 @@ function Enviar({ inicio }) {
     }
   }
 
+  /**
+   * Cerrar el visor con todo verificado ES la autorización: el correo sale.
+   * Antes había una confirmación más encima, y tres botones para mandar un
+   * correo es uno de más.
+   */
   async function cerrarRevision() {
+    const total = (revision || []).length;
     const buenos = (revision || []).filter((s) => s.revisado).length;
     setRevision(null);
+    if (total && buenos === total) {
+      await enviarYa();
+      return;
+    }
     await recargar();
-    if (buenos) setConfirmando(true);
   }
 
   /* -------- enviar -------- */
@@ -694,14 +583,9 @@ function Enviar({ inicio }) {
     <${TarjetasConteo} conteos=${conteosVista} filtro=${filtro}
       alFiltrar=${(f) => { setFiltro(f); setConfirmando(false); }} />
 
-    ${confirmando ? html`<div class="confirmar" role="alert">
-      <p><b>${elegidasVivas.length}</b>
-        ${elegidasVivas.length === 1 ? ' correo' : ' correos'} con su declaración adjunta.
-        ${modo === 'PRUEBA'
-          ? ' En modo prueba llegan a tu bandeja, no a las oficinas.'
-          : ' Van a ' + destinatarios + ' destinatarios en las oficinas.'}</p>
-      <button class="btn btn-principal" onClick=${enviarYa}>Confirmar envío</button>
-      <button class="btn" onClick=${() => setConfirmando(false)}>Cancelar</button>
+    ${modo === 'PRUEBA' && elegidasVivas.length ? html`<div class="confirmar">
+      <p>Modo prueba: las ${elegidasVivas.length} comunicaciones llegarán a tu
+        propia bandeja, no a las oficinas.</p>
     </div>` : null}
 
     ${resultado ? html`<div class=${'resultado ' + resultado.clase} role="status">
@@ -766,14 +650,6 @@ function Enviar({ inicio }) {
           : 'No hay obligaciones con requiere_envio = SI asignadas a ti.'}
       </p>` : null}
     </section>
-
-    ${datosPaso ? html`<${DatosDelCorreo} obligaciones=${datosPaso}
-      campos=${datos.campos} orden=${datos.orden_campos}
-      borradores=${borradores} alCambiar=${cambiarCampo}
-      alGuardar=${guardarDatos}
-      alTerminar=${() => cerrarDatos(true)}
-      alCancelar=${() => cerrarDatos(false)}
-      trabajando=${trabajando === 'guardando'} fallo=${fallo} /> ` : null}
 
     ${revision ? html`<${RevisarSoportes} soportes=${revision}
       alMarcar=${marcarSoporte} alCerrar=${cerrarRevision}

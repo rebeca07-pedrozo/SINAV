@@ -35,6 +35,7 @@ function pruebas() {
   pruebasVariosSoportes(esIgual);
   pruebasVariosSellados(esIgual);
   pruebasCorreoOficina(esIgual);
+  pruebasConcepto25(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -864,4 +865,53 @@ function pruebasCorreoOficina(esIgual) {
           adhesivoValido('REGISTRADO EN CARTERO'), '');
   esIgual('#N/A tampoco', adhesivoValido('#N/A'), '');
   esIgual('vacio tampoco', adhesivoValido(''), '');
+}
+
+/**
+ * Los consecutivos no se inventan: cada municipio tiene el suyo y lo unico
+ * que cambia de un periodo a otro es el mes. Revisoria busca esos numeros.
+ */
+function pruebasConcepto25(esIgual) {
+  esIgual('solo cambia el mes', giroDesdePlantilla('LR-09-74', 10), 'LR-10-74');
+  esIgual('el mes se rellena a dos cifras',
+          giroDesdePlantilla('LR-09-74', 3), 'LR-03-74');
+  esIgual('un prefijo con año tambien funciona',
+          giroDesdePlantilla('HC26-10-141', 11), 'HC26-11-141');
+  esIgual('el numero del municipio no se toca',
+          giroDesdePlantilla('AG-10-116', 12), 'AG-12-116');
+  esIgual('sin mes se devuelve igual',
+          giroDesdePlantilla('LR-09-74', 0), 'LR-09-74');
+  esIgual('algo que no es una plantilla no revienta',
+          giroDesdePlantilla('XYZ', 10), 'XYZ');
+  esIgual('vacio tampoco', giroDesdePlantilla('', 10), '');
+
+  // las claves se escriben sin tildes y sin dobles espacios
+  esIgual('clave normal', claveConcepto('NILO', 'ICA'), 'NILO|ICA');
+  esIgual('con tilde', claveConcepto('Medellín', 'ICA'), 'MEDELLIN|ICA');
+  esIgual('con enie', claveConcepto('Muña', 'ICA'), 'MUNA|ICA');
+  esIgual('con espacios de sobra', claveConcepto('  SAN  GIL ', 'ICA'), 'SAN GIL|ICA');
+  esIgual('sin impuesto, solo el municipio', claveConcepto('NILO', ''), 'NILO');
+
+  // las tablas de verdad, que son las que se van a usar
+  esIgual('NILO tiene consecutivo de ICA',
+          !!CONSECUTIVOS['NILO|ICA'], true);
+  esIgual('y su numero es el 74',
+          CONSECUTIVOS['NILO|ICA'].split('-').pop(), '74');
+  esIgual('ABEJORRAL tiene el de RETEICA',
+          CONSECUTIVOS['ABEJORRAL|RETEICA'].split('-').pop(), '141');
+  esIgual('hay mas de 300 consecutivos',
+          Object.keys(CONSECUTIVOS).length > 300, true);
+
+  esIgual('TOCANCIPA paga por PSE', formaPagoDe('TOCANCIPA'), 'PSE');
+  esIgual('FILANDIA por transferencia', formaPagoDe('FILANDIA'), 'TRANSFERENCIA');
+  esIgual('PALESTINA en oficina', formaPagoDe('PALESTINA'), 'OFICINA');
+  esIgual('un municipio que no esta, vacio', formaPagoDe('NARNIA'), '');
+
+  // el consecutivo de una obligacion lleva el mes de SU periodo
+  esIgual('bimestre 5 se declara en octubre',
+          consecutivoDe('NILO', 'ICA', '2026-B5').split('-')[1], '10');
+  esIgual('mensual de noviembre',
+          consecutivoDe('NILO', 'ICA', '2026-11').split('-')[1], '11');
+  esIgual('un municipio sin tabla no inventa nada',
+          consecutivoDe('NARNIA', 'ICA', '2026-11'), '');
 }

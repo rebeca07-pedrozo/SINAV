@@ -174,6 +174,8 @@ function apiEnviar(ids) {
       conCerrojo(function () {
         escribirCampos(HOJA.OBLIGACIONES, buscarFila(idFila), {
           estado: ESTADO.ENVIADA,
+          // el despacho es el dia en que sale el correo: no hay que escribirlo
+          fecha_despacho: hoy(),
           fecha_envio: new Date(),
           hilo_id: hilo
         });

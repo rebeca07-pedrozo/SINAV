@@ -53,6 +53,9 @@ function onOpen() {
   if (typeof menuMensuales === 'function') {
     try { menuMensuales(); } catch (e) { /* idem */ }
   }
+  if (typeof menuConcepto25 === 'function') {
+    try { menuConcepto25(); } catch (e) { /* idem */ }
+  }
 }
 
 function asegurarHojas() {

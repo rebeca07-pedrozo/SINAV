@@ -304,7 +304,20 @@ var CONFIG_BASE = [
   ['egreso', '25'],
   ['codigo_departamento', '9413'],
   ['nombre_recibe', 'Liliana Ramirez'],
-  ['copias_fijas', ''],
+  // Siempre en copia, en todos los envios. Si entra o sale alguien del
+  // equipo, se cambia aqui y ya.
+  ['copias_fijas', [
+    'merodriguez@davivienda.com',
+    'grpconceptosespeciales@davivienda.com',
+    'sptellez@davivienda.com',
+    'egomezg@davivienda.com',
+    'yasneidy.ramirez@davivienda.com',
+    'jesus.jaimes@davivienda.com',
+    'helen.cuadros@davivienda.com'
+  ].join(',')],
+  // El consecutivo de giro respeta el prefijo que tienen definido, porque es
+  // con el que concilia revisoria. SI = usa las iniciales de quien envia.
+  ['giro_sigue_al_remitente', 'NO'],
   ['dominio_oficinas', 'davivienda.com'],
   ['modo', 'PRUEBA'],
   ['rol_defecto', 'PROFESIONAL'],
@@ -369,6 +382,9 @@ function onOpen() {
   }
   if (typeof menuMensuales === 'function') {
     try { menuMensuales(); } catch (e) { /* idem */ }
+  }
+  if (typeof menuConcepto25 === 'function') {
+    try { menuConcepto25(); } catch (e) { /* idem */ }
   }
 }
 
@@ -2160,14 +2176,30 @@ function apiSoportesParaRevisar(ids) {
           pesoKB = Math.round(f.getSize() / 1024);
         } catch (e) { nombre = '(no se pudo abrir el archivo en Drive)'; }
 
+        var destinos = '';
+        try { destinos = destinatariosDe(o); } catch (e) { destinos = ''; }
+        var copias = '';
+        try { copias = copiasFijas(); } catch (e) { copias = ''; }
+
         soportes.push({
           id: String(o.id),
           municipio: String(o.municipio),
           cod_dane: String(o.cod_dane),
+          cod_oficina: String(o.cod_oficina || ''),
           impuesto: String(o.impuesto),
           periodo: String(o.periodo),
           vencimiento: fechaTexto(o.vencimiento),
           correo_oficina: String(o.correo_oficina || ''),
+          // lo que va a leer la oficina, para verlo junto al documento
+          nit_municipio: String(o.nit_municipio || ''),
+          valor_texto: pesosCortos(o.valor),
+          consecutivo_giro: String(o.consecutivo_giro || '') ||
+            consecutivoDe(o.municipio, o.impuesto, o.periodo),
+          adhesivo: String(o.adhesivo || ''),
+          pago_texto: textoPago(o),
+          destinatarios: destinos,
+          copias: copias,
+          copias_cuantas: copias ? copias.split(',').length : 0,
           soporte_id: sid,
           nombre: nombre,
           peso_kb: pesoKB,
@@ -2431,6 +2463,8 @@ function apiEnviar(ids) {
       conCerrojo(function () {
         escribirCampos(HOJA.OBLIGACIONES, buscarFila(idFila), {
           estado: ESTADO.ENVIADA,
+          // el despacho es el dia en que sale el correo: no hay que escribirlo
+          fecha_despacho: hoy(),
           fecha_envio: new Date(),
           hilo_id: hilo
         });
@@ -3233,13 +3267,11 @@ function camposEditables() {
  * eso lo lee un director de oficina que tiene que girar esa plata.
  */
 function camposDelCorreo() {
-  // el adhesivo NO esta aqui a proposito: lo trae repartirAdhesivos() de la
-  // hoja ADHESIVOS y ya vive en la columna. Pedirlo a mano seria hacer dos
-  // veces un trabajo que ya se hizo.
-  // el consecutivo de giro tampoco: lo asigna el envio con las iniciales de
-  // quien manda, el mes del periodo y la cuenta de ese mes
-  return ['valor', 'paga_quien', 'forma_pago', 'fecha_despacho',
-          'tipo_presentacion'];
+  // Solo el valor. Todo lo demas esta definido en los datos y no se vuelve a
+  // preguntar: quien paga, la forma de pago y el tipo de presentacion los
+  // carga Concepto25.gs; el adhesivo, repartirAdhesivos(); el consecutivo
+  // sale de la tabla de conceptos; y la fecha de despacho la pone el envio.
+  return ['valor'];
 }
 
 /**
@@ -3251,7 +3283,7 @@ function camposDelCorreo() {
  * el correo no sale sin el.
  */
 function camposObligatoriosDelCorreo() {
-  return ['valor', 'paga_quien', 'adhesivo'];
+  return ['valor', 'adhesivo'];
 }
 
 /**
@@ -5547,6 +5579,13 @@ function giroPara(o, nombreQuienEnvia) {
   var ya = String(o.consecutivo_giro || '').trim();
   if (ya) return ya;
 
+  // LO NORMAL: el numero que ese municipio tiene definido, con el mes de su
+  // periodo. Revisoria busca estos numeros, asi que no se inventan.
+  if (String(config('giro_sigue_al_remitente') || 'NO').toUpperCase() !== 'SI') {
+    var deTabla = consecutivoDe(o.municipio, o.impuesto, o.periodo);
+    if (deTabla) return deTabla;
+  }
+
   var ini = inicialesDe(nombreQuienEnvia);
   if (!ini) return '';
   var mes = mesDelPeriodo(o.periodo);
@@ -5597,6 +5636,7 @@ function pruebas() {
   pruebasVariosSoportes(esIgual);
   pruebasVariosSellados(esIgual);
   pruebasCorreoOficina(esIgual);
+  pruebasConcepto25(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -6426,4 +6466,53 @@ function pruebasCorreoOficina(esIgual) {
           adhesivoValido('REGISTRADO EN CARTERO'), '');
   esIgual('#N/A tampoco', adhesivoValido('#N/A'), '');
   esIgual('vacio tampoco', adhesivoValido(''), '');
+}
+
+/**
+ * Los consecutivos no se inventan: cada municipio tiene el suyo y lo unico
+ * que cambia de un periodo a otro es el mes. Revisoria busca esos numeros.
+ */
+function pruebasConcepto25(esIgual) {
+  esIgual('solo cambia el mes', giroDesdePlantilla('LR-09-74', 10), 'LR-10-74');
+  esIgual('el mes se rellena a dos cifras',
+          giroDesdePlantilla('LR-09-74', 3), 'LR-03-74');
+  esIgual('un prefijo con año tambien funciona',
+          giroDesdePlantilla('HC26-10-141', 11), 'HC26-11-141');
+  esIgual('el numero del municipio no se toca',
+          giroDesdePlantilla('AG-10-116', 12), 'AG-12-116');
+  esIgual('sin mes se devuelve igual',
+          giroDesdePlantilla('LR-09-74', 0), 'LR-09-74');
+  esIgual('algo que no es una plantilla no revienta',
+          giroDesdePlantilla('XYZ', 10), 'XYZ');
+  esIgual('vacio tampoco', giroDesdePlantilla('', 10), '');
+
+  // las claves se escriben sin tildes y sin dobles espacios
+  esIgual('clave normal', claveConcepto('NILO', 'ICA'), 'NILO|ICA');
+  esIgual('con tilde', claveConcepto('Medellín', 'ICA'), 'MEDELLIN|ICA');
+  esIgual('con enie', claveConcepto('Muña', 'ICA'), 'MUNA|ICA');
+  esIgual('con espacios de sobra', claveConcepto('  SAN  GIL ', 'ICA'), 'SAN GIL|ICA');
+  esIgual('sin impuesto, solo el municipio', claveConcepto('NILO', ''), 'NILO');
+
+  // las tablas de verdad, que son las que se van a usar
+  esIgual('NILO tiene consecutivo de ICA',
+          !!CONSECUTIVOS['NILO|ICA'], true);
+  esIgual('y su numero es el 74',
+          CONSECUTIVOS['NILO|ICA'].split('-').pop(), '74');
+  esIgual('ABEJORRAL tiene el de RETEICA',
+          CONSECUTIVOS['ABEJORRAL|RETEICA'].split('-').pop(), '141');
+  esIgual('hay mas de 300 consecutivos',
+          Object.keys(CONSECUTIVOS).length > 300, true);
+
+  esIgual('TOCANCIPA paga por PSE', formaPagoDe('TOCANCIPA'), 'PSE');
+  esIgual('FILANDIA por transferencia', formaPagoDe('FILANDIA'), 'TRANSFERENCIA');
+  esIgual('PALESTINA en oficina', formaPagoDe('PALESTINA'), 'OFICINA');
+  esIgual('un municipio que no esta, vacio', formaPagoDe('NARNIA'), '');
+
+  // el consecutivo de una obligacion lleva el mes de SU periodo
+  esIgual('bimestre 5 se declara en octubre',
+          consecutivoDe('NILO', 'ICA', '2026-B5').split('-')[1], '10');
+  esIgual('mensual de noviembre',
+          consecutivoDe('NILO', 'ICA', '2026-11').split('-')[1], '11');
+  esIgual('un municipio sin tabla no inventa nada',
+          consecutivoDe('NARNIA', 'ICA', '2026-11'), '');
 }

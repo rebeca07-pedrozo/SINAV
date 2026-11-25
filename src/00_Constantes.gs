@@ -299,7 +299,20 @@ var CONFIG_BASE = [
   ['egreso', '25'],
   ['codigo_departamento', '9413'],
   ['nombre_recibe', 'Liliana Ramirez'],
-  ['copias_fijas', ''],
+  // Siempre en copia, en todos los envios. Si entra o sale alguien del
+  // equipo, se cambia aqui y ya.
+  ['copias_fijas', [
+    'merodriguez@davivienda.com',
+    'grpconceptosespeciales@davivienda.com',
+    'sptellez@davivienda.com',
+    'egomezg@davivienda.com',
+    'yasneidy.ramirez@davivienda.com',
+    'jesus.jaimes@davivienda.com',
+    'helen.cuadros@davivienda.com'
+  ].join(',')],
+  // El consecutivo de giro respeta el prefijo que tienen definido, porque es
+  // con el que concilia revisoria. SI = usa las iniciales de quien envia.
+  ['giro_sigue_al_remitente', 'NO'],
   ['dominio_oficinas', 'davivienda.com'],
   ['modo', 'PRUEBA'],
   ['rol_defecto', 'PROFESIONAL'],

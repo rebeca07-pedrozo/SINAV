@@ -56,6 +56,7 @@ desplegable del editor.
 | **Codigo.gs** | La aplicación entera: instalar, migrar, diagnósticos, producción |
 | **Mensuales.gs** | El mes, los adhesivos, los correos de oficina, el archivado |
 | **Carga.gs** | La carga inicial de una vigencia. Se corre una vez al año |
+| **Concepto25.gs** | Los consecutivos de giro, las formas de pago y los traspasos |
 
 ### Cargar las obligaciones de un mes nuevo
 
@@ -79,6 +80,29 @@ Se puede correr las veces que quieras: lo que ya existe no se duplica.
 
 No pisa un adhesivo ya escrito, así que repetirlo es seguro. Al final lista
 las obligaciones del mes que quedaron sin número.
+
+### Cargar los consecutivos de giro y las formas de pago
+
+Una sola vez, y después solo si cambian las tablas:
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | — | **SINAV · Concepto 25 → Cargar consecutivos y formas de pago** | `cargarConcepto25` · Concepto25.gs |
+
+Escribe en PROGRAMACION (de donde heredan los meses siguientes) y en las
+obligaciones abiertas. **No pisa nada escrito a mano.** Al final lista los
+municipios que no están en las tablas.
+
+### Cuando alguien sale del equipo
+
+| # | Qué haces | Función |
+|---|---|---|
+| 1 | Pasar lo suyo a otra persona | `traspasar("sale@davivienda.com", "entra@davivienda.com")` · Concepto25.gs |
+| 2 | En la hoja USUARIOS, poner `activo = NO` a quien sale | — |
+| 3 | Revisar la columna `backup`: puede apuntar a quien ya no está | — |
+
+Las obligaciones `APROBADA` **no se tocan**: siguen diciendo quién las hizo.
+Cada traspaso queda en EVENTOS.
 
 ### Agregar o corregir correos de oficina
 
