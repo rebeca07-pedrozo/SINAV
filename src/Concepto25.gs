@@ -414,6 +414,8 @@ function enObligaciones() {
 function menuConcepto25() {
   SpreadsheetApp.getUi().createMenu('SINAV · Concepto 25')
     .addItem('Cargar consecutivos y formas de pago', 'cargarConcepto25DesdeMenu')
+    .addSeparator()
+    .addItem('¿Cómo está PROGRAMACION?', 'comoEstaProgramacionDesdeMenu')
     .addToUi();
 }
 
@@ -501,4 +503,72 @@ function traspasar(correoSale, correoEntra) {
   var txt = l.join('\n');
   Logger.log(txt);
   return txt;
+}
+
+/**
+ * Como esta PROGRAMACION: cuantas reglas hay y a cuantas les falta cada cosa.
+ *
+ * Sirve para no adivinar. «Solo veo dos correos» puede ser que la hoja tenga
+ * dos filas, o que tenga mil doscientas y solo dos traigan correo, y la
+ * respuesta es muy distinta.
+ */
+function comoEstaProgramacion() {
+  var h = libro().getSheetByName(HOJA_PROGRAMACION);
+  if (!h || h.getLastRow() < 2) {
+    return 'La hoja ' + HOJA_PROGRAMACION + ' está vacía.\n\n' +
+           'Corre SINAV · Carga → 1 · Cargar PROGRAMACION desde CALENDARIO.';
+  }
+
+  var todo = h.getRange(1, 1, h.getLastRow(), h.getLastColumn()).getValues();
+  var cab = todo[0].map(function (v) { return String(v).trim(); });
+  var ix = {};
+  cab.forEach(function (c, i) { if (c) ix[c] = i; });
+
+  var n = 0, correo = 0, dep = 0, cons = 0, pago = 0, resp = 0, noEnvia = 0;
+  var porImpuesto = {};
+
+  for (var r = 1; r < todo.length; r++) {
+    var f = todo[r];
+    if (!String(f[ix.municipio] || '').trim()) continue;
+    n++;
+    var imp = String(f[ix.impuesto] || '?').trim();
+    porImpuesto[imp] = (porImpuesto[imp] || 0) + 1;
+
+    if (normCorreos(f[ix.correo_oficina])) correo++;
+    if (String(f[ix.cod_oficina] || '').trim().replace(/^0+/, '')) dep++;
+    if ('consecutivo' in ix && String(f[ix.consecutivo] || '').trim()) cons++;
+    if ('forma_pago' in ix && String(f[ix.forma_pago] || '').trim()) pago++;
+    if (normCorreos(f[ix.responsable])) resp++;
+    if (String(f[ix.requiere_envio] || '').toUpperCase() !== 'SI') noEnvia++;
+  }
+
+  var l = [HOJA_PROGRAMACION + ': ' + n + ' reglas.', ''];
+  Object.keys(porImpuesto).sort().forEach(function (k) {
+    l.push('   ' + porImpuesto[k] + '  ' + k);
+  });
+  l.push('',
+    'Con correo de oficina escrito: ' + correo,
+    'Con dependencia (de ahí salen director<dep>@ y subdirector<dep>@): ' + dep,
+    'Con consecutivo de giro: ' + cons + ('consecutivo' in ix ? '' : '  (la columna no existe todavía)'),
+    'Con forma de pago: ' + pago + ('forma_pago' in ix ? '' : '  (la columna no existe todavía)'),
+    'Con responsable: ' + resp,
+    'Marcadas como que NO se envían: ' + noEnvia);
+
+  if (correo < n && dep === n) {
+    l.push('', 'Las ' + (n - correo) + ' sin correo NO están bloqueadas: todas tienen',
+      'dependencia, así que el destino se arma solo. La columna correo_oficina',
+      'es para las excepciones, no para llenarla entera.');
+  } else if (dep < n) {
+    l.push('', 'OJO: ' + (n - dep) + ' reglas no tienen dependencia NI correo. Esas sí',
+      'hay que completarlas a mano o no hay a quién enviarles.');
+  }
+
+  var txt = l.join('\n');
+  Logger.log(txt);
+  return txt;
+}
+
+function comoEstaProgramacionDesdeMenu() {
+  SpreadsheetApp.getUi().alert('SINAV · PROGRAMACION', comoEstaProgramacion(),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
 }
