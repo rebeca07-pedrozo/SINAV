@@ -594,15 +594,28 @@ function pruebasAusencias(esIgual) {
 
   // REQ-010: en PRUEBA la respuesta llega de uno mismo, y tiene que contar
   var falso = { getFrom: function () { return 'yo@davivienda.com'; } };
-  esIgual('en PRUEBA el primer mensaje es el que mandamos',
-          cuentaComoRespuesta(falso, 0, 'yo@davivienda.com', 'PRUEBA'), false);
-  esIgual('en PRUEBA lo que viene después sí cuenta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRUEBA'), true);
-  esIgual('en producción lo mío nunca cuenta como respuesta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRODUCCION'), false);
-  esIgual('en producción lo de la oficina sí',
-          cuentaComoRespuesta({ getFrom: function () { return 'oficina@muni.gov.co'; } },
-                              1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  // el unico que se descarta siempre es el primero: el que mando SINAV
+  var adjunto = function (kb) {
+    return { getFrom: function () { return 'yo@davivienda.com'; },
+             getAttachments: function () {
+               return kb ? [{ getSize: function () { return kb * 1024; } }] : [];
+             } };
+  };
+  var oficina = { getFrom: function () { return 'hacienda@cali.gov.co'; },
+                  getAttachments: function () { return []; } };
+
+  esIgual('el primero del hilo nunca cuenta',
+          cuentaComoRespuesta(adjunto(0), 0, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('la oficina cuenta, traiga o no adjunto',
+          cuentaComoRespuesta(oficina, 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('lo mio sin adjunto no cuenta: es un recordatorio',
+          cuentaComoRespuesta(adjunto(0), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('lo mio CON adjunto si cuenta: es el sellado reenviado',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('una firma incrustada no es un adjunto',
+          cuentaComoRespuesta(adjunto(0.2), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('y en PRUEBA vale lo mismo, sin reglas aparte',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRUEBA'), true);
 }
 
 /**

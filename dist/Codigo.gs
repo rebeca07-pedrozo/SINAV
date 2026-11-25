@@ -16,6 +16,13 @@ var SEGUNDOS_MAX = 270;       // 4m30s del limite de 6 minutos
  * que el tope de verdad es el peso, no la cantidad; esto es para que nadie
  * suba cuarenta por error.
  */
+/**
+ * Lo que tiene que pesar un adjunto para contar como evidencia. Por debajo
+ * suelen ser firmas y logos incrustados, no documentos. Bajo a proposito: un
+ * PDF de una pagina ronda los 10 KB, pero en una prueba puede ser menor.
+ */
+var MINIMO_ADJUNTO = 512;
+
 var MAX_SOPORTES = 10;
 var MAX_ADJUNTO_MB = 24;
 
@@ -2644,18 +2651,33 @@ function esMiMensaje(mensaje, miCorreo) {
 /**
  * Decide si un mensaje del hilo cuenta como respuesta.
  *
- * En PRODUCCION la respuesta viene de la oficina, asi que lo mio se descarta:
- * si contesto yo mismo sobre el hilo, eso no es que la oficina respondiera.
+ * La regla de antes era "lo mio no cuenta", y estaba mal planteada: el unico
+ * mensaje que hay que descartar siempre es EL QUE MANDO SINAV, que es el
+ * primero del hilo. Lo que venga despues es respuesta, venga de quien venga.
  *
- * En PRUEBA el correo se manda a mi propia bandeja a proposito, de modo que la
- * respuesta TAMBIEN es mia. Si se aplicara la regla de produccion, probar seria
- * imposible: se responde y la herramienta no ve nada. Por eso en PRUEBA lo
- * unico que se descarta es el primer mensaje del hilo, que es el que salio de
- * SINAV; todo lo que venga despues cuenta.
+ * De los mios se pide una condicion mas: que traigan adjunto. Asi un
+ * recordatorio que yo escriba sobre el hilo no marca la obligacion como
+ * respondida, pero el sellado que yo mismo reenvie —porque la alcaldia me lo
+ * paso por otro lado— si queda archivado, que es lo que importa.
+ *
+ * El modo ya no cambia nada: en PRUEBA el correo se manda a la propia bandeja
+ * y la respuesta tambien es propia, y con esta regla eso funciona solo.
  */
 function cuentaComoRespuesta(mensaje, indice, miCorreo, modo) {
-  if (modo === 'PRUEBA') return indice > 0;
-  return !esMiMensaje(mensaje, miCorreo);
+  if (indice === 0) return false;                // el que salio de SINAV
+  if (!esMiMensaje(mensaje, miCorreo)) return true;
+  return tieneAdjuntoUtil(mensaje);
+}
+
+/** Trae algo que valga como evidencia, no la firma ni un logo incrustado. */
+function tieneAdjuntoUtil(mensaje) {
+  try {
+    var adj = mensaje.getAttachments();
+    for (var i = 0; i < adj.length; i++) {
+      if (adj[i].getSize() >= MINIMO_ADJUNTO) return true;
+    }
+  } catch (e) { /* si no se puede leer, no cuenta */ }
+  return false;
 }
 
 /**
@@ -2696,7 +2718,7 @@ function leerHilo(o, miCorreo, modo) {
       // las firmas y los logos incrustados no son el sellado. El minimo es
       // bajo a proposito: un PDF de una pagina ronda los 10 KB, pero en una
       // prueba puede ser mucho mas pequeno y tiene que verse igual.
-      if (a.getSize() < 512) return;
+      if (a.getSize() < MINIMO_ADJUNTO) return;
       adjuntos.push(a);
     });
   }
@@ -2976,14 +2998,16 @@ function porQueNoVeLaRespuesta(idObligacion) {
     if (visto && m.getId() === visto) procesado = true;
 
     var vale = cuentaComoRespuesta(m, i, q.correo, modo);
-    var adj = m.getAttachments().filter(function (a) { return a.getSize() >= 512; });
+    var adj = m.getAttachments().filter(function (a) {
+      return a.getSize() >= MINIMO_ADJUNTO;
+    });
 
     var por = [];
     if (!nuevo) por.push('ya procesado antes');
     if (!vale) {
-      por.push(modo === 'PRUEBA'
-        ? 'es el primero del hilo (el que mandó SINAV)'
-        : 'salió de TU cuenta, y en PRODUCCION lo tuyo no cuenta como respuesta');
+      por.push(i === 0
+        ? 'es el primero del hilo, el que mandó SINAV'
+        : 'salió de tu cuenta y no trae ningún adjunto');
     }
     if (nuevo && vale) { cuentan++; conAdjunto += adj.length; }
 
@@ -3000,11 +3024,6 @@ function porQueNoVeLaRespuesta(idObligacion) {
     l.push('Hay ' + cuentan + ' mensaje(s) sin procesar que SÍ cuentan, con ' +
            conAdjunto + ' adjunto(s).');
     l.push('Dale a «Revisar respuestas ahora» y deberían entrar.');
-  } else if (modo === 'PRODUCCION') {
-    l.push('NO hay nada que contar. Si la respuesta de la prueba la escribiste TÚ,');
-    l.push('es esperado: en PRODUCCION los mensajes de tu propia cuenta no cuentan');
-    l.push('como respuesta de la oficina. Para ensayar el circuito completo usa el');
-    l.push('modo PRUEBA (volverAPruebas()), donde sí se tiene en cuenta.');
   } else {
     l.push('No hay mensajes nuevos que contar.');
   }
@@ -6124,15 +6143,28 @@ function pruebasAusencias(esIgual) {
 
   // REQ-010: en PRUEBA la respuesta llega de uno mismo, y tiene que contar
   var falso = { getFrom: function () { return 'yo@davivienda.com'; } };
-  esIgual('en PRUEBA el primer mensaje es el que mandamos',
-          cuentaComoRespuesta(falso, 0, 'yo@davivienda.com', 'PRUEBA'), false);
-  esIgual('en PRUEBA lo que viene después sí cuenta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRUEBA'), true);
-  esIgual('en producción lo mío nunca cuenta como respuesta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRODUCCION'), false);
-  esIgual('en producción lo de la oficina sí',
-          cuentaComoRespuesta({ getFrom: function () { return 'oficina@muni.gov.co'; } },
-                              1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  // el unico que se descarta siempre es el primero: el que mando SINAV
+  var adjunto = function (kb) {
+    return { getFrom: function () { return 'yo@davivienda.com'; },
+             getAttachments: function () {
+               return kb ? [{ getSize: function () { return kb * 1024; } }] : [];
+             } };
+  };
+  var oficina = { getFrom: function () { return 'hacienda@cali.gov.co'; },
+                  getAttachments: function () { return []; } };
+
+  esIgual('el primero del hilo nunca cuenta',
+          cuentaComoRespuesta(adjunto(0), 0, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('la oficina cuenta, traiga o no adjunto',
+          cuentaComoRespuesta(oficina, 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('lo mio sin adjunto no cuenta: es un recordatorio',
+          cuentaComoRespuesta(adjunto(0), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('lo mio CON adjunto si cuenta: es el sellado reenviado',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('una firma incrustada no es un adjunto',
+          cuentaComoRespuesta(adjunto(0.2), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('y en PRUEBA vale lo mismo, sin reglas aparte',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRUEBA'), true);
 }
 
 /**

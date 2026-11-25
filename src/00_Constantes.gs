@@ -11,6 +11,13 @@ var SEGUNDOS_MAX = 270;       // 4m30s del limite de 6 minutos
  * que el tope de verdad es el peso, no la cantidad; esto es para que nadie
  * suba cuarenta por error.
  */
+/**
+ * Lo que tiene que pesar un adjunto para contar como evidencia. Por debajo
+ * suelen ser firmas y logos incrustados, no documentos. Bajo a proposito: un
+ * PDF de una pagina ronda los 10 KB, pero en una prueba puede ser menor.
+ */
+var MINIMO_ADJUNTO = 512;
+
 var MAX_SOPORTES = 10;
 var MAX_ADJUNTO_MB = 24;
 

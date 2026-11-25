@@ -489,6 +489,23 @@ Va **por lotes con guardia de tiempo**: cada llamada a Gmail es lenta y Apps
 Script corta a los 6 minutos. Si queda a medias, se vuelve a darle y sigue donde
 iba, sin repetir lo ya procesado.
 
+### Qué cuenta como respuesta
+
+| Mensaje del hilo | ¿Cuenta? |
+|---|---|
+| El primero, el que mandó SINAV | **Nunca.** Es el nuestro |
+| De la oficina | **Siempre**, traiga o no adjunto |
+| De tu propia cuenta, **con** adjunto | **Sí.** Es el sellado, aunque lo reenvíes tú |
+| De tu propia cuenta, sin adjunto | No. Es un recordatorio, no una respuesta |
+
+La regla no mira quién escribe sino **si trae evidencia**. Así, si la alcaldía
+te manda el sellado por fuera (WhatsApp, otra cuenta) y tú lo adjuntas sobre
+el hilo, queda archivado igual. Y un recordatorio tuyo no marca la obligación
+como respondida.
+
+Un adjunto cuenta desde **512 bytes**; por debajo suelen ser firmas y logos
+incrustados, no documentos.
+
 ### Probar en modo PRUEBA
 
 En `modo = PRUEBA` el correo se manda **a tu propia bandeja** a propósito, así
