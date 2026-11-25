@@ -13,7 +13,8 @@ const archivos = ['00_Constantes.gs', '03_Roles.gs', '04_Normalizar.gs',
                  '16_Metricas.gs',
                  '11_Respuestas.gs', '20_Ausencias.gs', '21_Calendario.gs',
                  '22_Produccion.gs', '23_Correo.gs', '14_Campos.gs',
-                 'Carga.gs', 'Mensuales.gs', 'Concepto25.gs', '99_Pruebas.gs'];
+                 'Carga.gs', 'Mensuales.gs', 'Concepto25.gs',
+                 'Arranque.gs', '99_Pruebas.gs'];
 
 const codigo = archivos
   .map((f) => readFileSync(join(raiz, 'src', f), 'utf8'))

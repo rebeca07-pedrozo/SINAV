@@ -57,6 +57,25 @@ desplegable del editor.
 | **Mensuales.gs** | El mes, los adhesivos, los correos de oficina, el archivado |
 | **Carga.gs** | La carga inicial de una vigencia. Se corre una vez al año |
 | **Concepto25.gs** | Los consecutivos de giro, las formas de pago y los traspasos |
+| **Arranque.gs** | Los correos de las oficinas y la preparación del mes de una corrida |
+
+### Dejar el mes listo de una sola corrida
+
+Esto hace, en orden, todo lo de las secciones siguientes:
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Pega la hoja de correspondencia en la pestaña `ADHESIVOS` | — | — |
+| 2 | — | **SINAV · Preparar el mes → DEJAR EL MES LISTO** | `prepararElMes` · Arranque.gs |
+
+Crea columnas, trae las obligaciones del mes y del siguiente, escribe los
+correos de las oficinas, los consecutivos y las formas de pago, reparte los
+adhesivos y termina contando cuántas quedaron listas y qué les falta a las
+demás.
+
+Se puede correr las veces que haga falta: nada se duplica y **lo escrito a
+mano siempre gana**. Si el paso 1 no está hecho, los adhesivos se saltan y lo
+dice; el resto se hace igual.
 
 ### Cargar las obligaciones de un mes nuevo
 

@@ -36,6 +36,7 @@ function pruebas() {
   pruebasVariosSellados(esIgual);
   pruebasCorreoOficina(esIgual);
   pruebasConcepto25(esIgual);
+  pruebasCorreosOficina(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -914,4 +915,36 @@ function pruebasConcepto25(esIgual) {
           consecutivoDe('NILO', 'ICA', '2026-11').split('-')[1], '11');
   esIgual('un municipio sin tabla no inventa nada',
           consecutivoDe('NARNIA', 'ICA', '2026-11'), '');
+}
+
+/** El directorio de oficinas: 317 municipios con sus correos. */
+function pruebasCorreosOficina(esIgual) {
+  // el DANE se escribe con cinco cifras: 5002 es 05002, no 5002
+  esIgual('cinco cifras con cero delante', dane5('5002'), '05002');
+  esIgual('el que ya viene bien no cambia', dane5('19698'), '19698');
+  esIgual('acepta numero', dane5(5002), '05002');
+  esIgual('quita lo que no sea cifra', dane5('05002.0'), '50020');
+  esIgual('vacio no revienta', dane5(''), '');
+  esIgual('nulo tampoco', dane5(null), '');
+
+  esIgual('Santander de Quilichao tiene correos',
+          !!correosDeOficina('19698'), true);
+  esIgual('y el director va primero',
+          correosDeOficina('19698').split(',')[0], 'director0118@davivienda.com');
+  esIgual('el subdirector va segundo',
+          correosDeOficina('19698').split(',')[1], 'subdirector0118@davivienda.com');
+  esIgual('un municipio que no esta, vacio', correosDeOficina('99999'), '');
+
+  esIgual('hay mas de 300 municipios con correo',
+          Object.keys(CORREOS_OFICINA).length > 300, true);
+  esIgual('todos los correos son del banco o de una alcaldia',
+          Object.keys(CORREOS_OFICINA).every(function (k) {
+            return CORREOS_OFICINA[k].indexOf('@') > 0;
+          }), true);
+  esIgual('ningun municipio quedo con la lista vacia',
+          Object.keys(CORREOS_OFICINA).every(function (k) {
+            return CORREOS_OFICINA[k].length > 5;
+          }), true);
+
+  esIgual('Quilichao paga en oficina', pagoDeOficina('19698'), 'OFICINA');
 }
