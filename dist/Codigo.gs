@@ -344,6 +344,7 @@ function onOpen() {
     .addItem('Migrar columnas', 'migrar')
     .addItem('Correr pruebas', 'pruebas')
     .addItem('¿Por qué no se envía?', 'porQueNoSeEnviaDesdeMenu')
+    .addItem('¿Por qué no ve la respuesta?', 'porQueNoVeLaRespuestaDesdeMenu')
     .addSeparator()
     .addItem('Revisar antes de producción', 'revisarAntesDeProduccionDesdeMenu')
     .addItem('PASAR A PRODUCCIÓN', 'pasarAProduccionDesdeMenu')
@@ -816,6 +817,12 @@ function pasarAProduccionDesdeMenu() {
   } catch (e) {
     ui.alert('SINAV · no se pasó a producción', String(e.message || e), ui.ButtonSet.OK);
   }
+}
+
+function porQueNoVeLaRespuestaDesdeMenu() {
+  SpreadsheetApp.getUi().alert('SINAV · ¿por qué no ve la respuesta?',
+                               porQueNoVeLaRespuesta(),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 
@@ -2888,6 +2895,126 @@ function apiRevisarRespuestas() {
   var r = revisarRespuestas();
   r.lista = apiRespuestas();
   return r;
+}
+
+/* ---------------------------------------------------------------------------
+   DIAGNOSTICO
+
+   «Respondi y no lo ve» tiene media docena de causas distintas y ninguna se
+   nota desde la pantalla. Esto las enseña todas de una vez.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Cuenta, mensaje por mensaje, que esta viendo SINAV en el hilo de una
+ * obligacion y por que descarta lo que descarta.
+ *
+ *   porQueNoVeLaRespuesta()                  la primera ENVIADA que encuentre
+ *   porQueNoVeLaRespuesta('13001|ICA|...')   una concreta
+ */
+function porQueNoVeLaRespuesta(idObligacion) {
+  var q = yo();
+  var modo = String(config('modo') || 'PRUEBA').toUpperCase();
+  var todas = registros(HOJA.OBLIGACIONES);
+
+  var o = String(idObligacion || '').trim()
+    ? todas.filter(function (r) { return String(r.id) === String(idObligacion).trim(); })[0]
+    : todas.filter(function (r) {
+        return String(r.hilo_id || '').trim() &&
+               estadosEsperanRespuesta().indexOf(String(r.estado).toUpperCase()) >= 0;
+      })[0];
+
+  if (!o) {
+    return 'No encontré ninguna obligación enviada con hilo guardado.\n' +
+           'Pásame el id: porQueNoVeLaRespuesta("13001|ICA|GENERAL|2026-B6")';
+  }
+
+  var l = [
+    o.municipio + ' · ' + o.impuesto + ' · ' + o.periodo,
+    'Estado: ' + o.estado + '   ·   Modo: ' + modo,
+    'Tu cuenta: ' + q.correo,
+    ''
+  ];
+
+  if (!String(o.hilo_id || '').trim()) {
+    l.push('NO TIENE hilo_id. Al enviar no se encontró el hilo en tus enviados,');
+    l.push('así que la respuesta no se puede asociar sola. Busca un ERROR en');
+    l.push('EVENTOS con esta obligación.');
+    return avisoDiagnostico(l);
+  }
+  if (estadosEsperanRespuesta().indexOf(String(o.estado).toUpperCase()) < 0) {
+    l.push('El estado ' + o.estado + ' ya no mira el hilo. Solo se revisan ' +
+           estadosEsperanRespuesta().join(', ') + '.');
+    return avisoDiagnostico(l);
+  }
+
+  var hilo;
+  try {
+    hilo = GmailApp.getThreadById(String(o.hilo_id).trim());
+  } catch (e) {
+    l.push('El hilo ' + o.hilo_id + ' no abre desde tu cuenta: ' + e.message);
+    l.push('Si lo envió otra persona, el hilo está en SU bandeja, no en la tuya.');
+    return avisoDiagnostico(l);
+  }
+  if (!hilo) {
+    l.push('El hilo ' + o.hilo_id + ' no está en tu bandeja.');
+    return avisoDiagnostico(l);
+  }
+
+  var mensajes = hilo.getMessages();
+  var visto = String(o.ultimo_mensaje || '').trim();
+  l.push('El hilo tiene ' + mensajes.length + ' mensaje(s).');
+  l.push(visto ? 'Ya se procesó hasta el mensaje ' + visto : 'No se ha procesado ninguno.');
+  l.push('');
+
+  var procesado = !visto;
+  var cuentan = 0, conAdjunto = 0;
+
+  for (var i = 0; i < mensajes.length; i++) {
+    var m = mensajes[i];
+    var de = String(m.getFrom() || '');
+    var nuevo = procesado;
+    if (visto && m.getId() === visto) procesado = true;
+
+    var vale = cuentaComoRespuesta(m, i, q.correo, modo);
+    var adj = m.getAttachments().filter(function (a) { return a.getSize() >= 512; });
+
+    var por = [];
+    if (!nuevo) por.push('ya procesado antes');
+    if (!vale) {
+      por.push(modo === 'PRUEBA'
+        ? 'es el primero del hilo (el que mandó SINAV)'
+        : 'salió de TU cuenta, y en PRODUCCION lo tuyo no cuenta como respuesta');
+    }
+    if (nuevo && vale) { cuentan++; conAdjunto += adj.length; }
+
+    l.push((i + 1) + '. de ' + de);
+    l.push('   ' + (nuevo && vale ? 'CUENTA' : 'se descarta: ' + por.join(' y ')));
+    l.push('   adjuntos útiles: ' + adj.length +
+           (adj.length ? ' (' + adj.map(function (a) {
+             return a.getName() + ' ' + Math.round(a.getSize() / 1024) + ' KB';
+           }).join(', ') + ')' : ''));
+  }
+
+  l.push('');
+  if (cuentan) {
+    l.push('Hay ' + cuentan + ' mensaje(s) sin procesar que SÍ cuentan, con ' +
+           conAdjunto + ' adjunto(s).');
+    l.push('Dale a «Revisar respuestas ahora» y deberían entrar.');
+  } else if (modo === 'PRODUCCION') {
+    l.push('NO hay nada que contar. Si la respuesta de la prueba la escribiste TÚ,');
+    l.push('es esperado: en PRODUCCION los mensajes de tu propia cuenta no cuentan');
+    l.push('como respuesta de la oficina. Para ensayar el circuito completo usa el');
+    l.push('modo PRUEBA (volverAPruebas()), donde sí se tiene en cuenta.');
+  } else {
+    l.push('No hay mensajes nuevos que contar.');
+  }
+  return avisoDiagnostico(l);
+}
+
+function avisoDiagnostico(lineas) {
+  var txt = lineas.join('\n');
+  Logger.log(txt);
+  return txt;
 }
 
 
@@ -5089,8 +5216,10 @@ function cuerpoOficina(o, modo) {
          'ASPECTOS A TENER EN CUENTA:');
   aspectos(o).forEach(function (a) { l.push('• ' + a); });
   l.push('',
-    'Por favor RESPONDA SOBRE ESTE MISMO CORREO, no abra uno nuevo, y adjunte',
-    'la declaración sellada. Así queda archivada sola y no hay que buscarla después.',
+    'Agradecemos dar respuesta SOBRE ESTE MISMO CORREO, sin iniciar uno nuevo,',
+    'adjuntando la declaración con el sello de recibido. De esta manera el',
+    'soporte queda asociado automáticamente a la obligación y debidamente',
+    'archivado.',
     '', 'Cordialmente,', config('nombre_remitente'));
   return l.join('\n');
 }
@@ -5221,9 +5350,10 @@ function cuerpoHtmlOficina(o, modo) {
         '<div style="background:#f7f5f5;border:1px solid ' + BORDE + ';' +
         'padding:14px 16px;border-radius:4px;font-size:13px;line-height:1.55;' +
         'color:' + TINTA + '">' +
-        '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte ' +
-        'la declaración sellada. Así queda archivada sola y no hay que buscarla ' +
-        'después.</div></td></tr>' +
+        'Agradecemos dar respuesta <b>sobre este mismo correo</b>, sin iniciar ' +
+        'uno nuevo, adjuntando la declaración con el sello de recibido. De esta ' +
+        'manera el soporte queda asociado automáticamente a la obligación y ' +
+        'debidamente archivado.</div></td></tr>' +
 
       '<tr><td style="padding:0 0 26px;font-size:14px;color:' + TINTA + '">' +
         'Cordialmente,<br><b>' + config('nombre_remitente') + '</b></td></tr>' +
@@ -5232,8 +5362,8 @@ function cuerpoHtmlOficina(o, modo) {
 
     '<tr><td style="background:#f7f5f5;border-top:1px solid ' + BORDE + ';' +
       'padding:14px 28px;font-size:11px;color:' + APAGADO + ';line-height:1.5">' +
-      'Correo generado por SINAV, el control de obligaciones tributarias ' +
-      'territoriales del Departamento de Impuestos.</td></tr>' +
+      'Comunicación generada por SINAV, sistema de control de obligaciones ' +
+      'tributarias territoriales del Departamento de Impuestos.</td></tr>' +
 
   '</table></div>';
 }

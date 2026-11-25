@@ -165,8 +165,10 @@ function cuerpoOficina(o, modo) {
          'ASPECTOS A TENER EN CUENTA:');
   aspectos(o).forEach(function (a) { l.push('• ' + a); });
   l.push('',
-    'Por favor RESPONDA SOBRE ESTE MISMO CORREO, no abra uno nuevo, y adjunte',
-    'la declaración sellada. Así queda archivada sola y no hay que buscarla después.',
+    'Agradecemos dar respuesta SOBRE ESTE MISMO CORREO, sin iniciar uno nuevo,',
+    'adjuntando la declaración con el sello de recibido. De esta manera el',
+    'soporte queda asociado automáticamente a la obligación y debidamente',
+    'archivado.',
     '', 'Cordialmente,', config('nombre_remitente'));
   return l.join('\n');
 }
@@ -297,9 +299,10 @@ function cuerpoHtmlOficina(o, modo) {
         '<div style="background:#f7f5f5;border:1px solid ' + BORDE + ';' +
         'padding:14px 16px;border-radius:4px;font-size:13px;line-height:1.55;' +
         'color:' + TINTA + '">' +
-        '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte ' +
-        'la declaración sellada. Así queda archivada sola y no hay que buscarla ' +
-        'después.</div></td></tr>' +
+        'Agradecemos dar respuesta <b>sobre este mismo correo</b>, sin iniciar ' +
+        'uno nuevo, adjuntando la declaración con el sello de recibido. De esta ' +
+        'manera el soporte queda asociado automáticamente a la obligación y ' +
+        'debidamente archivado.</div></td></tr>' +
 
       '<tr><td style="padding:0 0 26px;font-size:14px;color:' + TINTA + '">' +
         'Cordialmente,<br><b>' + config('nombre_remitente') + '</b></td></tr>' +
@@ -308,8 +311,8 @@ function cuerpoHtmlOficina(o, modo) {
 
     '<tr><td style="background:#f7f5f5;border-top:1px solid ' + BORDE + ';' +
       'padding:14px 28px;font-size:11px;color:' + APAGADO + ';line-height:1.5">' +
-      'Correo generado por SINAV, el control de obligaciones tributarias ' +
-      'territoriales del Departamento de Impuestos.</td></tr>' +
+      'Comunicación generada por SINAV, sistema de control de obligaciones ' +
+      'tributarias territoriales del Departamento de Impuestos.</td></tr>' +
 
   '</table></div>';
 }

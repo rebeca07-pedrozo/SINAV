@@ -89,16 +89,16 @@ function TarjetasConteo({ conteos, filtro, alFiltrar }) {
  * y nadie sabia por que. Ahora se escribe en la fila.
  */
 function motivoLegible(o) {
-  if (o.mia === false) return 'es de otra persona';
+  if (o.mia === false) return 'asignada a otra persona';
   const m = String(o.motivo_no_enviable || '');
   if (!m) return '';
-  if (m === 'sin soporte') return 'falta subir el soporte';
+  if (m === 'sin soporte') return 'pendiente cargar el soporte';
   if (m === 'sin correo ni dependencia') {
-    return 'sin correo de oficina y sin dependencia: no hay a quién mandarlo';
+    return 'sin correo de oficina ni dependencia registrada';
   }
-  if (m === 'requiere_envio no es SI') return 'marcada como que no se envía por correo';
+  if (m === 'requiere_envio no es SI') return 'no está marcada para envío por correo';
   if (m.indexOf('no LISTA') >= 0) {
-    return 'está en ' + o.estado + ': solo se envía desde LISTA';
+    return 'en estado ' + o.estado + '. El envío solo procede desde LISTA.';
   }
   return m;
 }
@@ -145,12 +145,12 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
       ${o.soportes > 1
         ? html`<span class="sub">${o.soportes + ' archivos adjuntos'}</span>` : null}
       ${puedo && falta.length
-        ? html`<span class="sub porvencer">${'faltan datos: ' + falta.join(', ')}</span>`
+        ? html`<span class="sub porvencer">${'datos pendientes: ' + falta.join(', ')}</span>`
         : null}
       ${porque
         ? html`<span class="sub vencido">${'no se puede enviar: ' + porque}</span>`
         : (o.cadena.soporte && !o.soporte_revisado
-            ? html`<span class="sub porvencer">se revisa al enviar</span>` : null)}
+            ? html`<span class="sub porvencer">pendiente de verificación</span>` : null)}
     </td>
 
     <td class="celda-linea2">
@@ -207,28 +207,30 @@ function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
       </div>
 
       <p class="sub rev-nota">
-        Esto es lo que va a leer la oficina: cuánto girar, con qué sticker
-        viaja el sobre y con qué consecutivo se paga.
+        Información que se incluirá en la comunicación a la oficina: valor a
+        girar, sticker de correspondencia y consecutivo de giro.
       </p>
 
       <p class="dato-fijo">
         <span class="sub">Consecutivo de giro</span>
         <b class="dato-tel">${o.consecutivo_giro || 'se asigna al enviar'}</b>
         <span class="sub">${o.consecutivo_giro
-          ? 'ya asignado, no se renumera'
-          : 'tus iniciales, el mes del periodo y el consecutivo de ese mes'}</span>
+          ? 'Asignado previamente. No se renumera.'
+          : 'Se compone de las iniciales del remitente, el mes del periodo y ' +
+            'el consecutivo correspondiente.'}</span>
       </p>
 
       ${sticker ? html`<p class="dato-fijo">
         <span class="sub">Sticker de correspondencia</span>
         <b class="dato-tel">${sticker}</b>
-        <span class="sub">de la columna ADHESIVO, no se edita aquí</span>
+        <span class="sub">Tomado de la columna ADHESIVO. No se edita aquí.</span>
       </p>` : html`<div class="dato-fijo sin-dato">
         <span class="sub">Sticker de correspondencia</span>
-        <b>Falta, y sin él no sale el correo</b>
+        <b>Pendiente. El envío no se habilita sin este dato.</b>
         <span class="sub">
-          Se trae solo con <b>SINAV · Mes → Repartir los adhesivos del mes</b>.
-          Si ese municipio no está en la hoja de correspondencia, escríbelo aquí:
+          Se obtiene con <b>SINAV · Mes → Repartir los adhesivos del mes</b>.
+          Si el municipio no figura en la hoja de correspondencia, puede
+          registrarse manualmente a continuación:
         </span>
         <${CampoEdit} clave="adhesivo" def=${campos && campos.adhesivo}
           valor=${valorDe('adhesivo')}
@@ -254,13 +256,14 @@ function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
             else alTerminar();          // la última: pasa a revisar los PDF
           }}>
           ${trabajando ? 'Guardando…'
-            : (i + 1 < obligaciones.length ? 'Guardar y seguir' : 'Guardar y revisar los PDF')}
+            : (i + 1 < obligaciones.length
+                ? 'Guardar y continuar' : 'Guardar y revisar los soportes')}
         </button>
         ${falta.length
-          ? html`<span class="sub vencido">${'Falta: ' + falta.join(', ')}</span>`
-          : html`<span class="sub aldia">No falta ningún dato.</span>`}
+          ? html`<span class="sub vencido">${'Datos pendientes: ' + falta.join(', ')}</span>`
+          : html`<span class="sub aldia">Información completa.</span>`}
         <button class="btn" style=${{ marginLeft: 'auto' }}
-          disabled=${!!trabajando} onClick=${alCancelar}>Dejarlo para después</button>
+          disabled=${!!trabajando} onClick=${alCancelar}>Cancelar</button>
       </div>
     </div>
   </div>`;
@@ -302,9 +305,9 @@ function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
         : html`<p class="vacio">Esta obligación no tiene soporte.</p>`}
 
       <p class="sub rev-nota">
-        Comprueba que el documento sea <b>de este municipio y de este
-        periodo</b>. Si no lo es, márcalo como incorrecto: se quita el archivo
-        y habrá que subir el correcto.
+        Verifique que el documento corresponda a <b>este municipio y a este
+        periodo</b>. En caso contrario márquelo como incorrecto: el archivo se
+        retira y deberá cargarse el que corresponda.
         ${' '}<a href=${s.enlace} target="_blank" rel="noopener">Abrir en Drive</a>
       </p>
 
@@ -321,10 +324,10 @@ function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
           }}>
           Incorrecto
         </button>
-        <span class="sub">${listos} de ${soportes.length} revisados</span>
+        <span class="sub">${listos} de ${soportes.length} verificados</span>
         <button class="btn" style=${{ marginLeft: 'auto' }}
           disabled=${trabajando} onClick=${alCerrar}>
-          ${listos === soportes.length ? 'Listo' : 'Dejarlo para después'}
+          ${listos === soportes.length ? 'Continuar' : 'Cancelar'}
         </button>
       </div>
     </div>
@@ -526,7 +529,7 @@ function Enviar({ inicio }) {
         setRevision(null);
         setConfirmando(false);
         setResultado({ clase: 'malo',
-          titulo: 'Soporte marcado como incorrecto',
+          titulo: 'Soporte marcado como no válido',
           lineas: [
             frase(['Se quitó el archivo de',
                    o ? o.municipio + ' ' + o.impuesto + ' ' + o.periodo : 'la obligación',

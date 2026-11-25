@@ -34,6 +34,7 @@ function onOpen() {
     .addItem('Migrar columnas', 'migrar')
     .addItem('Correr pruebas', 'pruebas')
     .addItem('¿Por qué no se envía?', 'porQueNoSeEnviaDesdeMenu')
+    .addItem('¿Por qué no ve la respuesta?', 'porQueNoVeLaRespuestaDesdeMenu')
     .addSeparator()
     .addItem('Revisar antes de producción', 'revisarAntesDeProduccionDesdeMenu')
     .addItem('PASAR A PRODUCCIÓN', 'pasarAProduccionDesdeMenu')
@@ -506,4 +507,10 @@ function pasarAProduccionDesdeMenu() {
   } catch (e) {
     ui.alert('SINAV · no se pasó a producción', String(e.message || e), ui.ButtonSet.OK);
   }
+}
+
+function porQueNoVeLaRespuestaDesdeMenu() {
+  SpreadsheetApp.getUi().alert('SINAV · ¿por qué no ve la respuesta?',
+                               porQueNoVeLaRespuesta(),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
 }

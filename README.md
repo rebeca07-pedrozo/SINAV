@@ -27,6 +27,7 @@ estados y secuencia · [DESIGN.md](DESIGN.md) — decisiones visuales.
 
 ## Índice
 
+- [**Qué ejecutar para cada tarea**](#qué-ejecutar-para-cada-tarea)
 - [El problema que resuelve](#el-problema-que-resuelve)
 - [El recorrido de una obligación](#el-recorrido-de-una-obligación)
 - [La arquitectura](#la-arquitectura)
@@ -40,6 +41,95 @@ estados y secuencia · [DESIGN.md](DESIGN.md) — decisiones visuales.
 - [Qué hace cada archivo](#qué-hace-cada-archivo)
 - [Decisiones que conviene no deshacer](#decisiones-que-conviene-no-deshacer)
 - [Lo que falta](#lo-que-falta)
+
+---
+
+## Qué ejecutar para cada tarea
+
+Las funciones viven en tres archivos del editor de Apps Script. **El archivo
+que tengas abierto da igual**: todos comparten el mismo ámbito. Lo más cómodo
+es el menú del Sheets; la columna «función» está por si prefieres el
+desplegable del editor.
+
+| Archivo del editor | Qué contiene |
+|---|---|
+| **Codigo.gs** | La aplicación entera: instalar, migrar, diagnósticos, producción |
+| **Mensuales.gs** | El mes, los adhesivos, los correos de oficina, el archivado |
+| **Carga.gs** | La carga inicial de una vigencia. Se corre una vez al año |
+
+### Cargar las obligaciones de un mes nuevo
+
+Normalmente **no hay que hacer nada**: el activador lo hace el día 1 a las 5am.
+Si hay que adelantarlo o repetirlo:
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | — | **SINAV · Mes → Cargar el mes en curso y el siguiente** | `cargarMesVigente` · Mensuales.gs |
+| 2 | Comprobar que el activador sigue puesto | **SINAV · Mes → ¿Está programada?** | `estadoCargaMensual` · Mensuales.gs |
+
+Se puede correr las veces que quieras: lo que ya existe no se duplica.
+
+### Cargar los adhesivos de un mes
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Abre la pestaña **ADHESIVOS**, **borra todo** y pega la hoja del Excel de correspondencia (AUTORRETENCIÓN o RETEICA), encabezados incluidos | — | — |
+| 2 | — | **SINAV · Mes → Repartir los adhesivos del mes** | `repartirAdhesivos` · Mensuales.gs |
+| 3 | Repite 1 y 2 con la otra hoja del Excel | — | — |
+
+No pisa un adhesivo ya escrito, así que repetirlo es seguro. Al final lista
+las obligaciones del mes que quedaron sin número.
+
+### Agregar o corregir correos de oficina
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Escribe el correo en la hoja **PROGRAMACION**, columna `correo_oficina` | — | — |
+| 2 | — | **SINAV · Mes → Refrescar los correos de oficina** | `refrescarCorreos` · Mensuales.gs |
+
+El paso 2 baja lo nuevo a las obligaciones que ya existen. Sin él, lo escrito
+solo vale para las que se creen de aquí en adelante.
+
+### Después de pegar código nuevo
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Pega `dist/Codigo.gs`, `dist/Index.html` y `dist/Mensuales.gs` | — | — |
+| 2 | Crear las columnas que falten | **SINAV → Instalar / verificar** | `instalar` · Codigo.gs |
+| 3 | Poner al día los valores viejos | **SINAV → Migrar columnas** | `migrar` · Codigo.gs |
+| 4 | Si el despliegue está en versión fija, crear **versión nueva** | Implementar → Gestionar implementaciones | — |
+
+**El paso 2 no se salta.** `instalar()` crea las columnas; `migrar()` solo
+arregla valores. Si falta una columna, la pantalla da un error que lo dice.
+
+### Cuando algo no funciona
+
+| Síntoma | Menú | Función |
+|---|---|---|
+| Subí el soporte y no deja enviar | **SINAV → ¿Por qué no se envía?** | `porQueNoSeEnvia` · Codigo.gs |
+| Respondieron y no lo detecta | **SINAV → ¿Por qué no ve la respuesta?** | `porQueNoVeLaRespuesta` · Codigo.gs |
+| ¿Está puesto el activador del día 1? | **SINAV · Mes → ¿Está programada?** | `estadoCargaMensual` · Mensuales.gs |
+| El libro va lento | **SINAV · Mes → Archivar los meses cerrados** | `archivarCerradas` · Mensuales.gs |
+
+### Pasar a producción, o volver atrás
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Ver qué saldría | **SINAV → Revisar antes de producción** | `revisarAntesDeProduccion` · Codigo.gs |
+| 2 | Dar el paso | **SINAV → PASAR A PRODUCCIÓN** | `pasarAProduccion` · Codigo.gs |
+| — | Parar todo y volver a la bandeja propia | — | `volverAPruebas` · Codigo.gs |
+
+### Una vigencia nueva (una vez al año)
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Pega el calendario del año en la pestaña **CALENDARIO** | — | — |
+| 2 | Habilitar el año con los ids de sus carpetas de Drive | — | `habilitarVigencia("2027")` · Codigo.gs |
+| 3 | **NO vuelvas a correr `cargarProgramacion`**: borraría los correos llenados a mano durante todo el año | — | — |
+| 4 | Deja que la carga mensual haga el resto | — | — |
+
+`cargarProgramacion` (Carga.gs) solo se corre **la primera vez**, cuando
+PROGRAMACION está vacía.
 
 ---
 
