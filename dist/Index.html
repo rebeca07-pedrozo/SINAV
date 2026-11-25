@@ -348,10 +348,11 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .35; }
                     flex-wrap: wrap; }
 
 /* un aviso que NO es un error: solo cuenta lo que va a pasar */
-/* el desplegable de digitalizacion, dentro de la fila de Enviar */
-.fila-datos > td { padding: 0; background: var(--realce); }
-.panel-datos { padding: 12px var(--pad) 16px; border-top: 1px solid var(--borde); }
-.panel-datos > .sub { margin: 0 0 10px; }
+/* los datos del correo, primer paso del envio */
+.dato-fijo { margin: 0 0 14px; padding: 8px 12px; background: var(--realce);
+             border-left: 3px solid var(--aldia); }
+.dato-fijo b { display: block; font-size: var(--fs-seccion);
+               font-variant-numeric: tabular-nums; }
 .rejilla-campos { display: grid; gap: 12px 16px;
                   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 @media (max-width: 720px) { .rejilla-campos { grid-template-columns: 1fr; } }
@@ -747,6 +748,47 @@ function frase(partes) {
     typeof x === 'number' ? html`<b key=${i}>${x}</b>` : x);
 }
 
+/** Un campo del formulario, pintado segun lo que dijo el servidor. */
+function CampoEdit({ clave, def, valor, alCambiar }) {
+  const id = 'c-' + clave;
+
+  if (def.tipo === 'lista') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <select id=${id} value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)}>
+        ${def.vacio ? html`<option value="">— sin dato —</option>` : null}
+        ${def.valores.map((v) => html`<option key=${v} value=${v}>
+          ${bonito(v)}</option>`)}
+      </select>
+    </label>`;
+  }
+
+  if (def.tipo === 'valor') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="text" inputMode="numeric" class="num"
+        placeholder="0" value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+      <small>Se liquida en pesos. Acepta $ y puntos de mil.</small>
+    </label>`;
+  }
+
+  if (def.tipo === 'fecha') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="date" value=${valor || ''}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+    </label>`;
+  }
+
+  return html`<label class="campo ancho" key=${clave}>
+    <span>${def.et}</span>
+    <textarea id=${id} rows="2" value=${valor == null ? '' : String(valor)}
+      onChange=${(e) => alCambiar(clave, e.target.value)}></textarea>
+  </label>`;
+}
+
 /* ---------- piezas --------------------------------------------------------- */
 
 /** Un solo juego de iconos: trazo de 1.5px, 16px, sin relleno. */
@@ -952,19 +994,13 @@ function motivoLegible(o) {
   return m;
 }
 
-function Fila({ o, elegida, alElegir, alSubir, subiendo,
-                campos, orden, abierto, alAbrir, borrador, alCambiar,
-                alGuardar, guardando }) {
+function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
   const puedo = o.enviable && o.mia !== false;
   const porque = puedo ? '' : motivoLegible(o);
   const falta = o.falta_correo || [];
   const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
 
-  // OJO: htm no entiende <>...</> como fragmento — crea una etiqueta con el
-  // nombre vacio y React tumba la pagina entera. El fragmento se escribe
-  // nombrando React.Fragment, y se cierra con <//>.
-  return html`<${React.Fragment}>
-  <tr data-elegida=${elegida ? 'si' : 'no'}>
+  return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
     <td class="celda-casilla">
       <input type="checkbox" checked=${elegida} disabled=${!puedo}
         aria-label=${puedo
@@ -999,6 +1035,9 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo,
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
       ${o.soportes > 1
         ? html`<span class="sub">${o.soportes + ' archivos adjuntos'}</span>` : null}
+      ${puedo && falta.length
+        ? html`<span class="sub porvencer">${'faltan datos: ' + falta.join(', ')}</span>`
+        : null}
       ${porque
         ? html`<span class="sub vencido">${'no se puede enviar: ' + porque}</span>`
         : (o.cadena.soporte && !o.soporte_revisado
@@ -1010,53 +1049,95 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo,
     </td>
 
     <td class="celda-accion der">
-      <div class="acciones-soporte">
-        <button class="btn" aria-expanded=${abierto ? 'true' : 'false'}
-          onClick=${() => alAbrir(abierto ? '' : o.id)}>
-          ${falta.length
-            ? 'Digitalizar (faltan ' + falta.length + ')'
-            : (abierto ? 'Cerrar datos' : 'Datos ✓')}
-        </button>
-      </div>
       ${o.cadena.soporte
-        ? html`<div class="acciones-soporte">
-            <button class="btn" disabled=${subiendo}
-              onClick=${() => alSubir(o.id, true)}>
-              <${Icono} nombre="subir" /> Añadir otro</button>
-            <button class="btn" disabled=${subiendo}
-              onClick=${() => alSubir(o.id, false)}>Reemplazar</button>
-          </div>`
+        ? html`<button class="btn" disabled=${subiendo}
+            onClick=${() => alSubir(o.id, false)}>
+            ${subiendo ? 'Subiendo…' : 'Cambiar soporte'}</button>`
         : html`<button class="btn" disabled=${subiendo}
             onClick=${() => alSubir(o.id, false)}>
             <${Icono} nombre="subir" /> ${subiendo ? 'Subiendo…' : 'Subir soporte'}</button>`}
     </td>
-  </tr>
+  </tr>`;
+}
 
-  ${abierto ? html`<tr class="fila-datos">
-    <td colSpan="8">
-      <div class="panel-datos">
-        <p class="sub">Esto es lo que va en el correo a la oficina: el valor
-          que tiene que girar, el sticker con el que viaja el sobre y el
-          consecutivo de giro.</p>
-        <div class="rejilla-campos">
-          ${(orden || []).map((k) => campos && campos[k]
-            ? html`<${CampoEdit} key=${k} clave=${k} def=${campos[k]}
-                valor=${borrador[k] !== undefined ? borrador[k] : o[k]}
-                alCambiar=${alCambiar} />`
-            : null)}
+/**
+ * PASO 1 del envio: los datos que el correo necesita nombrar.
+ *
+ * Antes esto era una pestana aparte. Se trajo aqui porque es el momento en
+ * que la persona tiene los datos delante: esta a punto de mandar la
+ * declaracion y sabe por cuanto es y con que giro se paga.
+ *
+ * El sticker NO se escribe si ya esta: lo trajo el repartidor desde la hoja
+ * de correspondencia y se muestra tal cual. Solo se pide cuando falta.
+ */
+function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
+                          alGuardar, alTerminar, alCancelar, trabajando, fallo }) {
+  const [i, setI] = useState(0);
+  const o = obligaciones[i];
+  if (!o) return null;
+
+  const falta = o.falta_correo || [];
+  const b = borradores[o.id] || {};
+  const valorDe = (k) => (b[k] !== undefined ? b[k] : o[k]);
+
+  // el sticker ya viene de la hoja ADHESIVOS: se ensena, no se pide
+  const stickerPuesto = String(valorDe('adhesivo') || '').trim();
+  const aPedir = (orden || []).filter((k) =>
+    campos && campos[k] && !(k === 'adhesivo' && stickerPuesto));
+
+  return html`<div class="velo">
+    <div class="modal modal-ancho" role="dialog" aria-modal="true"
+      aria-labelledby="t-datos">
+      <div class="rev-cab">
+        <div>
+          <h2 id="t-datos">${o.municipio} · ${o.impuesto} · ${o.periodo}</h2>
+          <p class="sub">${'Vence ' + (o.vencimiento || 'sin fecha') +
+            ' · dependencia ' + (o.cod_oficina || '—') +
+            ' · NIT ' + (o.nit_municipio || '—')}</p>
         </div>
-        <div class="pie-form">
-          <button class="btn btn-principal" disabled=${guardando}
-            onClick=${() => alGuardar(o.id)}>
-            ${guardando ? 'Guardando…' : 'Guardar datos'}</button>
-          ${falta.length
-            ? html`<span class="sub vencido">${'Falta: ' + falta.join(', ')}</span>`
-            : html`<span class="sub aldia">No falta ningún dato del correo.</span>`}
-        </div>
+        <span class="rev-cuenta">${i + 1} de ${obligaciones.length}</span>
       </div>
-    </td>
-  </tr>` : null}
-  <//>`;
+
+      <p class="sub rev-nota">
+        Esto es lo que va a leer la oficina: cuánto girar, con qué sticker
+        viaja el sobre y con qué consecutivo se paga.
+      </p>
+
+      ${stickerPuesto ? html`<p class="dato-fijo">
+        <span class="sub">Sticker de correspondencia</span>
+        <b class="dato-tel">${stickerPuesto}</b>
+        <span class="sub">ya venía de la hoja ADHESIVOS</span>
+      </p>` : null}
+
+      <div class="rejilla-campos">
+        ${aPedir.map((k) => html`<${CampoEdit} key=${k} clave=${k}
+          def=${campos[k]} valor=${valorDe(k)}
+          alCambiar=${(clave, valor) => alCambiar(o.id, clave, valor)} />`)}
+      </div>
+
+      ${fallo ? html`<p class="sub vencido">${fallo}</p>` : null}
+
+      <div class="modal-pie">
+        <button class="btn" disabled=${!i || !!trabajando}
+          onClick=${() => setI(i - 1)}>Anterior</button>
+        <button class="btn btn-principal" disabled=${!!trabajando}
+          onClick=${async () => {
+            const ok = await alGuardar(o.id);
+            if (!ok) return;
+            if (i + 1 < obligaciones.length) setI(i + 1);
+            else alTerminar();          // la última: pasa a revisar los PDF
+          }}>
+          ${trabajando ? 'Guardando…'
+            : (i + 1 < obligaciones.length ? 'Guardar y seguir' : 'Guardar y revisar los PDF')}
+        </button>
+        ${falta.length
+          ? html`<span class="sub vencido">${'Falta: ' + falta.join(', ')}</span>`
+          : html`<span class="sub aldia">No falta ningún dato.</span>`}
+        <button class="btn" style=${{ marginLeft: 'auto' }}
+          disabled=${!!trabajando} onClick=${alCancelar}>Dejarlo para después</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 /**
@@ -1135,8 +1216,9 @@ function Enviar({ inicio }) {
   const [resultado, setResultado] = useState(null);
   const [fallo, setFallo] = useState('');
   const [revision, setRevision] = useState(null);
-  const [editando, setEditando] = useState('');     // la fila con los datos abiertos
-  const [borrador, setBorrador] = useState({});
+  // el asistente de envio: datos -> revisar los PDF -> confirmar
+  const [datosPaso, setDatosPaso] = useState(null);   // obligaciones a completar
+  const [borradores, setBorradores] = useState({});   // {id: {campo: valor}}
   const archivo = useRef(null);
   const destino = useRef('');
   const anadir = useRef(false);        // true = anexo, false = reemplazar
@@ -1187,32 +1269,46 @@ function Enviar({ inicio }) {
     setConfirmando(false);
   }
 
-  /* -------- digitalizar, aquí mismo y no en otra pantalla -------- */
+  /* -------- paso 1: los datos que el correo nombra -------- */
 
-  function abrirDatos(id) {
-    setEditando(id);
-    setBorrador({});
-    setResultado(null);
+  function cambiarCampo(id, clave, valor) {
+    setBorradores((v) => Object.assign({}, v, {
+      [id]: Object.assign({}, v[id] || {}, { [clave]: valor })
+    }));
   }
 
-  function cambiarCampo(clave, valor) {
-    setBorrador((v) => Object.assign({}, v, { [clave]: valor }));
-  }
-
+  /** Guarda lo escrito de una obligación. Devuelve true si quedó completa. */
   async function guardarDatos(id) {
-    if (!Object.keys(borrador).length) { setEditando(''); return; }
+    const cambios = borradores[id] || {};
     setTrabajando('guardando');
     setFallo('');
     try {
-      await llamar('apiGuardarCampos', id, borrador);
-      setBorrador({});
-      setEditando('');
-      await recargar();
+      if (Object.keys(cambios).length) await llamar('apiGuardarCampos', id, cambios);
+      const d = await llamar('apiListaEnviar', ventana);
+      setDatos((v) => Object.assign({}, v, d));
+      // la lista nueva manda: si todavía falta algo, se queda donde está
+      const fresca = (d.filas || []).find((f) => f.id === id);
+      const sigueCoja = fresca && (fresca.falta_correo || []).length;
+      setDatosPaso((lista) => (lista || []).map((o) => (o.id === id && fresca ? fresca : o)));
+      if (sigueCoja) {
+        setFallo('Todavía falta: ' + fresca.falta_correo.join(', '));
+        return false;
+      }
+      return true;
     } catch (e) {
       setFallo(String(e && e.message ? e.message : e));
+      return false;
     } finally {
       setTrabajando('');
     }
+  }
+
+  /** Del paso de datos al de revisar los PDF. */
+  async function cerrarDatos(seguir) {
+    setDatosPaso(null);
+    setBorradores({});
+    setFallo('');
+    if (seguir) await abrirRevision();
   }
 
   /* -------- subir el soporte: un archivo por llamada -------- */
@@ -1258,24 +1354,24 @@ function Enviar({ inicio }) {
 
   /* -------- revisar los soportes: obligatorio antes de enviar -------- */
 
-  async function abrirRevision() {
-    // el correo nombra el valor, el sticker y el giro: sin eso saldria
+  /** El botón de enviar. Arranca el asistente por donde haga falta. */
+  function empezarEnvio() {
+    setResultado(null);
+    setFallo('');
+    // el correo nombra el valor, el sticker y el giro: sin eso saldría
     // diciendo "por el valor de $0" a un director que tiene que girar
     const cojas = elegidasVivas
       .map((id) => filas.find((f) => f.id === id))
       .filter((o) => o && (o.falta_correo || []).length);
     if (cojas.length) {
-      setResultado({ clase: 'malo',
-        titulo: 'Faltan datos para el correo',
-        lineas: cojas.slice(0, 6).map((o) =>
-          o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ': falta ' +
-          o.falta_correo.join(', '))
-          .concat(cojas.length > 6 ? ['… y ' + (cojas.length - 6) + ' más'] : [])
-          .concat(['Se abre la primera para que la completes.']) });
-      abrirDatos(cojas[0].id);
+      setBorradores({});
+      setDatosPaso(cojas);
       return;
     }
+    abrirRevision();
+  }
 
+  async function abrirRevision() {
     setTrabajando('revisando');
     setFallo('');
     try {
@@ -1389,7 +1485,7 @@ function Enviar({ inicio }) {
         </button>
         <button class="btn btn-principal"
           disabled=${!elegidasVivas.length || !!trabajando}
-          onClick=${abrirRevision}>
+          onClick=${empezarEnvio}>
           ${trabajando === 'enviando'
             ? 'Enviando…'
             : 'Enviar seleccionadas (' + elegidasVivas.length + ')'}
@@ -1455,14 +1551,7 @@ function Enviar({ inicio }) {
               ${visibles.map((o) => html`<${Fila} key=${o.id} o=${o}
                 elegida=${elegidas.indexOf(o.id) >= 0}
                 subiendo=${subiendo === o.id}
-                alElegir=${alternar} alSubir=${pedirArchivo}
-                campos=${datos.campos} orden=${datos.orden_campos}
-                abierto=${editando === o.id}
-                alAbrir=${abrirDatos}
-                borrador=${editando === o.id ? borrador : {}}
-                alCambiar=${cambiarCampo}
-                alGuardar=${guardarDatos}
-                guardando=${trabajando === 'guardando'} />`)}
+                alElegir=${alternar} alSubir=${pedirArchivo} />`)}
             </tbody>`}
       </table>
 
@@ -1476,6 +1565,14 @@ function Enviar({ inicio }) {
           : 'No hay obligaciones con requiere_envio = SI asignadas a ti.'}
       </p>` : null}
     </section>
+
+    ${datosPaso ? html`<${DatosDelCorreo} obligaciones=${datosPaso}
+      campos=${datos.campos} orden=${datos.orden_campos}
+      borradores=${borradores} alCambiar=${cambiarCampo}
+      alGuardar=${guardarDatos}
+      alTerminar=${() => cerrarDatos(true)}
+      alCancelar=${() => cerrarDatos(false)}
+      trabajando=${trabajando === 'guardando'} fallo=${fallo} /> ` : null}
 
     ${revision ? html`<${RevisarSoportes} soportes=${revision}
       alMarcar=${marcarSoporte} alCerrar=${cerrarRevision}
@@ -1807,326 +1904,6 @@ function Carga() {
       style=${{ position: 'absolute', width: '1px', height: '1px', opacity: 0,
                 pointerEvents: 'none' }}
       tabIndex="-1" aria-hidden="true" />
-  </main>`;
-}
-</script>
-
-  <!-- ===== ui/Campos.html ===== -->
-<script>
-/* ===========================================================================
-   SINAV · pestana DIGITALIZAR.
-   La pregunta de esta pantalla: que obligacion le falta un dato que solo yo
-   puedo escribir. Lo incompleto va arriba, no lo mas reciente.
-   =========================================================================== */
-
-const FILTROS_CAMPOS = [
-  { id: 'incompletas', et: 'Les falta un dato', clave: 'incompletas' },
-  { id: 'sin_valor', et: 'Sin valor liquidado', clave: 'sin_valor' },
-  { id: 'por_revisar', et: 'Sin definir si se envía', clave: 'por_revisar' },
-  { id: 'todas', et: 'Todas', clave: 'todas' }
-];
-
-function aplicaFiltroCampos(o, filtro) {
-  if (filtro === 'incompletas') return o.faltan && o.faltan.length > 0;
-  if (filtro === 'sin_valor') return !o.valor;
-  if (filtro === 'por_revisar') return o.requiere_envio === 'REVISAR';
-  return true;
-}
-
-/** Un campo del formulario, pintado segun lo que dijo el servidor. */
-function CampoEdit({ clave, def, valor, alCambiar }) {
-  const id = 'c-' + clave;
-
-  if (def.tipo === 'lista') {
-    return html`<label class="campo" key=${clave}>
-      <span>${def.et}</span>
-      <select id=${id} value=${valor == null ? '' : String(valor)}
-        onChange=${(e) => alCambiar(clave, e.target.value)}>
-        ${def.vacio ? html`<option value="">— sin dato —</option>` : null}
-        ${def.valores.map((v) => html`<option key=${v} value=${v}>
-          ${bonito(v)}</option>`)}
-      </select>
-    </label>`;
-  }
-
-  if (def.tipo === 'valor') {
-    return html`<label class="campo" key=${clave}>
-      <span>${def.et}</span>
-      <input id=${id} type="text" inputMode="numeric" class="num"
-        placeholder="0" value=${valor == null ? '' : String(valor)}
-        onChange=${(e) => alCambiar(clave, e.target.value)} />
-      <small>Se liquida en pesos. Acepta $ y puntos de mil.</small>
-    </label>`;
-  }
-
-  if (def.tipo === 'fecha') {
-    return html`<label class="campo" key=${clave}>
-      <span>${def.et}</span>
-      <input id=${id} type="date" value=${valor || ''}
-        onChange=${(e) => alCambiar(clave, e.target.value)} />
-    </label>`;
-  }
-
-  return html`<label class="campo ancho" key=${clave}>
-    <span>${def.et}</span>
-    <textarea id=${id} rows="2" value=${valor == null ? '' : String(valor)}
-      onChange=${(e) => alCambiar(clave, e.target.value)}></textarea>
-  </label>`;
-}
-
-/** El formulario de una obligacion. */
-function Formulario({ o, opciones, alGuardar, alCerrar, guardando, fallo }) {
-  const [borrador, setBorrador] = useState({});
-
-  useEffect(() => { setBorrador({}); }, [o.id]);
-
-  const valorDe = (k) => (k in borrador ? borrador[k] : o[k]);
-  const cambiar = (k, v) => setBorrador((b) => Object.assign({}, b, { [k]: v }));
-  const sucios = Object.keys(borrador).filter((k) => {
-    const a = o[k] == null ? '' : String(o[k]);
-    const b = borrador[k] == null ? '' : String(borrador[k]);
-    return a !== b;
-  });
-
-  // exogena solo aplica a RETEICA, incluye_retencion solo a AUTORRETEICA
-  const claves = Object.keys(opciones).filter((k) => {
-    const d = opciones[k];
-    return !d.solo || d.solo === o.impuesto;
-  });
-
-  return html`<section class="panel panel-form">
-    <div class="panel-cab">
-      <h2>${o.municipio} · ${o.impuesto} · ${o.periodo}</h2>
-      <span class="total">DANE ${o.cod_dane}${o.cod_oficina
-        ? ' · oficina ' + o.cod_oficina : ''}</span>
-      <span class="der"><${Pildora} estado=${o.estado} /></span>
-    </div>
-
-    <p class="hallazgo hallazgo-form">
-      Vence ${o.vencimiento || 'sin fecha'} (${textoDias(o.dias)}).
-      ${o.revision_fecha
-        ? ' Revisada el ' + o.revision_fecha + ' por ' + o.revision_por + '.'
-        : ' Todavía sin visto bueno.'}
-      ${o.faltan && o.faltan.length
-        ? ' Falta: ' + o.faltan.join(', ') + '.'
-        : ' No le falta ningún dato manual.'}
-    </p>
-
-    <div class="rejilla-campos">
-      ${claves.map((k) => html`<${CampoEdit} key=${k} clave=${k}
-        def=${opciones[k]} valor=${valorDe(k)} alCambiar=${cambiar} />`)}
-    </div>
-
-    ${fallo ? html`<div class="error-bloque"><p><b>No se pudo guardar.</b> ${fallo}</p></div>` : null}
-
-    <div class="pie-form">
-      <button class="btn btn-principal" disabled=${!sucios.length || guardando}
-        onClick=${() => alGuardar(o.id, borrador)}>
-        ${guardando ? 'Guardando…'
-          : (sucios.length ? 'Guardar ' + sucios.length +
-             (sucios.length === 1 ? ' cambio' : ' cambios') : 'Sin cambios')}
-      </button>
-      <button class="btn" onClick=${alCerrar} disabled=${guardando}>Cerrar</button>
-      ${sucios.length ? html`<span class="sub">
-        Sin guardar: ${sucios.map((k) => opciones[k].et).join(', ')}.
-      </span>` : null}
-    </div>
-  </section>`;
-}
-
-function Campos() {
-  const [datos, setDatos] = useState(null);
-  const [filtro, setFiltro] = useState('incompletas');
-  const [abierta, setAbierta] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [fallo, setFallo] = useState('');
-  const [falloForm, setFalloForm] = useState('');
-  const [aviso, setAviso] = useState(null);
-
-  const cargar = useCallback(async () => {
-    setFallo('');
-    try {
-      setDatos(await llamar('apiListaCampos'));
-    } catch (e) {
-      setFallo(String(e && e.message ? e.message : e));
-    }
-  }, []);
-
-  useEffect(() => { cargar(); }, [cargar]);
-
-  async function guardar(id, borrador) {
-    setGuardando(true);
-    setFalloForm('');
-    try {
-      const r = await llamar('apiGuardarCampos', id, borrador);
-      setAviso({ clase: r.cambios ? '' : 'malo',
-                 titulo: r.cambios
-                   ? r.cambios + (r.cambios === 1 ? ' campo guardado' : ' campos guardados')
-                   : 'Nada cambió',
-                 lineas: r.detalle ? [r.detalle] : [] });
-      await cargar();
-    } catch (e) {
-      setFalloForm(String(e && e.message ? e.message : e));
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  if (!datos && fallo) {
-    return html`<main class="lienzo">
-      <div class="titulo-fila"><div><h1>Digitalizar</h1></div></div>
-      <section class="panel">
-        <${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />
-      </section>
-    </main>`;
-  }
-
-  if (!datos) {
-    return html`<main class="lienzo">
-      <div class="titulo-fila"><div><h1>Digitalizar</h1>
-        <p class="hallazgo"><${Hueso} ancho="380px" /></p></div></div>
-      <section class="panel">
-        <div class="panel-cab"><h2>Obligaciones</h2></div>
-        <table><${Huesos} filas=${3} /></table>
-      </section>
-    </main>`;
-  }
-
-  const filas = datos.filas || [];
-  const r = datos.resumen;
-  const visibles = filas.filter((o) => aplicaFiltroCampos(o, filtro));
-  const elegida = filas.find((o) => o.id === abierta);
-
-  return html`<main class="lienzo">
-    <div class="titulo-fila">
-      <div>
-        <h1>Digitalizar</h1>
-        <p class="hallazgo">
-          ${r.incompletas
-            ? frase([
-                r.incompletas,
-                r.incompletas === 1
-                  ? ' obligación necesita un dato que solo tú puedes escribir'
-                  : ' obligaciones necesitan un dato que solo tú puedes escribir',
-                '. ',
-                ...(r.sin_valor
-                  ? [r.sin_valor, r.sin_valor === 1
-                      ? ' está sin valor liquidado.' : ' están sin valor liquidado.']
-                  : [])
-              ])
-            : 'Ninguna obligación tiene campos manuales pendientes.'}
-        </p>
-      </div>
-      <div class="acciones-titulo">
-        <button class="btn" onClick=${cargar}>
-          <${Icono} nombre="recargar" /> Actualizar
-        </button>
-      </div>
-    </div>
-
-    <fieldset class="conteos">
-      <legend>Filtrar la lista</legend>
-      ${FILTROS_CAMPOS.map((f) => {
-        const n = r[f.clave] || 0;
-        return html`<button key=${f.id} type="button" class="conteo"
-          aria-pressed=${filtro === f.id} onClick=${() => setFiltro(f.id)}>
-          <span class="et">${f.et}</span>
-          <span class=${'vl' + (n === 0 ? ' cero' : '')}>${n}</span>
-        </button>`;
-      })}
-    </fieldset>
-
-    ${aviso ? html`<div class=${'resultado ' + aviso.clase} role="status">
-      <h2>${aviso.titulo}</h2>
-      ${aviso.lineas.length ? html`<ul>
-        ${aviso.lineas.map((l, i) => html`<li key=${i}>${l}</li>`)}</ul>` : null}
-    </div>` : null}
-
-    ${elegida ? html`<${Formulario} o=${elegida} opciones=${datos.opciones}
-      alGuardar=${guardar} alCerrar=${() => setAbierta('')}
-      guardando=${guardando} fallo=${falloForm} />` : null}
-
-    <section class="panel">
-      <div class="panel-cab">
-        <h2>Obligaciones</h2>
-        <span class="total">${visibles.length} de ${filas.length}</span>
-        <span class="der">${datos.generado ? 'leído ' + datos.generado.slice(11) : ''}</span>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Municipio</th>
-            <th>Impuesto</th>
-            <th class="num">Periodo</th>
-            <th class="num der">Vence</th>
-            <th class="num der">Valor</th>
-            <th>Pago</th>
-            <th>Le falta</th>
-            <th>Estado</th>
-            <th class="der">Campos</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${visibles.map((o) => html`<tr key=${o.id}
-            data-elegida=${o.id === abierta ? 'si' : 'no'}>
-            <td class="celda-mun">
-              <span class="ident">${o.municipio}</span>
-              <span class="sub">DANE ${o.cod_dane}${o.cod_oficina
-                ? ' · oficina ' + o.cod_oficina : ''}</span>
-            </td>
-            <td class="celda-linea2">
-              <span>${o.impuesto}</span>
-              ${o.regimen && o.regimen !== 'GENERAL'
-                ? html`<span class="sub">${o.regimen.toLowerCase()}</span>` : null}
-            </td>
-            <td class="celda-linea2 num">
-              <span>${o.periodo}</span>
-              <span class="sub">${o.periodicidad
-                ? bonito(o.periodicidad) : '—'}</span>
-            </td>
-            <td class="celda-linea2 num der">
-              <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
-              <span class=${'sub ' + (o.dias === null ? ''
-                : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : '')))}>
-                ${textoDias(o.dias)}</span>
-            </td>
-            <td class="celda-linea2 num der">
-              ${o.valor ? html`<span>${pesos(o.valor)}</span>`
-                : html`<span class="raya">—</span>`}
-            </td>
-            <td class="celda-linea2">
-              <span>${o.paga_quien
-                ? bonito(o.paga_quien) : html`<span class="raya">—</span>`}</span>
-              <span class="sub">${o.forma_pago
-                ? bonito(o.forma_pago) : 'forma sin definir'}</span>
-            </td>
-            <td class="celda-linea2">
-              ${o.faltan && o.faltan.length
-                ? html`<span class="falta-chip">${o.faltan.length}</span>
-                    <span class="sub">${o.faltan.join(', ')}</span>`
-                : html`<span class="sub">completa</span>`}
-            </td>
-            <td class="celda-linea2"><${Pildora} estado=${o.estado} /></td>
-            <td class="celda-accion der">
-              <button class="btn" onClick=${() => {
-                setAbierta(o.id === abierta ? '' : o.id);
-                setFalloForm('');
-                setAviso(null);
-              }}>${o.id === abierta ? 'Cerrar' : 'Digitalizar'}</button>
-            </td>
-          </tr>`)}
-        </tbody>
-      </table>
-
-      ${fallo ? html`<${ErrorBloque} mensaje=${fallo} alReintentar=${cargar} />` : null}
-
-      ${!fallo && !visibles.length ? html`<p class="vacio">
-        ${filas.length
-          ? 'Ninguna cae en este filtro. Las otras ' + filas.length + ' están en "Todas".'
-          : 'No tienes obligaciones asignadas, o todas están APROBADAS.'}
-      </p>` : null}
-    </section>
   </main>`;
 }
 </script>
@@ -3194,7 +2971,6 @@ function Respuestas() {
 const VISTAS = [
   { id: 'enviar', et: 'Enviar', icono: 'enviar', grupo: 'trabajo', lista: true },
   { id: 'carga', et: 'Carga masiva', icono: 'subir', grupo: 'trabajo' },
-  { id: 'campos', et: 'Digitalizar', icono: 'campos', grupo: 'trabajo' },
   { id: 'respuestas', et: 'Respuestas', icono: 'respuestas', grupo: 'trabajo' },
   { id: 'alertas', et: 'Alertas', icono: 'alertas', grupo: 'trabajo' },
   { id: 'metricas', et: 'Métricas', icono: 'metricas', grupo: 'admin',
@@ -3291,7 +3067,6 @@ function Pantalla({ error, children }) {
 function Vista({ vista, inicio }) {
   if (vista === 'enviar') return html`<${Enviar} inicio=${inicio} />`;
   if (vista === 'carga') return html`<${Carga} />`;
-  if (vista === 'campos') return html`<${Campos} />`;
   if (vista === 'metricas') return html`<${Metricas} />`;
   if (vista === 'alertas') return html`<${Alertas} />`;
   if (vista === 'asignacion') return html`<${Asignacion} />`;

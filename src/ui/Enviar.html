@@ -103,19 +103,13 @@ function motivoLegible(o) {
   return m;
 }
 
-function Fila({ o, elegida, alElegir, alSubir, subiendo,
-                campos, orden, abierto, alAbrir, borrador, alCambiar,
-                alGuardar, guardando }) {
+function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
   const puedo = o.enviable && o.mia !== false;
   const porque = puedo ? '' : motivoLegible(o);
   const falta = o.falta_correo || [];
   const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
 
-  // OJO: htm no entiende <>...</> como fragmento — crea una etiqueta con el
-  // nombre vacio y React tumba la pagina entera. El fragmento se escribe
-  // nombrando React.Fragment, y se cierra con <//>.
-  return html`<${React.Fragment}>
-  <tr data-elegida=${elegida ? 'si' : 'no'}>
+  return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
     <td class="celda-casilla">
       <input type="checkbox" checked=${elegida} disabled=${!puedo}
         aria-label=${puedo
@@ -150,6 +144,9 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo,
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
       ${o.soportes > 1
         ? html`<span class="sub">${o.soportes + ' archivos adjuntos'}</span>` : null}
+      ${puedo && falta.length
+        ? html`<span class="sub porvencer">${'faltan datos: ' + falta.join(', ')}</span>`
+        : null}
       ${porque
         ? html`<span class="sub vencido">${'no se puede enviar: ' + porque}</span>`
         : (o.cadena.soporte && !o.soporte_revisado
@@ -161,53 +158,95 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo,
     </td>
 
     <td class="celda-accion der">
-      <div class="acciones-soporte">
-        <button class="btn" aria-expanded=${abierto ? 'true' : 'false'}
-          onClick=${() => alAbrir(abierto ? '' : o.id)}>
-          ${falta.length
-            ? 'Digitalizar (faltan ' + falta.length + ')'
-            : (abierto ? 'Cerrar datos' : 'Datos ✓')}
-        </button>
-      </div>
       ${o.cadena.soporte
-        ? html`<div class="acciones-soporte">
-            <button class="btn" disabled=${subiendo}
-              onClick=${() => alSubir(o.id, true)}>
-              <${Icono} nombre="subir" /> Añadir otro</button>
-            <button class="btn" disabled=${subiendo}
-              onClick=${() => alSubir(o.id, false)}>Reemplazar</button>
-          </div>`
+        ? html`<button class="btn" disabled=${subiendo}
+            onClick=${() => alSubir(o.id, false)}>
+            ${subiendo ? 'Subiendo…' : 'Cambiar soporte'}</button>`
         : html`<button class="btn" disabled=${subiendo}
             onClick=${() => alSubir(o.id, false)}>
             <${Icono} nombre="subir" /> ${subiendo ? 'Subiendo…' : 'Subir soporte'}</button>`}
     </td>
-  </tr>
+  </tr>`;
+}
 
-  ${abierto ? html`<tr class="fila-datos">
-    <td colSpan="8">
-      <div class="panel-datos">
-        <p class="sub">Esto es lo que va en el correo a la oficina: el valor
-          que tiene que girar, el sticker con el que viaja el sobre y el
-          consecutivo de giro.</p>
-        <div class="rejilla-campos">
-          ${(orden || []).map((k) => campos && campos[k]
-            ? html`<${CampoEdit} key=${k} clave=${k} def=${campos[k]}
-                valor=${borrador[k] !== undefined ? borrador[k] : o[k]}
-                alCambiar=${alCambiar} />`
-            : null)}
+/**
+ * PASO 1 del envio: los datos que el correo necesita nombrar.
+ *
+ * Antes esto era una pestana aparte. Se trajo aqui porque es el momento en
+ * que la persona tiene los datos delante: esta a punto de mandar la
+ * declaracion y sabe por cuanto es y con que giro se paga.
+ *
+ * El sticker NO se escribe si ya esta: lo trajo el repartidor desde la hoja
+ * de correspondencia y se muestra tal cual. Solo se pide cuando falta.
+ */
+function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
+                          alGuardar, alTerminar, alCancelar, trabajando, fallo }) {
+  const [i, setI] = useState(0);
+  const o = obligaciones[i];
+  if (!o) return null;
+
+  const falta = o.falta_correo || [];
+  const b = borradores[o.id] || {};
+  const valorDe = (k) => (b[k] !== undefined ? b[k] : o[k]);
+
+  // el sticker ya viene de la hoja ADHESIVOS: se ensena, no se pide
+  const stickerPuesto = String(valorDe('adhesivo') || '').trim();
+  const aPedir = (orden || []).filter((k) =>
+    campos && campos[k] && !(k === 'adhesivo' && stickerPuesto));
+
+  return html`<div class="velo">
+    <div class="modal modal-ancho" role="dialog" aria-modal="true"
+      aria-labelledby="t-datos">
+      <div class="rev-cab">
+        <div>
+          <h2 id="t-datos">${o.municipio} · ${o.impuesto} · ${o.periodo}</h2>
+          <p class="sub">${'Vence ' + (o.vencimiento || 'sin fecha') +
+            ' · dependencia ' + (o.cod_oficina || '—') +
+            ' · NIT ' + (o.nit_municipio || '—')}</p>
         </div>
-        <div class="pie-form">
-          <button class="btn btn-principal" disabled=${guardando}
-            onClick=${() => alGuardar(o.id)}>
-            ${guardando ? 'Guardando…' : 'Guardar datos'}</button>
-          ${falta.length
-            ? html`<span class="sub vencido">${'Falta: ' + falta.join(', ')}</span>`
-            : html`<span class="sub aldia">No falta ningún dato del correo.</span>`}
-        </div>
+        <span class="rev-cuenta">${i + 1} de ${obligaciones.length}</span>
       </div>
-    </td>
-  </tr>` : null}
-  <//>`;
+
+      <p class="sub rev-nota">
+        Esto es lo que va a leer la oficina: cuánto girar, con qué sticker
+        viaja el sobre y con qué consecutivo se paga.
+      </p>
+
+      ${stickerPuesto ? html`<p class="dato-fijo">
+        <span class="sub">Sticker de correspondencia</span>
+        <b class="dato-tel">${stickerPuesto}</b>
+        <span class="sub">ya venía de la hoja ADHESIVOS</span>
+      </p>` : null}
+
+      <div class="rejilla-campos">
+        ${aPedir.map((k) => html`<${CampoEdit} key=${k} clave=${k}
+          def=${campos[k]} valor=${valorDe(k)}
+          alCambiar=${(clave, valor) => alCambiar(o.id, clave, valor)} />`)}
+      </div>
+
+      ${fallo ? html`<p class="sub vencido">${fallo}</p>` : null}
+
+      <div class="modal-pie">
+        <button class="btn" disabled=${!i || !!trabajando}
+          onClick=${() => setI(i - 1)}>Anterior</button>
+        <button class="btn btn-principal" disabled=${!!trabajando}
+          onClick=${async () => {
+            const ok = await alGuardar(o.id);
+            if (!ok) return;
+            if (i + 1 < obligaciones.length) setI(i + 1);
+            else alTerminar();          // la última: pasa a revisar los PDF
+          }}>
+          ${trabajando ? 'Guardando…'
+            : (i + 1 < obligaciones.length ? 'Guardar y seguir' : 'Guardar y revisar los PDF')}
+        </button>
+        ${falta.length
+          ? html`<span class="sub vencido">${'Falta: ' + falta.join(', ')}</span>`
+          : html`<span class="sub aldia">No falta ningún dato.</span>`}
+        <button class="btn" style=${{ marginLeft: 'auto' }}
+          disabled=${!!trabajando} onClick=${alCancelar}>Dejarlo para después</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 /**
@@ -286,8 +325,9 @@ function Enviar({ inicio }) {
   const [resultado, setResultado] = useState(null);
   const [fallo, setFallo] = useState('');
   const [revision, setRevision] = useState(null);
-  const [editando, setEditando] = useState('');     // la fila con los datos abiertos
-  const [borrador, setBorrador] = useState({});
+  // el asistente de envio: datos -> revisar los PDF -> confirmar
+  const [datosPaso, setDatosPaso] = useState(null);   // obligaciones a completar
+  const [borradores, setBorradores] = useState({});   // {id: {campo: valor}}
   const archivo = useRef(null);
   const destino = useRef('');
   const anadir = useRef(false);        // true = anexo, false = reemplazar
@@ -338,32 +378,46 @@ function Enviar({ inicio }) {
     setConfirmando(false);
   }
 
-  /* -------- digitalizar, aquí mismo y no en otra pantalla -------- */
+  /* -------- paso 1: los datos que el correo nombra -------- */
 
-  function abrirDatos(id) {
-    setEditando(id);
-    setBorrador({});
-    setResultado(null);
+  function cambiarCampo(id, clave, valor) {
+    setBorradores((v) => Object.assign({}, v, {
+      [id]: Object.assign({}, v[id] || {}, { [clave]: valor })
+    }));
   }
 
-  function cambiarCampo(clave, valor) {
-    setBorrador((v) => Object.assign({}, v, { [clave]: valor }));
-  }
-
+  /** Guarda lo escrito de una obligación. Devuelve true si quedó completa. */
   async function guardarDatos(id) {
-    if (!Object.keys(borrador).length) { setEditando(''); return; }
+    const cambios = borradores[id] || {};
     setTrabajando('guardando');
     setFallo('');
     try {
-      await llamar('apiGuardarCampos', id, borrador);
-      setBorrador({});
-      setEditando('');
-      await recargar();
+      if (Object.keys(cambios).length) await llamar('apiGuardarCampos', id, cambios);
+      const d = await llamar('apiListaEnviar', ventana);
+      setDatos((v) => Object.assign({}, v, d));
+      // la lista nueva manda: si todavía falta algo, se queda donde está
+      const fresca = (d.filas || []).find((f) => f.id === id);
+      const sigueCoja = fresca && (fresca.falta_correo || []).length;
+      setDatosPaso((lista) => (lista || []).map((o) => (o.id === id && fresca ? fresca : o)));
+      if (sigueCoja) {
+        setFallo('Todavía falta: ' + fresca.falta_correo.join(', '));
+        return false;
+      }
+      return true;
     } catch (e) {
       setFallo(String(e && e.message ? e.message : e));
+      return false;
     } finally {
       setTrabajando('');
     }
+  }
+
+  /** Del paso de datos al de revisar los PDF. */
+  async function cerrarDatos(seguir) {
+    setDatosPaso(null);
+    setBorradores({});
+    setFallo('');
+    if (seguir) await abrirRevision();
   }
 
   /* -------- subir el soporte: un archivo por llamada -------- */
@@ -409,24 +463,24 @@ function Enviar({ inicio }) {
 
   /* -------- revisar los soportes: obligatorio antes de enviar -------- */
 
-  async function abrirRevision() {
-    // el correo nombra el valor, el sticker y el giro: sin eso saldria
+  /** El botón de enviar. Arranca el asistente por donde haga falta. */
+  function empezarEnvio() {
+    setResultado(null);
+    setFallo('');
+    // el correo nombra el valor, el sticker y el giro: sin eso saldría
     // diciendo "por el valor de $0" a un director que tiene que girar
     const cojas = elegidasVivas
       .map((id) => filas.find((f) => f.id === id))
       .filter((o) => o && (o.falta_correo || []).length);
     if (cojas.length) {
-      setResultado({ clase: 'malo',
-        titulo: 'Faltan datos para el correo',
-        lineas: cojas.slice(0, 6).map((o) =>
-          o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ': falta ' +
-          o.falta_correo.join(', '))
-          .concat(cojas.length > 6 ? ['… y ' + (cojas.length - 6) + ' más'] : [])
-          .concat(['Se abre la primera para que la completes.']) });
-      abrirDatos(cojas[0].id);
+      setBorradores({});
+      setDatosPaso(cojas);
       return;
     }
+    abrirRevision();
+  }
 
+  async function abrirRevision() {
     setTrabajando('revisando');
     setFallo('');
     try {
@@ -540,7 +594,7 @@ function Enviar({ inicio }) {
         </button>
         <button class="btn btn-principal"
           disabled=${!elegidasVivas.length || !!trabajando}
-          onClick=${abrirRevision}>
+          onClick=${empezarEnvio}>
           ${trabajando === 'enviando'
             ? 'Enviando…'
             : 'Enviar seleccionadas (' + elegidasVivas.length + ')'}
@@ -606,14 +660,7 @@ function Enviar({ inicio }) {
               ${visibles.map((o) => html`<${Fila} key=${o.id} o=${o}
                 elegida=${elegidas.indexOf(o.id) >= 0}
                 subiendo=${subiendo === o.id}
-                alElegir=${alternar} alSubir=${pedirArchivo}
-                campos=${datos.campos} orden=${datos.orden_campos}
-                abierto=${editando === o.id}
-                alAbrir=${abrirDatos}
-                borrador=${editando === o.id ? borrador : {}}
-                alCambiar=${cambiarCampo}
-                alGuardar=${guardarDatos}
-                guardando=${trabajando === 'guardando'} />`)}
+                alElegir=${alternar} alSubir=${pedirArchivo} />`)}
             </tbody>`}
       </table>
 
@@ -627,6 +674,14 @@ function Enviar({ inicio }) {
           : 'No hay obligaciones con requiere_envio = SI asignadas a ti.'}
       </p>` : null}
     </section>
+
+    ${datosPaso ? html`<${DatosDelCorreo} obligaciones=${datosPaso}
+      campos=${datos.campos} orden=${datos.orden_campos}
+      borradores=${borradores} alCambiar=${cambiarCampo}
+      alGuardar=${guardarDatos}
+      alTerminar=${() => cerrarDatos(true)}
+      alCancelar=${() => cerrarDatos(false)}
+      trabajando=${trabajando === 'guardando'} fallo=${fallo} /> ` : null}
 
     ${revision ? html`<${RevisarSoportes} soportes=${revision}
       alMarcar=${marcarSoporte} alCerrar=${cerrarRevision}

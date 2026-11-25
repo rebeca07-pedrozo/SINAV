@@ -8,7 +8,6 @@
 const VISTAS = [
   { id: 'enviar', et: 'Enviar', icono: 'enviar', grupo: 'trabajo', lista: true },
   { id: 'carga', et: 'Carga masiva', icono: 'subir', grupo: 'trabajo' },
-  { id: 'campos', et: 'Digitalizar', icono: 'campos', grupo: 'trabajo' },
   { id: 'respuestas', et: 'Respuestas', icono: 'respuestas', grupo: 'trabajo' },
   { id: 'alertas', et: 'Alertas', icono: 'alertas', grupo: 'trabajo' },
   { id: 'metricas', et: 'Métricas', icono: 'metricas', grupo: 'admin',
@@ -105,7 +104,6 @@ function Pantalla({ error, children }) {
 function Vista({ vista, inicio }) {
   if (vista === 'enviar') return html`<${Enviar} inicio=${inicio} />`;
   if (vista === 'carga') return html`<${Carga} />`;
-  if (vista === 'campos') return html`<${Campos} />`;
   if (vista === 'metricas') return html`<${Metricas} />`;
   if (vista === 'alertas') return html`<${Alertas} />`;
   if (vista === 'asignacion') return html`<${Asignacion} />`;

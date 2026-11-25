@@ -600,9 +600,18 @@ que tiene que mover esa plata. Por eso SINAV no deja enviar sin:
 
 **Valor · Quién paga · Sticker de correspondencia · Consecutivo de giro**
 
-Se llenan en la misma pantalla de Enviar, con el botón **Digitalizar** de cada
-fila. Al darle a *Enviar seleccionadas*, si falta algo te lo dice y te abre la
-primera fila coja.
+**No hay pantalla de digitalización aparte**: se llenan en el primer paso del
+envío. Al darle a *Enviar seleccionadas*, si a alguna le falta algo se abre el
+formulario, una por una, y de ahí se pasa solo a revisar los PDF.
+
+El **sticker no se escribe** si el repartidor ya lo trajo de la hoja ADHESIVOS:
+se muestra, y punto. Solo se pide cuando falta.
+
+El envío es, entonces, tres pasos encadenados:
+
+1. **Los datos** del correo, solo de las que les falte algo
+2. **Revisar los PDF**, uno por uno
+3. **Confirmar** y el correo sale
 
 ### 8 · `requiere_envio` manda sobre el envío
 

@@ -99,6 +99,15 @@ filas.push({
   mia: false, enviable: false, motivo_no_enviable: 'sin soporte', nivel: 'porvencer'
 });
 
+// el adhesivo lo trae el repartidor desde la hoja ADHESIVOS: a unas si, a
+// otras todavia no, que es justo lo que distingue los dos casos en pantalla
+filas.forEach((o, k) => {
+  o.adhesivo = String(55285300 + k);
+  if (k % 2) o.consecutivo_giro = 'LR-09-' + (70 + k);
+  // lo que falta para el correo lo calcula el servidor de verdad
+  o.falta_correo = S.faltaParaElCorreo(o);
+});
+
 const conteos = filas.reduce((c, o) => {
   c.todas++;
   if (!o.cadena.soporte) c.sin_soporte++;
@@ -315,7 +324,6 @@ window.google = { script: { run: (function () {
     apiEnviar: (ids) => ({ enviadas: ids.map((id) => ({ id })), rechazadas: [],
                            pendientes: [], modo: 'PRUEBA',
                            cuota: { usada: ids.length, tope: 1500 } }),
-    apiListaCampos: () => D.LISTA_CAMPOS,
     apiCamposOpciones: () => D.LISTA_CAMPOS.opciones,
     apiGuardarCampos: (id, campos) => ({
       id, cambios: Object.keys(campos || {}).length,
