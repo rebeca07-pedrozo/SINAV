@@ -742,12 +742,25 @@ Las copias fijas (Elizabeth, GRP Conceptos Especiales…) se escriben una vez en
 | `copias_fijas` | `fecha_despacho` |
 | `dominio_oficinas` | `paga_quien` |
 
-### El logo
+### Los logos: son dos, no uno
 
-Sale de `logo_id` (Propiedades del script) y se **incrusta** en el correo, no
-se enlaza: Gmail bloquea las imágenes remotas hasta que quien lee da permiso,
-y entonces el correo llega roto. Si no hay logo, el correo sale igual, sin
-imagen.
+| Propiedad del script | Dónde se usa | Cómo tiene que ser |
+|---|---|---|
+| `logo_id` | La aplicación, sobre fondo blanco | **Oscuro** |
+| `logo_correo_id` | El correo, sobre la franja roja | **Claro** (blanco) |
+
+Si solo hay `logo_id`, el correo lo usa igual pero **la cabecera se vuelve
+blanca con una regla roja debajo**, para que un logo oscuro no quede ahogado
+en rojo. La cabecera roja solo aparece cuando hay una versión clara en
+`logo_correo_id`.
+
+Las dos aceptan el id pelado o el enlace completo de Drive, y las dos tienen
+respaldo en CONFIG (`logo_id`, `logo_correo_id`) por si alguien prefiere
+ponerlas ahí.
+
+El logo se **incrusta** en el correo, no se enlaza: Gmail bloquea las imágenes
+remotas hasta que quien lee da permiso, y entonces el correo llega roto. Si no
+hay ninguno, el correo sale con el nombre del banco en texto.
 
 ## 8c · Los adhesivos de correspondencia
 

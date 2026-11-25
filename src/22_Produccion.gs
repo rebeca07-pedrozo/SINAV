@@ -103,6 +103,11 @@ function revisarAntesDeProduccion() {
     l.push('', 'Menor: no hay logo. La interfaz muestra el espacio punteado. Se arregla');
     l.push('en Configuración del proyecto → Propiedades del script → logo_id.');
   }
+  if (!idDeLogoCorreo()) {
+    l.push('', 'Menor: no hay logo_correo_id. El correo usa el logo de la aplicación,');
+    l.push('que es oscuro, así que la cabecera sale blanca en vez de roja. Para la');
+    l.push('cabecera roja hace falta una versión clara del logo en esa propiedad.');
+  }
 
   var txt = l.join('\n');
   Logger.log(txt);

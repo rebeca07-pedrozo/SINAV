@@ -5001,6 +5001,11 @@ function revisarAntesDeProduccion() {
     l.push('', 'Menor: no hay logo. La interfaz muestra el espacio punteado. Se arregla');
     l.push('en Configuración del proyecto → Propiedades del script → logo_id.');
   }
+  if (!idDeLogoCorreo()) {
+    l.push('', 'Menor: no hay logo_correo_id. El correo usa el logo de la aplicación,');
+    l.push('que es oscuro, así que la cabecera sale blanca en vez de roja. Para la');
+    l.push('cabecera roja hace falta una versión clara del logo en esa propiedad.');
+  }
 
   var txt = l.join('\n');
   Logger.log(txt);
@@ -5278,20 +5283,30 @@ function cuerpoHtmlOficina(o, modo) {
     'width="100%" style="max-width:640px;margin:0 auto;background:#ffffff;' +
     'border-radius:8px;overflow:hidden;border:1px solid ' + BORDE + '">' +
 
-    // ---- cabecera con el logo
-    '<tr><td style="background:' + ROJO + ';padding:18px 28px">' +
-      '<table role="presentation" width="100%"><tr>' +
-        '<td valign="middle">' +
-          (tieneLogo()
-            ? '<img src="cid:logo" alt="Davivienda" height="26" ' +
-              'style="height:26px;display:block">'
-            : '<div style="color:#fff;font-size:17px;font-weight:700;' +
-              'letter-spacing:.02em">Davivienda</div>') +
-        '</td>' +
-        '<td valign="middle" align="right" style="color:#ffffff;font-size:12px;' +
-          'opacity:.92">Departamento de Impuestos</td>' +
-      '</tr></table>' +
-    '</td></tr>' +
+    // ---- cabecera.
+    // Sobre rojo solo si hay un logo HECHO para el correo (claro). Con el
+    // logo de la aplicacion, que es oscuro, la franja roja se lo come: en ese
+    // caso la cabecera va blanca con una regla roja debajo.
+    (function () {
+      var propio = !!idDeLogoCorreo() && tieneLogo();
+      var fondo = propio ? ROJO : '#ffffff';
+      var texto = propio ? '#ffffff' : APAGADO;
+      var regla = propio ? '' : ';border-bottom:3px solid ' + ROJO;
+      return '<tr><td style="background:' + fondo + ';padding:18px 28px' +
+          regla + '">' +
+        '<table role="presentation" width="100%"><tr>' +
+          '<td valign="middle">' +
+            (tieneLogo()
+              ? '<img src="cid:logo" alt="Davivienda" height="26" ' +
+                'style="height:26px;display:block">'
+              : '<div style="color:' + (propio ? '#fff' : ROJO) +
+                ';font-size:17px;font-weight:700;letter-spacing:.02em">' +
+                'Davivienda</div>') +
+          '</td>' +
+          '<td valign="middle" align="right" style="color:' + texto +
+            ';font-size:12px">Departamento de Impuestos</td>' +
+        '</tr></table></td></tr>';
+    })() +
 
     '<tr><td style="padding:26px 28px 0">' +
       '<table role="presentation" width="100%">' + aviso +
@@ -5374,6 +5389,24 @@ function tieneLogo() {
 }
 
 /**
+ * El logo PARA EL CORREO. Sale de la propiedad del script 'logo_correo_id',
+ * con CONFIG.logo_correo_id de respaldo. Acepta el id o el enlace de Drive.
+ */
+function idDeLogoCorreo() {
+  var v = '';
+  try {
+    v = PropertiesService.getScriptProperties().getProperty('logo_correo_id') || '';
+  } catch (e) {
+    v = '';
+  }
+  if (!v) v = config('logo_correo_id');
+  var s = String(v || '').trim();
+  if (!s) return '';
+  var m = /\/d\/([A-Za-z0-9_-]+)/.exec(s) || /[?&]id=([A-Za-z0-9_-]+)/.exec(s);
+  return m ? m[1] : s;
+}
+
+/**
  * El logo como blob, para incrustarlo en el correo. Se cachea en memoria
  * durante la ejecucion: en un envio de 50 correos seria abrir Drive 50 veces.
  */
@@ -5384,9 +5417,12 @@ function blobDelLogo() {
   if (_blobLogoBuscado) return _blobLogo;
   _blobLogoBuscado = true;
   _blobLogo = null;
-  // idLogo() ya resuelve las propiedades del script, CONFIG y el enlace
-  // completo de Drive. No se repite aqui.
-  var id = idLogo();
+
+  // El logo del correo va sobre la franja roja; el de la aplicacion, sobre
+  // blanco. Casi nunca es el mismo archivo: uno tiene que ser claro y el otro
+  // oscuro. Por eso 'logo_correo_id' manda aqui, y si no esta, se cae al de
+  // la aplicacion, que al menos ensena algo.
+  var id = idDeLogoCorreo() || idLogo();
   if (!id) return null;
   try {
     _blobLogo = DriveApp.getFileById(id).getBlob().setName('logo');
