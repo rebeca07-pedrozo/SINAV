@@ -64,13 +64,23 @@ function camposEditables() {
  * eso lo lee un director de oficina que tiene que girar esa plata.
  */
 function camposDelCorreo() {
-  return ['valor', 'paga_quien', 'forma_pago', 'adhesivo', 'consecutivo_giro',
+  // el adhesivo NO esta aqui a proposito: lo trae repartirAdhesivos() de la
+  // hoja ADHESIVOS y ya vive en la columna. Pedirlo a mano seria hacer dos
+  // veces un trabajo que ya se hizo.
+  return ['valor', 'paga_quien', 'forma_pago', 'consecutivo_giro',
           'fecha_despacho', 'tipo_presentacion'];
 }
 
-/** Los que no pueden ir vacios. forma_pago y fecha_despacho si pueden. */
+/**
+ * Los que no pueden ir vacios.
+ *
+ * El adhesivo tampoco esta: si falta, el correo sale igual, sin la frase del
+ * sticker. Bloquear por eso dejaria trabada una obligacion cuyo municipio no
+ * aparece en la hoja de correspondencia, y no hay forma de arreglarlo desde
+ * la pantalla. Se avisa, que es distinto de impedir.
+ */
 function camposObligatoriosDelCorreo() {
-  return ['valor', 'paga_quien', 'adhesivo', 'consecutivo_giro'];
+  return ['valor', 'paga_quien', 'consecutivo_giro'];
 }
 
 /**

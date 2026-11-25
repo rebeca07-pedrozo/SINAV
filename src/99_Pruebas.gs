@@ -789,8 +789,11 @@ function pruebasCorreoOficina(esIgual) {
           faltaParaElCorreo(con({ valor: '' })).length, 1);
   esIgual('un valor en cero tampoco sirve',
           faltaParaElCorreo(con({ valor: 0 })).length, 1);
-  esIgual('sin adhesivo falta el sticker',
-          faltaParaElCorreo(con({ adhesivo: '' }))[0], 'Sticker de correspondencia');
+  // el adhesivo NO bloquea: si la hoja de correspondencia no trae ese
+  // municipio, el correo sale sin la frase del sticker en vez de dejar la
+  // obligacion trabada sin forma de arreglarla
+  esIgual('sin adhesivo NO se bloquea el envio',
+          faltaParaElCorreo(con({ adhesivo: '' })).length, 0);
   esIgual('sin giro falta el giro',
           faltaParaElCorreo(con({ consecutivo_giro: '' }))[0], 'Consecutivo de giro');
 

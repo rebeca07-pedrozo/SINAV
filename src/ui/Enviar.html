@@ -189,10 +189,9 @@ function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
   const b = borradores[o.id] || {};
   const valorDe = (k) => (b[k] !== undefined ? b[k] : o[k]);
 
-  // el sticker ya viene de la hoja ADHESIVOS: se ensena, no se pide
-  const stickerPuesto = String(valorDe('adhesivo') || '').trim();
-  const aPedir = (orden || []).filter((k) =>
-    campos && campos[k] && !(k === 'adhesivo' && stickerPuesto));
+  // el sticker sale de la columna ADHESIVO: se ensena, nunca se pide
+  const sticker = String(o.adhesivo || '').trim();
+  const aPedir = (orden || []).filter((k) => campos && campos[k]);
 
   return html`<div class="velo">
     <div class="modal modal-ancho" role="dialog" aria-modal="true"
@@ -212,11 +211,14 @@ function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
         viaja el sobre y con qué consecutivo se paga.
       </p>
 
-      ${stickerPuesto ? html`<p class="dato-fijo">
+      <p class=${'dato-fijo' + (sticker ? '' : ' sin-dato')}>
         <span class="sub">Sticker de correspondencia</span>
-        <b class="dato-tel">${stickerPuesto}</b>
-        <span class="sub">ya venía de la hoja ADHESIVOS</span>
-      </p>` : null}
+        <b class="dato-tel">${sticker || 'sin sticker'}</b>
+        <span class="sub">${sticker
+          ? 'de la columna ADHESIVO, no se edita aquí'
+          : 'el correo saldrá sin el número. Se trae con SINAV · Mes → ' +
+            'Repartir los adhesivos del mes'}</span>
+      </p>
 
       <div class="rejilla-campos">
         ${aPedir.map((k) => html`<${CampoEdit} key=${k} clave=${k}
