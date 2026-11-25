@@ -103,7 +103,47 @@ function motivoLegible(o) {
   return m;
 }
 
-function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
+/**
+ * El valor liquidado, editable en la misma fila.
+ *
+ * Es el dato que mas se escribe y el unico que cambia en cada periodo, asi
+ * que abrir una ventana por obligacion para escribir un numero no tiene
+ * sentido. Se guarda al salir del campo, no en cada tecla.
+ */
+function CeldaValor({ o, alGuardar, guardando }) {
+  const [texto, setTexto] = useState(o.valor == null ? '' : String(o.valor));
+  const [tocado, setTocado] = useState(false);
+  const previo = useRef(o.valor == null ? '' : String(o.valor));
+
+  // si la fila se recarga desde el servidor, el campo sigue lo que diga la
+  // hoja, salvo que la persona lo esté escribiendo
+  useEffect(() => {
+    if (tocado) return;
+    const v = o.valor == null ? '' : String(o.valor);
+    previo.current = v;
+    setTexto(v);
+  }, [o.valor, tocado]);
+
+  async function salir() {
+    setTocado(false);
+    if (texto.trim() === previo.current.trim()) return;
+    const ok = await alGuardar(o.id, texto);
+    if (!ok) setTexto(previo.current);        // no se pudo: se deja como estaba
+  }
+
+  return html`<td class="celda-valor num der">
+    <input type="text" inputMode="numeric" class="num entrada-valor"
+      aria-label=${'Valor liquidado de ' + o.municipio + ' ' + o.impuesto}
+      placeholder="—" value=${texto} disabled=${guardando}
+      onInput=${(e) => { setTocado(true); setTexto(e.target.value); }}
+      onBlur=${salir}
+      onKeyDown=${(e) => { if (e.key === 'Enter') e.target.blur(); }} />
+    ${guardando ? html`<span class="sub">guardando…</span>` : null}
+  </td>`;
+}
+
+function Fila({ o, elegida, alElegir, alSubir, subiendo, alGuardarValor,
+                guardandoValor }) {
   const puedo = o.enviable && o.mia !== false;
   const porque = puedo ? '' : motivoLegible(o);
   const falta = o.falta_correo || [];
@@ -139,6 +179,9 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
       <span>${o.vencimiento || html`<span class="raya">—</span>`}</span>
       <span class=${'sub ' + nivelVence}>${textoDias(o.dias)}</span>
     </td>
+
+    <${CeldaValor} o=${o} alGuardar=${alGuardarValor}
+      guardando=${guardandoValor} />
 
     <td class="celda-linea2">
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
@@ -348,6 +391,7 @@ function Enviar({ inicio }) {
   // el asistente de envio: datos -> revisar los PDF -> confirmar
   const [datosPaso, setDatosPaso] = useState(null);   // obligaciones a completar
   const [borradores, setBorradores] = useState({});   // {id: {campo: valor}}
+  const [valorEnCurso, setValorEnCurso] = useState('');
   const archivo = useRef(null);
   const destino = useRef('');
   const anadir = useRef(false);        // true = anexo, false = reemplazar
@@ -396,6 +440,31 @@ function Enviar({ inicio }) {
     setElegidas(elegidasVivas.length === elegiblesVisibles.length
       ? [] : elegiblesVisibles.map((o) => o.id));
     setConfirmando(false);
+  }
+
+  /* -------- el valor, escrito en la propia tabla -------- */
+
+  /**
+   * Guarda el valor de una fila sin recargar la lista entera: el servidor
+   * devuelve la fila ya decorada y se reemplaza solo esa.
+   */
+  async function guardarValor(id, texto) {
+    setValorEnCurso(id);
+    setFallo('');
+    try {
+      const r = await llamar('apiGuardarCampos', id, { valor: texto });
+      if (r && r.fila) {
+        setDatos((v) => Object.assign({}, v, {
+          filas: (v.filas || []).map((f) => (f.id === id ? r.fila : f))
+        }));
+      }
+      return true;
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+      return false;
+    } finally {
+      setValorEnCurso('');
+    }
   }
 
   /* -------- paso 1: los datos que el correo nombra -------- */
@@ -668,6 +737,7 @@ function Enviar({ inicio }) {
             <th>Impuesto</th>
             <th class="num">Periodo</th>
             <th class="num der">Vence</th>
+            <th class="num der">Valor</th>
             <th>Evidencia</th>
             <th>Estado</th>
             <th class="der">Soporte</th>
@@ -680,7 +750,9 @@ function Enviar({ inicio }) {
               ${visibles.map((o) => html`<${Fila} key=${o.id} o=${o}
                 elegida=${elegidas.indexOf(o.id) >= 0}
                 subiendo=${subiendo === o.id}
-                alElegir=${alternar} alSubir=${pedirArchivo} />`)}
+                alElegir=${alternar} alSubir=${pedirArchivo}
+                alGuardarValor=${guardarValor}
+                guardandoValor=${valorEnCurso === o.id} />`)}
             </tbody>`}
       </table>
 

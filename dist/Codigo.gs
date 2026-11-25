@@ -3384,7 +3384,20 @@ function apiGuardarCampos(id, campos) {
     escribirCampos(HOJA.OBLIGACIONES, fila, aEscribir);
     registrar(id, EVENTO.CAMPOS_EDITADOS, bitacora.join(' · '));
 
-    return { id: id, cambios: bitacora.length, detalle: bitacora.join(' · ') };
+    // la fila ya decorada, para que la pantalla no tenga que recargar la
+    // lista entera despues de escribir un solo valor
+    var fresca = null;
+    try {
+      fresca = registros(HOJA.OBLIGACIONES).filter(function (r) {
+        return String(r.id) === String(id);
+      })[0];
+      fresca = fresca ? decorar(fresca) : null;
+    } catch (e) {
+      fresca = null;
+    }
+
+    return { id: id, cambios: bitacora.length, detalle: bitacora.join(' · '),
+             fila: fresca };
   });
 }
 

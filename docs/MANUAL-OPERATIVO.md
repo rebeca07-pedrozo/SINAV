@@ -617,7 +617,12 @@ que tiene que mover esa plata. Por eso SINAV no deja enviar sin:
 
 **Valor · Quién paga · Sticker de correspondencia · Consecutivo de giro**
 
-**No hay pantalla de digitalización aparte**: se llenan en el primer paso del
+**El valor liquidado se escribe en la propia tabla de Enviar**, en su columna,
+sin abrir nada: es el dato que más se repite y el que cambia en cada periodo.
+Se guarda al salir del campo o al dar Enter, y queda escrito en la hoja. Si el
+guardado falla, el campo vuelve a lo que decía antes y la pantalla lo avisa.
+
+El resto **no tiene pantalla aparte**: se llenan en el primer paso del
 envío. Al darle a *Enviar seleccionadas*, si a alguna le falta algo se abre el
 formulario, una por una, y de ahí se pasa solo a revisar los PDF.
 
