@@ -383,7 +383,9 @@ var PAGO_POR_DANE = {
 
 /** El codigo DANE como esta escrito en las tablas: cinco cifras con ceros. */
 function dane5(v) {
-  var s = String(v === null || v === undefined ? '' : v).replace(/[^\d]/g, '');
+  // normCodigo sabe deshacer una fecha, que es como vuelve el DANE cuando la
+  // columna quedo con formato de fecha en la hoja
+  var s = normCodigo(v, 5).replace(/[^\d]/g, '');
   if (!s) return '';
   while (s.length < 5) s = '0' + s;
   return s.slice(-5);
@@ -559,6 +561,8 @@ function menuArranque() {
     .addSeparator()
     .addItem('Solo los correos de las oficinas', 'cargarCorreosOficinaDesdeMenu')
     .addItem('¿Cómo quedó el mes?', 'resumenDelMesDesdeMenu')
+    .addSeparator()
+    .addItem('Borrar obligaciones mal formadas', 'borrarObligacionesInvalidasDesdeMenu')
     .addToUi();
 }
 
@@ -573,4 +577,73 @@ function avisoLargo(titulo, texto) {
     t.length > 1400 ? t.slice(0, 1400) + '\n\n[…] El texto completo está en ' +
       'Ejecuciones, en el editor.' : t,
     SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/* ---------------------------------------------------------------------------
+   LIMPIEZA
+
+   Si la columna del DANE en CALENDARIO quedo con formato de fecha, las
+   obligaciones se crearon con una fecha por codigo y un id que no sirve.
+   Esto las quita para poder volver a cargarlas bien.
+   --------------------------------------------------------------------------- */
+
+/** El id empieza por el DANE: cinco cifras. Lo que no, nacio mal. */
+function idEsValido(id) {
+  return /^\d{5}\|/.test(String(id || '').trim());
+}
+
+/**
+ * Borra las obligaciones cuyo id no empieza por un DANE de cinco cifras.
+ *
+ * Solo toca las que nadie ha trabajado: en PENDIENTE, sin soporte y sin
+ * correo enviado. Si alguna ya tiene trabajo encima, la deja y lo dice, para
+ * que alguien decida a mano.
+ */
+function borrarObligacionesInvalidas() {
+  exige('configurar');
+
+  var ix = indices(HOJA.OBLIGACIONES);
+  var h = libro().getSheetByName(HOJA.OBLIGACIONES);
+  var todas = filas(HOJA.OBLIGACIONES);
+
+  var aBorrar = [], conTrabajo = [];
+  todas.forEach(function (f, k) {
+    if (idEsValido(f[ix.id])) return;
+    var tocada = String(f[ix.soporte_id] || '').trim() ||
+                 String(f[ix.hilo_id] || '').trim() ||
+                 String(f[ix.estado] || '').trim().toUpperCase() !== ESTADO.PENDIENTE;
+    if (tocada) conTrabajo.push(String(f[ix.id]).slice(0, 40));
+    else aBorrar.push(k + 2);
+  });
+
+  if (!aBorrar.length && !conTrabajo.length) {
+    return 'No hay obligaciones con el id mal formado. No se borró nada.';
+  }
+
+  // de abajo hacia arriba: borrar una fila mueve las de abajo
+  conCerrojo(function () {
+    for (var i = aBorrar.length - 1; i >= 0; i--) h.deleteRow(aBorrar[i]);
+  });
+
+  registrar('', EVENTO.AVISO, 'borradas ' + aBorrar.length + ' obligaciones mal formadas');
+
+  var l = [aBorrar.length + ' obligaciones con el id mal formado fueron borradas.'];
+  if (conTrabajo.length) {
+    l.push('', conTrabajo.length + ' NO se tocaron porque ya tienen trabajo encima');
+    l.push('(soporte, envío o un estado distinto de PENDIENTE). Míralas a mano:');
+    conTrabajo.slice(0, 10).forEach(function (x) { l.push('   ' + x); });
+    if (conTrabajo.length > 10) l.push('   … y ' + (conTrabajo.length - 10) + ' más');
+  }
+  l.push('', 'Ahora vuelve a correr SINAV · Preparar el mes → DEJAR EL MES LISTO.');
+  return l.join('\n');
+}
+
+function borrarObligacionesInvalidasDesdeMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.alert('SINAV · limpiar',
+    'Esto borra las obligaciones cuyo código DANE quedó como una fecha, ' +
+    'siempre que nadie las haya trabajado todavía. ¿Seguir?',
+    ui.ButtonSet.YES_NO);
+  if (r !== ui.Button.YES) return;
+  avisoLargo('Limpieza', borrarObligacionesInvalidas());
 }

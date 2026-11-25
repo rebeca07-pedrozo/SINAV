@@ -1273,11 +1273,36 @@ function normPeriodicidad(v) {
  */
 function normCodigo(v, ancho) {
   if (v === null || v === undefined) return '';
+
+  // UNA FECHA. Pasa cuando la columna del codigo quedo con formato de fecha:
+  // la hoja guarda 54001 pero devuelve «Mon Apr 05 2049», y entonces el DANE
+  // del municipio se vuelve una fecha y el id de la obligacion con el. Se
+  // deshace la conversion: el numero de serie de la hoja ES el codigo.
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return '';
+    var serie = diasDesdeElOrigen(v);
+    if (serie <= 0) return '';
+    var t = String(serie);
+    if (ancho) while (t.length < ancho) t = '0' + t;
+    return t;
+  }
+
   var s = String(v).trim();
   if (s.indexOf('E+') > 0 || s.indexOf('e+') > 0) s = Number(s).toFixed(0);
   s = s.replace(/\.0+$/, '');
   if (ancho && /^[0-9]+$/.test(s)) while (s.length < ancho) s = '0' + s;
   return s;
+}
+
+/**
+ * El numero de serie que la hoja de calculo guarda detras de una fecha: los
+ * dias desde el 30 de diciembre de 1899. Se cuenta con las piezas locales de
+ * la fecha, no con getTime(), para que el huso horario no corra un dia.
+ */
+function diasDesdeElOrigen(d) {
+  var utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  var origen = Date.UTC(1899, 11, 30);
+  return Math.round((utc - origen) / 86400000);
 }
 
 /** Periodo: 2026-09 | 2026-B4 | 2026-T3 | 2026-C2 | 2026. '' si no encaja. */
@@ -5641,6 +5666,7 @@ function pruebas() {
   pruebasCorreoOficina(esIgual);
   pruebasConcepto25(esIgual);
   pruebasCorreosOficina(esIgual);
+  pruebasCodigoComoFecha(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -6527,7 +6553,7 @@ function pruebasCorreosOficina(esIgual) {
   esIgual('cinco cifras con cero delante', dane5('5002'), '05002');
   esIgual('el que ya viene bien no cambia', dane5('19698'), '19698');
   esIgual('acepta numero', dane5(5002), '05002');
-  esIgual('quita lo que no sea cifra', dane5('05002.0'), '50020');
+  esIgual('el .0 que deja Sheets se cae', dane5('05002.0'), '05002');
   esIgual('vacio no revienta', dane5(''), '');
   esIgual('nulo tampoco', dane5(null), '');
 
@@ -6551,4 +6577,43 @@ function pruebasCorreosOficina(esIgual) {
           }), true);
 
   esIgual('Quilichao paga en oficina', pagoDeOficina('19698'), 'OFICINA');
+}
+
+/**
+ * El DANE leido como fecha.
+ *
+ * Si la columna del codigo en CALENDARIO quedo con formato de fecha, la hoja
+ * guarda 5659 pero devuelve «29 de junio de 1915», y entonces el municipio de
+ * una obligacion es una fecha y su id tambien. Se deshace la conversion: el
+ * numero de serie de la hoja ES el codigo.
+ */
+function pruebasCodigoComoFecha(esIgual) {
+  esIgual('el origen de la hoja es el 30/12/1899',
+          diasDesdeElOrigen(new Date(1899, 11, 30)), 0);
+  esIgual('el 31/12/1899 es el dia 1',
+          diasDesdeElOrigen(new Date(1899, 11, 31)), 1);
+
+  esIgual('29/06/1915 era el DANE 05659',
+          normCodigo(new Date(1915, 5, 29), 5), '05659');
+  esIgual('01/11/1942 era el 15646',
+          normCodigo(new Date(1942, 10, 1), 5), '15646');
+  esIgual('05/04/2049 era el 54518',
+          normCodigo(new Date(2049, 3, 5), 5), '54518');
+  esIgual('y dane5 tambien lo deshace',
+          dane5(new Date(1915, 5, 29)), '05659');
+
+  esIgual('una fecha invalida no inventa un codigo',
+          normCodigo(new Date('x'), 5), '');
+  esIgual('una fecha anterior al origen tampoco',
+          normCodigo(new Date(1800, 0, 1), 5), '');
+
+  // lo de siempre sigue igual
+  esIgual('un codigo normal no se toca', normCodigo('05001', 5), '05001');
+  esIgual('y se rellena con ceros', normCodigo('851', 4), '0851');
+
+  // los ids mal formados se reconocen
+  esIgual('un id bueno', idEsValido('05001|ICA|GENERAL|2026-11'), true);
+  esIgual('uno con fecha por DANE',
+          idEsValido('Mon Apr 05 2049 00:00:00 GMT-0500|RETEICA|GENERAL|2026-11'), false);
+  esIgual('vacio no es valido', idEsValido(''), false);
 }
