@@ -126,6 +126,22 @@ function apiEnviar(ids) {
       break;
     }
 
+    // el consecutivo de giro se toma AQUI, no antes: si se asignara al
+    // digitalizar, una obligacion que luego no se manda dejaria un hueco en
+    // la numeracion
+    if (!String(o.consecutivo_giro || '').trim()) {
+      try {
+        var giro = giroPara(o, yo().nombre);
+        if (giro) {
+          o.consecutivo_giro = giro;
+          escribirCampos(HOJA.OBLIGACIONES, buscarFila(o.id),
+                         { consecutivo_giro: giro });
+        }
+      } catch (e) {
+        registrar(id, EVENTO.ERROR, 'no se pudo asignar el consecutivo: ' + e.message);
+      }
+    }
+
     try {
       // todos los soportes de la obligacion: la declaracion y sus anexos
       var adjuntos = [], bytes = 0;

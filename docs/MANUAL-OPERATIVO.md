@@ -604,8 +604,34 @@ que tiene que mover esa plata. Por eso SINAV no deja enviar sin:
 envío. Al darle a *Enviar seleccionadas*, si a alguna le falta algo se abre el
 formulario, una por una, y de ahí se pasa solo a revisar los PDF.
 
-El **sticker no se escribe** si el repartidor ya lo trajo de la hoja ADHESIVOS:
-se muestra, y punto. Solo se pide cuando falta.
+Dos datos **no se escriben nunca**:
+
+- **El sticker** lo trajo `repartirAdhesivos()` de la hoja ADHESIVOS y se
+  muestra tal cual. Si falta, el envío **se bloquea** —el sobre viaja con ese
+  número y sin él la oficina no sabe qué recibe— y la pantalla deja
+  escribirlo a mano como última salida.
+- **El consecutivo de giro** lo arma SINAV en el momento de enviar.
+
+### Cómo se arma el consecutivo de giro
+
+`LR-09-74` se lee así:
+
+| | | |
+|---|---|---|
+| `LR` | Las iniciales de **quien envía**, en ese momento | Si Andrea cubre a Yasneidy y manda ella, dice `AG` |
+| `09` | El mes del **periodo**, no el del envío | Aquí se trabaja mes vencido: lo que se presenta en diciembre es de noviembre |
+| `74` | Un consecutivo que **arranca de nuevo cada mes**, por persona | |
+
+En los periodos largos el mes es el **último** del periodo, que es el que se
+declara: el bimestre 5 son septiembre y octubre, así que dice `10`.
+
+Se asigna **en el momento del envío**, no al digitalizar: si se asignara
+antes, una obligación que luego no se manda dejaría un hueco en la
+numeración. Una vez asignado no se renumera nunca.
+
+La cuenta vive en las Propiedades del script, una por persona y mes
+(`giro:LR:2026-09`). Si alguna vez hay que empezar de otro número, se edita
+ahí.
 
 El envío es, entonces, tres pasos encadenados:
 

@@ -789,13 +789,43 @@ function pruebasCorreoOficina(esIgual) {
           faltaParaElCorreo(con({ valor: '' })).length, 1);
   esIgual('un valor en cero tampoco sirve',
           faltaParaElCorreo(con({ valor: 0 })).length, 1);
-  // el adhesivo NO bloquea: si la hoja de correspondencia no trae ese
-  // municipio, el correo sale sin la frase del sticker en vez de dejar la
-  // obligacion trabada sin forma de arreglarla
-  esIgual('sin adhesivo NO se bloquea el envio',
-          faltaParaElCorreo(con({ adhesivo: '' })).length, 0);
-  esIgual('sin giro falta el giro',
-          faltaParaElCorreo(con({ consecutivo_giro: '' }))[0], 'Consecutivo de giro');
+  // el sobre viaja con ese numero: sin el, la oficina no sabe que recibe
+  esIgual('sin adhesivo no sale el correo',
+          faltaParaElCorreo(con({ adhesivo: '' }))[0], 'Sticker de correspondencia');
+  // el consecutivo de giro NO se pide: lo asigna el envio
+  esIgual('sin giro no se bloquea: se asigna al enviar',
+          faltaParaElCorreo(con({ consecutivo_giro: '' })).length, 0);
+
+  // LR-09-74: iniciales de quien envia, mes del PERIODO, consecutivo del mes
+  esIgual('iniciales de nombre y apellido', inicialesDe('Liliana Ramirez'), 'LR');
+  esIgual('con tilde tambien', inicialesDe('Andrea Galvis Díaz'), 'AG');
+  esIgual('en minusculas', inicialesDe('jesus jaimes'), 'JJ');
+  esIgual('un solo nombre', inicialesDe('Elizabeth'), 'EL');
+  esIgual('vacio no revienta', inicialesDe(''), '');
+  esIgual('nulo no revienta', inicialesDe(null), '');
+
+  // aqui se trabaja MES VENCIDO: el mes es el del periodo, no el del envio,
+  // y en los periodos largos es el ultimo mes, que es el que se declara
+  esIgual('mensual', mesDelPeriodo('2026-09'), 9);
+  esIgual('mensual de un digito', mesDelPeriodo('2026-9'), 9);
+  esIgual('bimestre 5 son sept-oct: se declara octubre',
+          mesDelPeriodo('2026-B5'), 10);
+  esIgual('bimestre 1', mesDelPeriodo('2026-B1'), 2);
+  esIgual('trimestre 3', mesDelPeriodo('2026-T3'), 9);
+  esIgual('cuatrimestre 2', mesDelPeriodo('2026-C2'), 8);
+  esIgual('anual cierra en diciembre', mesDelPeriodo('2026'), 12);
+  esIgual('basura no inventa un mes', mesDelPeriodo('xyz'), 0);
+  esIgual('vacio tampoco', mesDelPeriodo(''), 0);
+
+  esIgual('el formato del ejemplo', formatoGiro('LR', 9, 74), 'LR-09-74');
+  esIgual('mes de dos cifras', formatoGiro('AG', 11, 3), 'AG-11-03');
+  esIgual('consecutivo largo', formatoGiro('HC', 12, 140), 'HC-12-140');
+
+  // la cuenta es por persona y por mes del periodo
+  esIgual('la clave separa personas',
+          claveGiro('LR', 2026, 9) === claveGiro('AG', 2026, 9), false);
+  esIgual('y separa meses',
+          claveGiro('LR', 2026, 9) === claveGiro('LR', 2026, 10), false);
 
   // la dependencia vale como destinatario: es lo que desbloquea los
   // municipios que nunca tuvieron correo escrito

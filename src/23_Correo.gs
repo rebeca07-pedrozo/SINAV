@@ -179,59 +179,139 @@ function cuerpoOficina(o, modo) {
  * remotas hasta que el que lee da permiso, y entonces el correo llega roto.
  */
 function cuerpoHtmlOficina(o, modo) {
-  var rojo = '#e30518';
-  var p = function (txt) {
-    return '<p style="margin:0 0 14px">' + txt + '</p>';
-  };
+  var ROJO = '#e30518';
+  var TINTA = '#111111';
+  var APAGADO = '#5f6368';
+  var BORDE = '#e8e8e8';
+  var FUENTE = "-apple-system,'Segoe UI',Arial,Helvetica,sans-serif";
+
   var aviso = modo === 'PRUEBA'
-    ? '<p style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;' +
-      'padding:8px 10px;margin:0 0 16px;font-size:13px">MODO PRUEBA. ' +
-      'Este correo iba para: ' + (destinatariosDe(o) || '-') + '</p>'
+    ? '<tr><td style="padding:0 0 16px">' +
+      '<div style="background:#fff6e0;border:1px solid #f0d9a0;color:#8a5500;' +
+      'padding:10px 14px;font-size:13px;border-radius:4px">' +
+      '<b>MODO PRUEBA.</b> Este correo iba para: ' +
+      (destinatariosDe(o) || '-') + '</div></td></tr>'
     : '';
 
-  var fila = function (k, v) {
-    return '<tr><td style="padding:3px 16px 3px 0;color:#5f6368;' +
-           'white-space:nowrap">' + k + '</td>' +
-           '<td style="padding:3px 0;color:#111"><b>' + v + '</b></td></tr>';
+  // cada dato en su celda, para que no se amontonen en el movil
+  var dato = function (k, v, ancho) {
+    return '<td width="' + (ancho || '50%') + '" valign="top" ' +
+      'style="padding:10px 14px;border:1px solid ' + BORDE + '">' +
+      '<div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;' +
+      'color:' + APAGADO + ';padding-bottom:3px">' + k + '</div>' +
+      '<div style="font-size:15px;color:' + TINTA + ';font-weight:700">' +
+      v + '</div></td>';
   };
 
-  var puntos = aspectos(o).map(function (a) {
-    return '<li style="margin:0 0 8px">' + a + '</li>';
-  }).join('');
+  var punto = function (n, txt) {
+    return '<tr>' +
+      '<td valign="top" width="26" style="padding:0 0 12px">' +
+      '<div style="width:19px;height:19px;border-radius:10px;background:' + ROJO + ';' +
+      'color:#fff;font-size:11px;font-weight:700;text-align:center;' +
+      'line-height:19px">' + n + '</div></td>' +
+      '<td valign="top" style="padding:0 0 12px;font-size:13px;line-height:1.55;' +
+      'color:' + TINTA + '">' + txt + '</td></tr>';
+  };
 
-  return '<div style="font:14px/1.55 Arial,Helvetica,sans-serif;color:#111;' +
-      'max-width:660px">' +
-    aviso +
-    (tieneLogo() ? '<div style="padding:0 0 12px"><img src="cid:logo" ' +
-      'alt="Davivienda" style="height:34px"></div>' : '') +
-    '<div style="border-top:3px solid ' + rojo + ';padding-top:16px">' +
-    p('Buenos días,') +
-    p(parrafoEnvio(o)) +
-    '<table style="border-collapse:collapse;font-size:13px;margin:0 0 16px;' +
-      'background:#f9f9f9;padding:8px">' +
-      fila('Municipio', o.municipio + ' (DANE ' + o.cod_dane + ')') +
-      fila('Dependencia', dependenciaDe(o) || '-') +
-      fila('Impuesto', (IMPUESTO_LARGO[o.impuesto] || o.impuesto) + ' &middot; ' +
-           String(o.periodicidad || '').toLowerCase()) +
-      fila('Periodo', o.periodo) +
-      fila('Valor', pesosCortos(o.valor)) +
-      fila('NIT del municipio', o.nit_municipio || '-') +
-      fila('Presentación', (o.tipo_presentacion || '-') + ' &middot; paga ' + textoPago(o)) +
-      (String(o.adhesivo || '').trim() ? fila('Sticker', o.adhesivo) : '') +
-      (String(o.consecutivo_giro || '').trim()
-        ? fila('Consecutivo de giro', o.consecutivo_giro) : '') +
-    '</table>' +
-    p(parrafoPago(o)) +
-    '<p style="margin:0 0 14px;padding:10px 12px;background:#fce9e9;' +
-      'border-left:3px solid ' + rojo + '">Fecha de vencimiento el <b>' +
-      fechaLarga(o.vencimiento) + '</b>.</p>' +
-    '<p style="margin:0 0 6px"><b>ASPECTOS A TENER EN CUENTA:</b></p>' +
-    '<ul style="margin:0 0 16px;padding-left:18px">' + puntos + '</ul>' +
-    '<p style="background:#f2f2f2;padding:10px 12px;margin:0 0 16px">' +
-      '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte la ' +
-      'declaración sellada. Así queda archivada sola y no hay que buscarla después.</p>' +
-    p('Cordialmente,<br>' + config('nombre_remitente')) +
-    '</div></div>';
+  var puntos = '';
+  aspectos(o).forEach(function (a, k) { puntos += punto(k + 1, a); });
+
+  var sticker = String(o.adhesivo || '').trim();
+  var giro = String(o.consecutivo_giro || '').trim();
+
+  return '' +
+  '<div style="background:#f1f3f4;padding:24px 12px;font-family:' + FUENTE + '">' +
+  '<table role="presentation" cellpadding="0" cellspacing="0" border="0" ' +
+    'width="100%" style="max-width:640px;margin:0 auto;background:#ffffff;' +
+    'border-radius:8px;overflow:hidden;border:1px solid ' + BORDE + '">' +
+
+    // ---- cabecera con el logo
+    '<tr><td style="background:' + ROJO + ';padding:18px 28px">' +
+      '<table role="presentation" width="100%"><tr>' +
+        '<td valign="middle">' +
+          (tieneLogo()
+            ? '<img src="cid:logo" alt="Davivienda" height="26" ' +
+              'style="height:26px;display:block">'
+            : '<div style="color:#fff;font-size:17px;font-weight:700;' +
+              'letter-spacing:.02em">Davivienda</div>') +
+        '</td>' +
+        '<td valign="middle" align="right" style="color:#ffffff;font-size:12px;' +
+          'opacity:.92">Departamento de Impuestos</td>' +
+      '</tr></table>' +
+    '</td></tr>' +
+
+    '<tr><td style="padding:26px 28px 0">' +
+      '<table role="presentation" width="100%">' + aviso +
+
+      // ---- de que se trata
+      '<tr><td style="padding:0 0 4px;font-size:11px;letter-spacing:.06em;' +
+        'text-transform:uppercase;color:' + APAGADO + '">' +
+        (IMPUESTO_LARGO[o.impuesto] || o.impuesto) + ' &middot; ' +
+        String(o.periodicidad || '').toLowerCase() + '</td></tr>' +
+      '<tr><td style="padding:0 0 18px;font-size:23px;line-height:1.25;' +
+        'font-weight:700;color:' + TINTA + '">' +
+        String(o.municipio || '').toUpperCase() +
+        '<span style="color:' + APAGADO + ';font-weight:400"> &middot; ' +
+        o.periodo + '</span></td></tr>' +
+
+      // ---- el vencimiento, que es lo que no se puede pasar por alto
+      '<tr><td style="padding:0 0 20px">' +
+        '<div style="background:#fce9e9;border-left:4px solid ' + ROJO + ';' +
+        'padding:12px 16px;border-radius:0 4px 4px 0">' +
+          '<div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;' +
+          'color:' + APAGADO + '">Fecha de vencimiento</div>' +
+          '<div style="font-size:18px;font-weight:700;color:' + ROJO + ';' +
+          'padding-top:2px">' + fechaLarga(o.vencimiento) + '</div>' +
+        '</div></td></tr>' +
+
+      '<tr><td style="padding:0 0 18px;font-size:14px;line-height:1.6;color:' +
+        TINTA + '">Buenos días,<br><br>' + parrafoEnvio(o) + '</td></tr>' +
+
+      // ---- la ficha
+      '<tr><td style="padding:0 0 20px">' +
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" ' +
+          'width="100%" style="border-collapse:collapse">' +
+          '<tr>' + dato('Valor a girar', pesosCortos(o.valor)) +
+                   dato('NIT del municipio', o.nit_municipio || '—') + '</tr>' +
+          '<tr>' + dato('Dependencia', dependenciaDe(o) || '—') +
+                   dato('Sticker de correspondencia', sticker || '—') + '</tr>' +
+          '<tr>' + dato('Consecutivo de giro', giro || '—') +
+                   dato('Presentación', (o.tipo_presentacion || '—') +
+                        ' &middot; paga ' + textoPago(o)) + '</tr>' +
+        '</table></td></tr>' +
+
+      '<tr><td style="padding:0 0 22px;font-size:14px;line-height:1.6;color:' +
+        TINTA + '">' + parrafoPago(o) + '</td></tr>' +
+
+      // ---- los cuatro aspectos, numerados
+      '<tr><td style="padding:0 0 6px;font-size:12px;letter-spacing:.06em;' +
+        'text-transform:uppercase;color:' + APAGADO + ';font-weight:700">' +
+        'Aspectos a tener en cuenta</td></tr>' +
+      '<tr><td style="padding:0 0 10px;border-top:1px solid ' + BORDE + '"></td></tr>' +
+      '<tr><td style="padding:0 0 8px">' +
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" ' +
+        'width="100%">' + puntos + '</table></td></tr>' +
+
+      // ---- la instruccion que hace que todo lo demas funcione
+      '<tr><td style="padding:4px 0 22px">' +
+        '<div style="background:#f7f5f5;border:1px solid ' + BORDE + ';' +
+        'padding:14px 16px;border-radius:4px;font-size:13px;line-height:1.55;' +
+        'color:' + TINTA + '">' +
+        '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte ' +
+        'la declaración sellada. Así queda archivada sola y no hay que buscarla ' +
+        'después.</div></td></tr>' +
+
+      '<tr><td style="padding:0 0 26px;font-size:14px;color:' + TINTA + '">' +
+        'Cordialmente,<br><b>' + config('nombre_remitente') + '</b></td></tr>' +
+      '</table>' +
+    '</td></tr>' +
+
+    '<tr><td style="background:#f7f5f5;border-top:1px solid ' + BORDE + ';' +
+      'padding:14px 28px;font-size:11px;color:' + APAGADO + ';line-height:1.5">' +
+      'Correo generado por SINAV, el control de obligaciones tributarias ' +
+      'territoriales del Departamento de Impuestos.</td></tr>' +
+
+  '</table></div>';
 }
 
 /** Hay logo configurado y se puede abrir. */
@@ -260,4 +340,97 @@ function blobDelLogo() {
     _blobLogo = null;                 // sin logo el correo sale igual, sin imagen
   }
   return _blobLogo;
+}
+
+/* ===========================================================================
+   EL CONSECUTIVO DE GIRO
+
+   LR-09-74 se lee asi:
+
+     LR   las iniciales de QUIEN ENVIA, en el momento de enviar. Si Andrea
+          cubre a Yasneidy y es Andrea quien manda, el giro dice AG.
+     09   el mes del PERIODO, no el mes en que se manda. Aqui se trabaja mes
+          vencido: lo que se presenta en diciembre es de noviembre.
+     74   un consecutivo que arranca de nuevo cada mes, por persona.
+
+   Se asigna en el momento del envio, no antes: si se asignara al digitalizar,
+   una obligacion que luego no se manda dejaria un hueco en la numeracion.
+   =========================================================================== */
+
+/** 'Liliana Ramirez' -> 'LR'. Primer nombre y primer apellido. */
+function inicialesDe(nombre) {
+  var partes = String(nombre || '')
+    .normalize ? String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+               : String(nombre || '');
+  var trozos = partes.toUpperCase().split(/[^A-Z]+/).filter(function (x) { return x; });
+  if (!trozos.length) return '';
+  if (trozos.length === 1) return trozos[0].slice(0, 2);
+  return trozos[0].charAt(0) + trozos[1].charAt(0);
+}
+
+/**
+ * El mes al que corresponde el periodo. Es el ULTIMO mes del periodo, que es
+ * el que se declara: el bimestre 5 son septiembre y octubre, y se declara
+ * octubre.
+ *
+ *   2026-09  -> 9      2026-B5 -> 10     2026-T3 -> 9
+ *   2026-C2  -> 8      2026    -> 12
+ */
+function mesDelPeriodo(periodo) {
+  var p = String(periodo || '').trim().toUpperCase();
+  var m = p.match(/^(\d{4})-(\d{1,2})$/);
+  if (m) return Number(m[2]);
+  m = p.match(/^(\d{4})-B(\d)$/);
+  if (m) return Number(m[2]) * 2;
+  m = p.match(/^(\d{4})-T(\d)$/);
+  if (m) return Number(m[2]) * 3;
+  m = p.match(/^(\d{4})-C(\d)$/);
+  if (m) return Number(m[2]) * 4;
+  if (/^\d{4}$/.test(p)) return 12;              // anual: se declara el cierre
+  return 0;
+}
+
+/** LR + mes de dos cifras + consecutivo. */
+function formatoGiro(iniciales, mes, n) {
+  var mm = mes < 10 ? '0' + mes : String(mes);
+  var nn = n < 10 ? '0' + n : String(n);
+  return String(iniciales || '').toUpperCase() + '-' + mm + '-' + nn;
+}
+
+/** La clave del contador: por persona y por mes del periodo. */
+function claveGiro(iniciales, anio, mes) {
+  return 'giro:' + String(iniciales).toUpperCase() + ':' + anio + '-' +
+         (mes < 10 ? '0' + mes : mes);
+}
+
+/**
+ * Toma el siguiente numero de la cuenta y lo guarda. Bajo cerrojo, que dos
+ * envios a la vez no se lleven el mismo.
+ */
+function siguienteConsecutivoGiro(iniciales, anio, mes) {
+  return conCerrojo(function () {
+    var props = PropertiesService.getScriptProperties();
+    var clave = claveGiro(iniciales, anio, mes);
+    var n = Number(props.getProperty(clave) || 0) + 1;
+    props.setProperty(clave, String(n));
+    return n;
+  });
+}
+
+/**
+ * El consecutivo de una obligacion. Si ya tiene uno escrito, ese manda: no se
+ * renumera nada que ya haya salido.
+ */
+function giroPara(o, nombreQuienEnvia) {
+  var ya = String(o.consecutivo_giro || '').trim();
+  if (ya) return ya;
+
+  var ini = inicialesDe(nombreQuienEnvia);
+  if (!ini) return '';
+  var mes = mesDelPeriodo(o.periodo);
+  if (!mes) return '';
+  var anio = Number(String(o.periodo || '').slice(0, 4)) ||
+             Number(o.vigencia) || new Date().getFullYear();
+
+  return formatoGiro(ini, mes, siguienteConsecutivoGiro(ini, anio, mes));
 }

@@ -102,7 +102,9 @@ filas.push({
 // el adhesivo lo trae el repartidor desde la hoja ADHESIVOS: a unas si, a
 // otras todavia no, que es justo lo que distingue los dos casos en pantalla
 filas.forEach((o, k) => {
-  o.adhesivo = String(55285300 + k);
+  // a casi todas les llego el adhesivo; a la primera no, que es el caso raro
+  // que hay que poder ver en pantalla
+  if (k) o.adhesivo = String(55285300 + k);
   if (k % 2) o.consecutivo_giro = 'LR-09-' + (70 + k);
   // lo que falta para el correo lo calcula el servidor de verdad
   o.falta_correo = S.faltaParaElCorreo(o);

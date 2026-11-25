@@ -67,20 +67,22 @@ function camposDelCorreo() {
   // el adhesivo NO esta aqui a proposito: lo trae repartirAdhesivos() de la
   // hoja ADHESIVOS y ya vive en la columna. Pedirlo a mano seria hacer dos
   // veces un trabajo que ya se hizo.
-  return ['valor', 'paga_quien', 'forma_pago', 'consecutivo_giro',
-          'fecha_despacho', 'tipo_presentacion'];
+  // el consecutivo de giro tampoco: lo asigna el envio con las iniciales de
+  // quien manda, el mes del periodo y la cuenta de ese mes
+  return ['valor', 'paga_quien', 'forma_pago', 'fecha_despacho',
+          'tipo_presentacion'];
 }
 
 /**
  * Los que no pueden ir vacios.
  *
- * El adhesivo tampoco esta: si falta, el correo sale igual, sin la frase del
- * sticker. Bloquear por eso dejaria trabada una obligacion cuyo municipio no
- * aparece en la hoja de correspondencia, y no hay forma de arreglarlo desde
- * la pantalla. Se avisa, que es distinto de impedir.
+ * El adhesivo SI esta: el sobre viaja con ese numero y sin el la oficina no
+ * sabe que esta recibiendo. En teoria nunca falta, porque lo trae
+ * repartirAdhesivos(); cuando falta, la pantalla deja escribirlo a mano, pero
+ * el correo no sale sin el.
  */
 function camposObligatoriosDelCorreo() {
-  return ['valor', 'paga_quien', 'consecutivo_giro'];
+  return ['valor', 'paga_quien', 'adhesivo'];
 }
 
 /**

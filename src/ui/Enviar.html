@@ -211,14 +211,29 @@ function DatosDelCorreo({ obligaciones, campos, orden, borradores, alCambiar,
         viaja el sobre y con qué consecutivo se paga.
       </p>
 
-      <p class=${'dato-fijo' + (sticker ? '' : ' sin-dato')}>
-        <span class="sub">Sticker de correspondencia</span>
-        <b class="dato-tel">${sticker || 'sin sticker'}</b>
-        <span class="sub">${sticker
-          ? 'de la columna ADHESIVO, no se edita aquí'
-          : 'el correo saldrá sin el número. Se trae con SINAV · Mes → ' +
-            'Repartir los adhesivos del mes'}</span>
+      <p class="dato-fijo">
+        <span class="sub">Consecutivo de giro</span>
+        <b class="dato-tel">${o.consecutivo_giro || 'se asigna al enviar'}</b>
+        <span class="sub">${o.consecutivo_giro
+          ? 'ya asignado, no se renumera'
+          : 'tus iniciales, el mes del periodo y el consecutivo de ese mes'}</span>
       </p>
+
+      ${sticker ? html`<p class="dato-fijo">
+        <span class="sub">Sticker de correspondencia</span>
+        <b class="dato-tel">${sticker}</b>
+        <span class="sub">de la columna ADHESIVO, no se edita aquí</span>
+      </p>` : html`<div class="dato-fijo sin-dato">
+        <span class="sub">Sticker de correspondencia</span>
+        <b>Falta, y sin él no sale el correo</b>
+        <span class="sub">
+          Se trae solo con <b>SINAV · Mes → Repartir los adhesivos del mes</b>.
+          Si ese municipio no está en la hoja de correspondencia, escríbelo aquí:
+        </span>
+        <${CampoEdit} clave="adhesivo" def=${campos && campos.adhesivo}
+          valor=${valorDe('adhesivo')}
+          alCambiar=${(clave, valor) => alCambiar(o.id, clave, valor)} />
+      </div>`}
 
       <div class="rejilla-campos">
         ${aPedir.map((k) => html`<${CampoEdit} key=${k} clave=${k}
