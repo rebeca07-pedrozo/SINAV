@@ -58,6 +58,7 @@ desplegable del editor.
 | **Carga.gs** | La carga inicial de una vigencia. Se corre una vez al año |
 | **Concepto25.gs** | Los consecutivos de giro, las formas de pago y los traspasos |
 | **Arranque.gs** | Los correos de las oficinas y la preparación del mes de una corrida |
+| **Reemplazo.gs** | Cuando alguien sale del equipo |
 
 ### Dejar el mes listo de una sola corrida
 
@@ -114,14 +115,28 @@ municipios que no están en las tablas.
 
 ### Cuando alguien sale del equipo
 
-| # | Qué haces | Función |
-|---|---|---|
-| 1 | Pasar lo suyo a otra persona | `traspasar("sale@davivienda.com", "entra@davivienda.com")` · Concepto25.gs |
-| 2 | En la hoja USUARIOS, poner `activo = NO` a quien sale | — |
-| 3 | Revisar la columna `backup`: puede apuntar a quien ya no está | — |
+Quien sale deja **tres** rastros, y el tercero es el que se olvida:
 
-Las obligaciones `APROBADA` **no se tocan**: siguen diciendo quién las hizo.
-Cada traspaso queda en EVENTOS.
+1. El responsable en PROGRAMACION
+2. El responsable en las obligaciones abiertas
+3. **Sus iniciales en el consecutivo de giro**: `AG-10-74` es de Andrea Galvis
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Ver cómo están escritos los correos | **SINAV · Reemplazo → Ver los usuarios** | `listarUsuarios` · Reemplazo.gs |
+| 2 | Hacer el reemplazo | **SINAV · Reemplazo → Reemplazar a una persona** | `reemplazar` · Reemplazo.gs |
+| 3 | En USUARIOS: `activo = NO` a quien sale, y revisar `backup` | — | — |
+
+El paso 2 pregunta los cuatro datos: el correo que sale, el que entra, y los
+prefijos del consecutivo (`AG` → `LR`). Si dejas el prefijo vacío, solo cambia
+el responsable.
+
+**El número del consecutivo no se toca**, porque es del municipio y no de la
+persona: AGUACHICA es el 01 lo declare quien lo declare. Por eso cambiar
+`AG-10-01` por `LR-10-01` da exactamente la numeración que ya usaba Liliana.
+
+Lo que **no** se toca: las `APROBADA`, que son historia, y las que ya tienen
+el correo enviado, porque ese consecutivo ya viajó en el asunto.
 
 ### Agregar o corregir correos de oficina
 

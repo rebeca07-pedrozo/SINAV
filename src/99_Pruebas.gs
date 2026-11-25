@@ -38,6 +38,7 @@ function pruebas() {
   pruebasConcepto25(esIgual);
   pruebasCorreosOficina(esIgual);
   pruebasCodigoComoFecha(esIgual);
+  pruebasReemplazo(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -987,4 +988,34 @@ function pruebasCodigoComoFecha(esIgual) {
   esIgual('uno con fecha por DANE',
           idEsValido('Mon Apr 05 2049 00:00:00 GMT-0500|RETEICA|GENERAL|2026-11'), false);
   esIgual('vacio no es valido', idEsValido(''), false);
+}
+
+/**
+ * Cuando alguien sale, sus iniciales siguen en el consecutivo durante meses
+ * si nadie las cambia. El NUMERO no se toca: es del municipio.
+ */
+function pruebasReemplazo(esIgual) {
+  esIgual('AG pasa a LR y el resto queda igual',
+          cambiarPrefijo('AG-10-74', 'AG', 'LR'), 'LR-10-74');
+  esIgual('el numero no se toca, por largo que sea',
+          cambiarPrefijo('AG-10-148', 'AG', 'LR'), 'LR-10-148');
+  esIgual('el mes tampoco', cambiarPrefijo('AG-03-01', 'AG', 'LR'), 'LR-03-01');
+  esIgual('un prefijo con año',
+          cambiarPrefijo('HC26-10-141', 'HC26', 'LR'), 'LR-10-141');
+  esIgual('se puede poner un prefijo con año',
+          cambiarPrefijo('AG-10-74', 'AG', 'LR26'), 'LR26-10-74');
+
+  // lo que NO es suyo no se toca
+  esIgual('el de otra persona se queda',
+          cambiarPrefijo('HC26-10-141', 'AG', 'LR'), 'HC26-10-141');
+  esIgual('sin prefijos no cambia nada',
+          cambiarPrefijo('AG-10-74', '', ''), 'AG-10-74');
+  esIgual('algo que no es un consecutivo tampoco',
+          cambiarPrefijo('PENDIENTE', 'AG', 'LR'), 'PENDIENTE');
+  esIgual('vacio no revienta', cambiarPrefijo('', 'AG', 'LR'), '');
+  esIgual('nulo tampoco', cambiarPrefijo(null, 'AG', 'LR'), '');
+
+  // el prefijo se compara entero: AG no es A
+  esIgual('no cambia por un prefijo que solo empieza igual',
+          cambiarPrefijo('AG-10-74', 'A', 'LR'), 'AG-10-74');
 }

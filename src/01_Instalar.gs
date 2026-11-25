@@ -59,6 +59,9 @@ function onOpen() {
   if (typeof menuArranque === 'function') {
     try { menuArranque(); } catch (e) { /* idem */ }
   }
+  if (typeof menuReemplazo === 'function') {
+    try { menuReemplazo(); } catch (e) { /* idem */ }
+  }
 }
 
 function asegurarHojas() {
