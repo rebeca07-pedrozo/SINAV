@@ -1763,3 +1763,25 @@ function apiAlertas() {
     generado: fechaHoraTexto(new Date())
   };
 }
+
+/** ¿Existen los dos HTML y los ve el proyecto? */
+function probarPagina() {
+  var l = [];
+  ['pagina', 'correos'].forEach(function (n) {
+    try {
+      var c = HtmlService.createHtmlOutputFromFile(n).getContent();
+      l.push(n + ': OK, ' + c.length + ' caracteres.');
+      l.push('   empieza con: ' + c.slice(0, 60).replace(/\s+/g, ' '));
+    } catch (e) {
+      l.push(n + ': NO SE PUDO LEER → ' + e.message);
+    }
+  });
+  try {
+    var salida = doGet();
+    l.push('doGet() devolvió ' + salida.getContent().length + ' caracteres.');
+  } catch (e) {
+    l.push('doGet() falló → ' + e.message);
+  }
+  Logger.log(l.join('\n'));
+  return l.join('\n');
+}
