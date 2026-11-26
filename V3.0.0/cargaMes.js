@@ -386,3 +386,93 @@ function estadoCargaMensual() {
   Logger.log(txt);
   return txt;
 }
+
+/* ===========================================================================
+   DIAGNOSTICO DEL CALENDARIO
+
+   «A Helen le cargó y a los demas no» tiene tres causas posibles y ninguna se
+   ve desde la hoja: que esa columna de mes este vacia para ellos, que el
+   correo del responsable no coincida con el del archivo, o que el impuesto o
+   la periodicidad no se reconozcan. Esto las cuenta todas.
+   =========================================================================== */
+
+function diagnosticarCalendario() {
+  var hc = libro().getSheetByName(HOJA.CALENDARIO);
+  if (!hc || hc.getLastRow() < 2) return 'CALENDARIO está vacío.';
+
+  var todo = hc.getRange(1, 1, hc.getLastRow(), hc.getLastColumn()).getValues();
+  var cab = todo[0].map(function (c) { return String(c).trim(); });
+  var ix = {};
+  cab.forEach(function (c, i) { if (c && !(c in ix)) ix[c] = i; });
+
+  // las columnas que son meses
+  var meses = [];
+  cab.forEach(function (c, i) {
+    var p = mesDeColumna(todo[0][i]);
+    if (p) meses.push({ col: i, et: c, anio: p.anio, mes: p.mes });
+  });
+
+  var declarados = {};
+  profesionales().forEach(function (p) {
+    declarados[String(p.correo).toLowerCase()] = p.hoja;
+  });
+
+  var porResp = {}, sinDueno = {}, sinImpuesto = {}, sinPeriodicidad = {};
+  var total = 0;
+
+  for (var f = 1; f < todo.length; f++) {
+    var fila = todo[f];
+    var resp = String(fila[ix.responsable] || '').trim().toLowerCase();
+    if (!resp && !String(fila[ix.municipio] || '').trim()) continue;
+    total++;
+
+    if (!declarados[resp]) {
+      sinDueno[resp || '(vacío)'] = (sinDueno[resp || '(vacío)'] || 0) + 1;
+    }
+    if (!normImpuesto(fila[ix.impuesto])) {
+      sinImpuesto[String(fila[ix.impuesto])] = true;
+    }
+    if (!normPeriodicidad(fila[ix.periodicidad])) {
+      sinPeriodicidad[String(fila[ix.periodicidad])] = true;
+    }
+
+    if (!porResp[resp]) porResp[resp] = { filas: 0, meses: {} };
+    porResp[resp].filas++;
+    meses.forEach(function (m) {
+      if (normFecha(fila[m.col])) {
+        porResp[resp].meses[m.et] = (porResp[resp].meses[m.et] || 0) + 1;
+      }
+    });
+  }
+
+  var l = ['CALENDARIO: ' + total + ' filas.', '',
+           'Columnas de mes que reconozco: ' +
+           (meses.length ? meses.map(function (m) { return m.et; }).join(', ')
+                         : 'NINGUNA — revisa los encabezados'), ''];
+
+  Object.keys(porResp).sort().forEach(function (r) {
+    var p = porResp[r];
+    l.push((declarados[r] ? '→ ' + declarados[r] : '   SIN HOJA') + '   ' +
+           (r || '(sin responsable)') + '   ' + p.filas + ' filas');
+    var conFecha = meses.map(function (m) {
+      return m.et + ': ' + (p.meses[m.et] || 0);
+    });
+    l.push('      con fecha → ' + conFecha.join('  ·  '));
+  });
+
+  if (Object.keys(sinDueno).length) {
+    l.push('', 'Correos que NO corresponden a ningún profesional declarado:');
+    Object.keys(sinDueno).sort().forEach(function (k) {
+      l.push('   ' + sinDueno[k] + '  ' + k);
+    });
+    l.push('   (compáralos con los de yasneidy.js, jesus.js y helen.js)');
+  }
+  var ri = Object.keys(sinImpuesto);
+  if (ri.length) l.push('', 'Impuestos que no reconozco: ' + ri.join(', '));
+  var rp = Object.keys(sinPeriodicidad);
+  if (rp.length) l.push('', 'Periodicidades que no reconozco: ' + rp.join(', '));
+
+  var txt = l.join('\n');
+  Logger.log(txt);
+  return txt;
+}
