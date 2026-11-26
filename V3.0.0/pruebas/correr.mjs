@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ARCHIVOS = ['ENTORNO.js', 'normalizar.js', 'codigo.js',
+const ARCHIVOS = ['ENTORNO.js', 'normalizar.js', 'codigo.js', 'cargaMes.js',
                   'yasneidy.js', 'jesus.js', 'helen.js'];
 
 const CONFIG = {

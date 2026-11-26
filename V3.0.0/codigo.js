@@ -1304,7 +1304,10 @@ function datosDelCorreo(o, modo) {
     nombre_recibe: recibe,
     remitente: config('nombre_remitente') || 'Impuestos Davivienda',
     destinatarios: destinatariosDe(o),
-    hay_logo: !!blobDelLogo()
+    hay_logo: !!blobDelLogo(),
+    // hay un logo CLARO hecho para el correo: solo entonces la cabecera va
+    // sobre rojo. Con el logo oscuro de la aplicacion, la franja se lo come
+    logo_propio: !!idDePropiedad('logo_correo_id')
   };
 }
 

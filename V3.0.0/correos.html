@@ -1,0 +1,231 @@
+<!--
+  SINAV · correos.html — el correo que recibe la oficina.
+
+  No es un aviso: es una instruccion de trabajo. Dice que egreso elaborar, con
+  que consecutivo girar, a donde devolver el sellado y que pasa si no lo
+  devuelven. Por eso el texto vive aqui, donde se puede leer y corregir sin
+  entrar al codigo.
+
+  Todo va con tablas y estilos en linea, que es lo unico que Gmail y Outlook
+  respetan de verdad. Nada de clases ni de hojas de estilo: las quitan.
+
+  Los datos llegan en `d`, que arma datosDelCorreo() en codigo.js.
+-->
+<div style="background:#f1f3f4;padding:24px 12px;
+            font-family:-apple-system,'Segoe UI',Arial,Helvetica,sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:8px;
+              overflow:hidden;border:1px solid #e8e8e8">
+
+  <!-- Cabecera. Sobre rojo solo si hay un logo CLARO hecho para el correo;
+       con el logo de la aplicacion, que es oscuro, la franja se lo come. -->
+  <? if (d.hay_logo && d.logo_propio) { ?>
+  <tr><td style="background:#e30518;padding:18px 28px">
+    <table role="presentation" width="100%"><tr>
+      <td valign="middle"><img src="cid:logo" alt="Davivienda" height="26"
+          style="height:26px;display:block"></td>
+      <td valign="middle" align="right" style="color:#ffffff;font-size:12px">
+        Departamento de Impuestos</td>
+    </tr></table>
+  </td></tr>
+  <? } else { ?>
+  <tr><td style="background:#ffffff;padding:18px 28px;border-bottom:3px solid #e30518">
+    <table role="presentation" width="100%"><tr>
+      <td valign="middle">
+        <? if (d.hay_logo) { ?>
+          <img src="cid:logo" alt="Davivienda" height="26"
+               style="height:26px;display:block">
+        <? } else { ?>
+          <div style="color:#e30518;font-size:17px;font-weight:700">Davivienda</div>
+        <? } ?>
+      </td>
+      <td valign="middle" align="right" style="color:#5f6368;font-size:12px">
+        Departamento de Impuestos</td>
+    </tr></table>
+  </td></tr>
+  <? } ?>
+
+  <tr><td style="padding:26px 28px 0">
+    <table role="presentation" width="100%">
+
+      <? if (d.modo === 'PRUEBA') { ?>
+      <tr><td style="padding:0 0 16px">
+        <div style="background:#fff6e0;border:1px solid #f0d9a0;color:#8a5500;
+                    padding:10px 14px;font-size:13px;border-radius:4px">
+          <b>MODO PRUEBA.</b> Este correo iba para: <?= d.destinatarios ?>
+        </div>
+      </td></tr>
+      <? } ?>
+
+      <!-- De que se trata -->
+      <tr><td style="padding:0 0 4px;font-size:11px;letter-spacing:.06em;
+                     text-transform:uppercase;color:#5f6368">
+        <?= d.impuesto_largo ?> &middot; <?= d.periodicidad.toLowerCase() ?>
+      </td></tr>
+      <tr><td style="padding:0 0 18px;font-size:23px;line-height:1.25;
+                     font-weight:700;color:#111111">
+        <?= d.municipio ?><span style="color:#5f6368;font-weight:400">
+        &middot; <?= d.periodo ?></span>
+      </td></tr>
+
+      <!-- Lo que no se puede pasar por alto -->
+      <tr><td style="padding:0 0 20px">
+        <div style="background:#fce9e9;border-left:4px solid #e30518;
+                    padding:12px 16px;border-radius:0 4px 4px 0">
+          <div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+                      color:#5f6368">Fecha de vencimiento</div>
+          <div style="font-size:18px;font-weight:700;color:#e30518;padding-top:2px">
+            <?= d.vencimiento ?>
+          </div>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:0 0 18px;font-size:14px;line-height:1.6;color:#111111">
+        Buenos días,<br><br>
+        Reciban un cordial saludo, les informo que enviamos por correo interno
+        <? if (d.adhesivo) { ?>con el sticker No <?= d.adhesivo ?> <? } ?>
+        la <?= d.impuesto_largo ?> <?= d.periodicidad ?> del <?= d.vigencia ?>,
+        del Municipio <?= d.municipio ?>, por el valor de <?= d.valor ?>
+        con el NIT <?= d.nit ?> a la dependencia <?= d.dependencia ?>.
+      </td></tr>
+
+      <!-- La ficha -->
+      <tr><td style="padding:0 0 20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+               width="100%" style="border-collapse:collapse">
+          <tr>
+            <td width="50%" valign="top" style="padding:10px 14px;border:1px solid #e8e8e8">
+              <div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+                          color:#5f6368;padding-bottom:3px">Valor a girar</div>
+              <div style="font-size:15px;color:#111111;font-weight:700"><?= d.valor ?></div>
+            </td>
+            <td width="50%" valign="top" style="padding:10px 14px;border:1px solid #e8e8e8">
+              <div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+                          color:#5f6368;padding-bottom:3px">NIT del municipio</div>
+              <div style="font-size:15px;color:#111111;font-weight:700"><?= d.nit ?></div>
+            </td>
+          </tr>
+          <tr>
+            <td valign="top" style="padding:10px 14px;border:1px solid #e8e8e8">
+              <div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+                          color:#5f6368;padding-bottom:3px">Dependencia</div>
+              <div style="font-size:15px;color:#111111;font-weight:700"><?= d.dependencia ?></div>
+            </td>
+            <td valign="top" style="padding:10px 14px;border:1px solid #e8e8e8">
+              <div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+                          color:#5f6368;padding-bottom:3px">Sticker de correspondencia</div>
+              <div style="font-size:15px;color:#111111;font-weight:700">
+                <?= d.adhesivo || '—' ?></div>
+            </td>
+          </tr>
+          <tr>
+            <td valign="top" style="padding:10px 14px;border:1px solid #e8e8e8">
+              <div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+                          color:#5f6368;padding-bottom:3px">Consecutivo de giro</div>
+              <div style="font-size:15px;color:#111111;font-weight:700">
+                <?= d.consecutivo || '—' ?></div>
+            </td>
+            <td valign="top" style="padding:10px 14px;border:1px solid #e8e8e8">
+              <div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+                          color:#5f6368;padding-bottom:3px">Forma de pago</div>
+              <div style="font-size:15px;color:#111111;font-weight:700"><?= d.forma_pago ?></div>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:0 0 22px;font-size:14px;line-height:1.6;color:#111111">
+        Favor realizar el pago por contingencia elaborando egreso <?= d.egreso ?><?
+        if (d.consecutivo) { ?>, de acuerdo al consecutivo de giro asignado para
+        este pago No <?= d.consecutivo ?><? } ?>, realizar la presentación y el
+        pago una vez reciban el soporte. Si el Banco posee recaudo con el
+        Municipio, timbrar en efectivo con abono a cuenta del Municipio sin
+        olvidar enviar el correo a GRP Conceptos Especiales; si no poseemos
+        recaudo con ellos elaborar el cheque con el mismo egreso <?= d.egreso ?>
+        y concepto 40 para pagar en otra entidad, o en la alcaldía.
+      </td></tr>
+
+      <!-- Los aspectos, numerados -->
+      <tr><td style="padding:0 0 6px;font-size:12px;letter-spacing:.06em;
+                     text-transform:uppercase;color:#5f6368;font-weight:700">
+        Aspectos a tener en cuenta
+      </td></tr>
+      <tr><td style="padding:0 0 10px;border-top:1px solid #e8e8e8"></td></tr>
+      <tr><td style="padding:0 0 8px">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td valign="top" width="26" style="padding:0 0 12px">
+              <div style="width:19px;height:19px;border-radius:10px;background:#e30518;
+                          color:#fff;font-size:11px;font-weight:700;text-align:center;
+                          line-height:19px">1</div></td>
+            <td valign="top" style="padding:0 0 12px;font-size:13px;line-height:1.55;color:#111111">
+              Por favor una vez presentada la declaración (ante la entidad
+              recaudadora y sellada con fecha de recibido), enviar por este medio
+              imagen del pago y enviar la declaración con el sello de recibido a
+              Dpto. de impuestos<? if (d.codigo_departamento) { ?>, código
+              <?= d.codigo_departamento ?><? } ?><? if (d.nombre_recibe) { ?> a
+              nombre de <?= d.nombre_recibe ?><? } ?>. Si el departamento de
+              impuestos no es notificado mediante correo electrónico, se
+              reportará como evento SARO.</td>
+          </tr>
+          <tr>
+            <td valign="top" width="26" style="padding:0 0 12px">
+              <div style="width:19px;height:19px;border-radius:10px;background:#e30518;
+                          color:#fff;font-size:11px;font-weight:700;text-align:center;
+                          line-height:19px">2</div></td>
+            <td valign="top" style="padding:0 0 12px;font-size:13px;line-height:1.55;color:#111111">
+              Si por alguna eventualidad el día anterior a la fecha del
+              vencimiento de la declaración no ha recibido en su oficina el
+              formulario, por favor comunicarse conmigo con carácter urgente.
+              Solicitamos una vez recibido el correo tramitar el pago del mismo,
+              no es necesario esperar a la fecha de vencimiento, para evitar
+              sanciones tributarias; que de generarse, serán cargadas a la
+              oficina responsable del trámite.</td>
+          </tr>
+          <tr>
+            <td valign="top" width="26" style="padding:0 0 12px">
+              <div style="width:19px;height:19px;border-radius:10px;background:#e30518;
+                          color:#fff;font-size:11px;font-weight:700;text-align:center;
+                          line-height:19px">3</div></td>
+            <td valign="top" style="padding:0 0 12px;font-size:13px;line-height:1.55;color:#111111">
+              Es responsabilidad de la oficina y/o área administrativa llevar a
+              cabo el trámite satisfactorio.</td>
+          </tr>
+          <tr>
+            <td valign="top" width="26" style="padding:0 0 12px">
+              <div style="width:19px;height:19px;border-radius:10px;background:#e30518;
+                          color:#fff;font-size:11px;font-weight:700;text-align:center;
+                          line-height:19px">4</div></td>
+            <td valign="top" style="padding:0 0 12px;font-size:13px;line-height:1.55;color:#111111">
+              Sugerimos tomar fotocopia del recibido de la declaración y archivar
+              para la oficina. Recuerde que esta documentación es soporte si a
+              futuro se requiere.</td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <!-- La instruccion que hace que todo lo demas funcione -->
+      <tr><td style="padding:4px 0 22px">
+        <div style="background:#f7f5f5;border:1px solid #e8e8e8;padding:14px 16px;
+                    border-radius:4px;font-size:13px;line-height:1.55;color:#111111">
+          Agradecemos dar respuesta <b>sobre este mismo correo</b>, sin iniciar
+          uno nuevo, adjuntando la declaración con el sello de recibido. De esta
+          manera el soporte queda asociado automáticamente a la obligación y
+          debidamente archivado.
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:0 0 26px;font-size:14px;color:#111111">
+        Cordialmente,<br><b><?= d.remitente ?></b>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="background:#f7f5f5;border-top:1px solid #e8e8e8;padding:14px 28px;
+                 font-size:11px;color:#5f6368;line-height:1.5">
+    Comunicación generada por SINAV, sistema de control de obligaciones
+    tributarias territoriales del Departamento de Impuestos.
+  </td></tr>
+
+</table>
+</div>

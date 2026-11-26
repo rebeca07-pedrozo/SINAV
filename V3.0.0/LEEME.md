@@ -30,6 +30,38 @@ diez.
 | **EVENTOS** | La aplicación. Append-only |
 | **YASNEIDY**, **JESUS**, **HELEN** | La aplicación: una por profesional, solo el mes en curso |
 
+## Qué correr, y de qué archivo
+
+### Una sola vez, al montar
+
+| # | Función | Archivo | Qué hace |
+|---|---|---|---|
+| 1 | `normalizarHojas` | **normalizar.js** | Deja los datos escritos de una sola forma |
+| 2 | `instalar` | **codigo.js** | Crea las hojas de los tres y las columnas que falten |
+| 3 | `programarCargaMensual` | **cargaMes.js** | Deja el activador del día 1 puesto |
+
+### Cada mes
+
+| # | Función | Archivo | Qué hace |
+|---|---|---|---|
+| 1 | Pegar la hoja de correspondencia en `ADHESIVOS` | — | — |
+| 2 | `prepararElMes` | **cargaMes.js** | Trae el mes a las tres hojas. Lo hace solo el día 1 |
+
+### Cuando haga falta
+
+| Función | Archivo | Para qué |
+|---|---|---|
+| `verEntorno` | **ENTORNO.js** | En qué modo está y qué hay en CONFIG |
+| `aProduccion` / `aPruebas` | **ENTORNO.js** | El interruptor |
+| `cargarYasneidy` | **yasneidy.js** | Solo lo de ella |
+| `cargarJesus` | **jesus.js** | Solo lo de él |
+| `cargarHelen` | **helen.js** | Solo lo de ella |
+| `estadoCargaMensual` | **cargaMes.js** | ¿Quedó el activador? |
+| `limpiarMesesViejos` | **cargaMes.js** | Archiva lo cerrado de meses anteriores |
+
+**Lo que nadie corre a mano:** `onOpen` (la llama Google), `doGet` (la llama
+la aplicación web) y todo lo que empieza por `api…` (lo llama la pantalla).
+
 ## El orden en que se lee
 
 1. `ENTORNO.js` — el interruptor

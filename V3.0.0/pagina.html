@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SINAV</title>
+
+<!--
+  SINAV · pagina.html — toda la interfaz.
+
+  React desde CDN y htm para las plantillas: sin paso de compilacion, se pega
+  tal cual en Apps Script. htm NO entiende <>...</> como fragmento; se escribe
+  <${Fragment}> ... <//>, y si no, la pagina sale EN BLANCO sin decir nada.
+-->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+
+<style>
+:root {
+  --fondo:#f7f5f5; --superficie:#fff; --realce:#f9f9f9; --borde:#e8e8e8;
+  --regla:#f2f2f2; --control:#d1d5db; --tinta:#111; --apagado:#5f6368;
+  --marca:#e30518; --vencido:#b00510; --porvencer:#8a5500; --aldia:#1f7a4d;
+  --vencido-fondo:#fce9e9; --porvencer-fondo:#fff6e0; --aldia-fondo:#e6f2eb;
+  --r:6px; --gap:16px; --pad:20px;
+  --fuente:'Archivo',-apple-system,'Segoe UI',Arial,sans-serif;
+  --fs:14px; --fs-chico:13px; --fs-meta:12px;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--fondo); color:var(--tinta);
+       font:400 var(--fs)/1.45 var(--fuente); }
+h1,h2,h3 { margin:0; font-weight:700; }
+button { font:inherit; }
+
+.marco { display:grid; grid-template-columns:240px 1fr; min-height:100vh; }
+.lateral { background:var(--superficie); border-right:1px solid var(--borde);
+           padding:var(--pad); display:flex; flex-direction:column; gap:var(--gap); }
+.marca { display:flex; align-items:center; gap:10px; }
+.marca img { height:22px; }
+.marca b { font-size:15px; }
+.nav { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.nav button { width:100%; text-align:left; padding:8px 10px; border:0; border-radius:var(--r);
+              background:transparent; color:var(--tinta); cursor:pointer; }
+.nav button[aria-current="true"] { background:var(--realce); font-weight:700; }
+.nav .cuenta { float:right; color:var(--apagado); font-variant-numeric:tabular-nums; }
+.pie { margin-top:auto; font-size:var(--fs-meta); color:var(--apagado); }
+
+main { padding:var(--pad) var(--pad) 60px; max-width:1400px; }
+.cab { display:flex; align-items:baseline; gap:12px; margin-bottom:var(--gap); }
+.cab h1 { font-size:22px; }
+.cab .der { margin-left:auto; color:var(--apagado); font-size:var(--fs-chico); }
+
+.aviso { background:var(--porvencer-fondo); border:1px solid #f0d9a0;
+         color:var(--porvencer); padding:10px 14px; border-radius:var(--r);
+         margin-bottom:var(--gap); font-size:var(--fs-chico); }
+.error { background:var(--vencido-fondo); border:1px solid #f1c6c6;
+         color:var(--vencido); padding:10px 14px; border-radius:var(--r);
+         margin-bottom:var(--gap); }
+.ok { background:var(--aldia-fondo); border:1px solid #bfe0cd; color:var(--aldia);
+      padding:10px 14px; border-radius:var(--r); margin-bottom:var(--gap); }
+
+.panel { background:var(--superficie); border:1px solid var(--borde);
+         border-radius:8px; overflow:hidden; }
+.panel-cab { display:flex; align-items:center; gap:10px; padding:12px var(--pad);
+             border-bottom:1px solid var(--borde); }
+.panel-cab h2 { font-size:15px; }
+.panel-cab .der { margin-left:auto; color:var(--apagado); font-size:var(--fs-chico); }
+
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; font-size:var(--fs-meta); text-transform:uppercase;
+     letter-spacing:.04em; color:var(--apagado); font-weight:600;
+     padding:8px var(--pad); border-bottom:1px solid var(--borde); }
+td { padding:10px var(--pad); border-bottom:1px solid var(--regla);
+     vertical-align:top; }
+tr[data-elegida="si"] td { background:var(--realce); }
+.num { font-variant-numeric:tabular-nums; }
+.der { text-align:right; }
+.ident { font-weight:600; }
+.sub { display:block; margin-top:2px; font-size:var(--fs-meta); color:var(--apagado); }
+.sub.vencido { color:var(--vencido); }
+.sub.porvencer { color:var(--porvencer); }
+.sub.aldia { color:var(--aldia); }
+
+.btn { padding:6px 12px; border:1px solid var(--control); border-radius:var(--r);
+       background:var(--superficie); color:var(--tinta); cursor:pointer; }
+.btn:hover:not(:disabled) { background:var(--realce); }
+.btn:disabled { opacity:.45; cursor:not-allowed; }
+.btn-principal { background:var(--marca); border-color:var(--marca); color:#fff; }
+.btn-principal:hover:not(:disabled) { background:#c40414; }
+.btn-malo { color:var(--vencido); border-color:#e3b4b4; }
+
+.pildora { display:inline-block; padding:2px 8px; border-radius:10px;
+           font-size:var(--fs-meta); font-weight:600; }
+.p-PENDIENTE { background:var(--realce); color:var(--apagado); }
+.p-LISTA { background:var(--aldia-fondo); color:var(--aldia); }
+.p-ENVIADA { background:#e8f0fe; color:#1a56c4; }
+.p-RESPONDIDA { background:#e8f0fe; color:#1a56c4; }
+.p-APROBADA { background:var(--aldia-fondo); color:var(--aldia); }
+.p-DEVUELTA { background:var(--vencido-fondo); color:var(--vencido); }
+
+.entrada { width:120px; padding:5px 8px; border:1px solid var(--control);
+           border-radius:var(--r); font:inherit; text-align:right;
+           font-variant-numeric:tabular-nums; }
+.entrada:focus { outline:2px solid var(--marca); outline-offset:-1px; }
+.entrada.ancha { width:100%; text-align:left; }
+
+.velo { position:fixed; inset:0; background:rgba(17,17,17,.45);
+        display:flex; align-items:center; justify-content:center; padding:20px;
+        z-index:10; }
+.modal { background:var(--superficie); border-radius:8px; padding:var(--pad);
+         max-width:1100px; width:94vw; max-height:92vh; overflow:auto; }
+.modal-cab { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; }
+.modal-cab h2 { font-size:17px; }
+.modal-cab .cuenta { margin-left:auto; color:var(--apagado); font-size:var(--fs-chico); }
+.modal-pie { display:flex; align-items:center; gap:10px; margin-top:16px;
+             flex-wrap:wrap; }
+.envio { display:grid; grid-template-columns:300px 1fr; gap:16px; }
+.fichas { display:flex; flex-direction:column; gap:10px; max-height:58vh; overflow:auto; }
+.ficha { border-left:2px solid var(--borde); padding:2px 0 2px 10px; }
+.ficha b { display:block; font-variant-numeric:tabular-nums; word-break:break-word; }
+.vista { width:100%; height:58vh; border:1px solid var(--borde); border-radius:var(--r); }
+.vacio { padding:40px; text-align:center; color:var(--apagado); }
+
+@media (max-width:900px) {
+  .marco { grid-template-columns:1fr; }
+  .lateral { flex-direction:row; flex-wrap:wrap; align-items:center; }
+  .nav { flex-direction:row; flex-wrap:wrap; }
+  .pie { display:none; }
+  .envio { grid-template-columns:1fr; }
+  .vista { height:44vh; }
+  th:nth-child(4), td:nth-child(4), th:nth-child(7), td:nth-child(7) { display:none; }
+}
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+
+<script>
+const { createElement, useState, useEffect, useRef, useCallback, Fragment } = React;
+const html = htm.bind(createElement);
+
+/** google.script.run, pero con promesas. */
+function llamar(fn, ...args) {
+  return new Promise((ok, mal) => {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn](...args);
+  });
+}
+
+const pesos = (v) => v == null || v === ''
+  ? '—' : '$' + String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+const diasTexto = (d) => d === null ? ''
+  : d < 0 ? 'hace ' + (-d) + (d === -1 ? ' día' : ' días')
+  : d === 0 ? 'vence hoy' : 'en ' + d + (d === 1 ? ' día' : ' días');
+
+/* ---------- las pantallas ------------------------------------------------ */
+
+const VISTAS = [
+  { id: 'enviar', et: 'Enviar' },
+  { id: 'respuestas', et: 'Respuestas' }
+];
+
+function App({ inicio }) {
+  const [datos, setDatos] = useState(inicio);
+  const [vista, setVista] = useState('enviar');
+
+  if (datos.error) {
+    return html`<main><div class="error">${datos.error}</div></main>`;
+  }
+
+  const recargar = useCallback(async () => {
+    const d = await llamar('apiLista');
+    setDatos((v) => Object.assign({}, v, d));
+  }, []);
+
+  const porVista = {
+    enviar: datos.filas.filter((o) => o.estado !== 'APROBADA'),
+    respuestas: datos.filas.filter((o) => o.tiene_envio)
+  };
+
+  return html`<div class="marco">
+    <aside class="lateral">
+      <div class="marca">
+        ${datos.logo ? html`<img src=${datos.logo} alt="" />` : null}
+        <b>SINAV</b>
+      </div>
+      <ul class="nav">
+        ${VISTAS.map((v) => html`<li key=${v.id}>
+          <button aria-current=${vista === v.id ? 'true' : 'false'}
+            onClick=${() => setVista(v.id)}>
+            ${v.et}<span class="cuenta">${porVista[v.id].length}</span>
+          </button></li>`)}
+      </ul>
+      <div class="pie">
+        <b>${datos.yo.nombre || datos.yo.correo}</b><br/>
+        ${datos.yo.perfil}<br/>${datos.yo.correo}
+      </div>
+    </aside>
+
+    <main>
+      ${datos.modo === 'PRUEBA' ? html`<div class="aviso">
+        <b>Ambiente de pruebas.</b> Los correos llegan a tu bandeja, no a las
+        oficinas.</div>` : null}
+
+      ${vista === 'enviar'
+        ? html`<${Enviar} datos=${datos} filas=${porVista.enviar} alRecargar=${recargar} />`
+        : html`<${Respuestas} filas=${porVista.respuestas} alRecargar=${recargar} />`}
+    </main>
+  </div>`;
+}
+
+/* ---------- ENVIAR -------------------------------------------------------- */
+
+function Enviar({ datos, filas, alRecargar }) {
+  const [elegidas, setElegidas] = useState([]);
+  const [revision, setRevision] = useState(null);
+  const [trabajando, setTrabajando] = useState('');
+  const [fallo, setFallo] = useState('');
+  const [resultado, setResultado] = useState(null);
+  const archivo = useRef(null);
+  const destino = useRef({ id: '', agregar: false });
+
+  const elegibles = filas.filter((o) => o.enviable && !o.falta.length);
+  const vivas = elegidas.filter((id) => elegibles.some((o) => o.id === id));
+
+  function alternar(id) {
+    setElegidas((v) => v.indexOf(id) >= 0 ? v.filter((x) => x !== id) : v.concat([id]));
+    setResultado(null);
+  }
+
+  async function guardarValor(id, texto) {
+    setFallo('');
+    try {
+      await llamar('apiGuardarValor', id, texto);
+      await alRecargar();
+      return true;
+    } catch (e) { setFallo(String(e.message || e)); return false; }
+  }
+
+  async function guardarCorreo(id, texto) {
+    setFallo('');
+    try {
+      await llamar('apiGuardarCorreo', id, texto);
+      await alRecargar();
+      return true;
+    } catch (e) { setFallo(String(e.message || e)); return false; }
+  }
+
+  function pedirArchivo(id, agregar) {
+    destino.current = { id, agregar: !!agregar };
+    archivo.current.value = '';
+    archivo.current.click();
+  }
+
+  async function recibirArchivo(ev) {
+    const f = ev.target.files && ev.target.files[0];
+    const { id, agregar } = destino.current;
+    if (!f || !id) return;
+    setTrabajando(id);
+    setFallo('');
+    try {
+      const datosBase64 = await new Promise((ok, mal) => {
+        const lector = new FileReader();
+        lector.onload = () => ok(String(lector.result).split(',')[1]);
+        lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+        lector.readAsDataURL(f);
+      });
+      await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64, agregar);
+      await alRecargar();
+      setResultado({ clase: 'ok', titulo: 'Soporte cargado: ' + f.name, lineas: [] });
+    } catch (e) {
+      setFallo('No se pudo subir ' + f.name + '. ' + (e.message || e));
+    } finally { setTrabajando(''); }
+  }
+
+  async function abrirRevision() {
+    setTrabajando('revisando');
+    setFallo('');
+    try {
+      const r = await llamar('apiSoportesParaRevisar', vivas);
+      setRevision(r.soportes);
+    } catch (e) { setFallo(String(e.message || e)); }
+    finally { setTrabajando(''); }
+  }
+
+  async function marcar(id, correcto, soporteId) {
+    setTrabajando('marcando');
+    try {
+      const r = await llamar('apiMarcarSoporte', id, correcto, soporteId);
+      setRevision((v) => v.map((s) =>
+        s.soporte_id === soporteId ? Object.assign({}, s, { revisado: correcto }) : s));
+      if (!correcto) {
+        setElegidas((v) => v.filter((x) => x !== id));
+        setRevision(null);
+        setResultado({ clase: 'error', titulo: 'Soporte marcado como no válido',
+          lineas: ['Se retiró ese archivo. ' +
+            (r.quedan ? 'Le quedan ' + r.quedan + ' adjuntos.' : 'Volvió a PENDIENTE.')] });
+        await alRecargar();
+        return 'cerrado';
+      }
+    } catch (e) { setFallo(String(e.message || e)); }
+    finally { setTrabajando(''); }
+  }
+
+  async function autorizar() {
+    const total = (revision || []).length;
+    const listos = (revision || []).filter((s) => s.revisado).length;
+    setRevision(null);
+    if (!total || listos !== total) { await alRecargar(); return; }
+
+    setTrabajando('enviando');
+    try {
+      const r = await llamar('apiEnviar', vivas);
+      const lineas = r.rechazadas.map((x) => {
+        const o = filas.find((f) => f.id === x.id);
+        return (o ? o.municipio + ' ' + o.impuesto : x.id) + ': ' + x.motivo;
+      });
+      setResultado({
+        clase: r.enviadas.length ? 'ok' : 'error',
+        titulo: r.enviadas.length + ' comunicaciones enviadas' +
+                (r.modo === 'PRUEBA' ? ' a tu propia bandeja' : ''),
+        lineas: lineas
+      });
+      setElegidas([]);
+      await alRecargar();
+    } catch (e) { setFallo(String(e.message || e)); }
+    finally { setTrabajando(''); }
+  }
+
+  return html`<${Fragment}>
+    <div class="cab">
+      <h1>Obligaciones por enviar</h1>
+      <span class="der">${filas.length} en tu hoja ·
+        ${datos.cuota.usada} de ${datos.cuota.tope} destinatarios hoy</span>
+    </div>
+
+    ${fallo ? html`<div class="error">${fallo}</div>` : null}
+    ${resultado ? html`<div class=${resultado.clase}>
+      <b>${resultado.titulo}</b>
+      ${resultado.lineas.length ? html`<ul>${resultado.lineas.map((l, i) =>
+        html`<li key=${i}>${l}</li>`)}</ul>` : null}
+    </div>` : null}
+
+    <div class="panel">
+      <div class="panel-cab">
+        <h2>${vivas.length} seleccionadas</h2>
+        <span class="der">
+          <button class="btn btn-principal" disabled=${!vivas.length || !!trabajando}
+            onClick=${abrirRevision}>
+            ${trabajando === 'enviando' ? 'Enviando…'
+              : 'Enviar seleccionadas (' + vivas.length + ')'}
+          </button>
+        </span>
+      </div>
+
+      <table>
+        <thead><tr>
+          <th style=${{ width: '34px' }}></th>
+          <th>Municipio</th><th>Impuesto</th><th class="num">Periodo</th>
+          <th class="num der">Vence</th><th class="num der">Valor</th>
+          <th>Estado</th><th class="der">Soporte</th>
+        </tr></thead>
+        <tbody>
+          ${filas.map((o) => html`<${Fila} key=${o.id} o=${o}
+            elegida=${elegidas.indexOf(o.id) >= 0}
+            alElegir=${alternar} alSubir=${pedirArchivo}
+            alGuardarValor=${guardarValor} alGuardarCorreo=${guardarCorreo}
+            subiendo=${trabajando === o.id} />`)}
+        </tbody>
+      </table>
+      ${!filas.length ? html`<p class="vacio">No hay obligaciones en tu hoja.
+        Pídele al administrador que prepare el mes.</p>` : null}
+    </div>
+
+    <input type="file" ref=${archivo} style=${{ display: 'none' }}
+      onChange=${recibirArchivo} />
+
+    ${revision ? html`<${Revisar} soportes=${revision} alMarcar=${marcar}
+      alCerrar=${autorizar} trabajando=${!!trabajando} />` : null}
+  <//>`;
+}
+
+/** Una fila. El valor y el correo que falte se escriben aquí mismo. */
+function Fila({ o, elegida, alElegir, alSubir, alGuardarValor, alGuardarCorreo, subiendo }) {
+  const puedo = o.enviable && !o.falta.length;
+  const nivel = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
+
+  return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
+    <td><input type="checkbox" checked=${elegida} disabled=${!puedo}
+      aria-label=${'Seleccionar ' + o.municipio}
+      onChange=${() => alElegir(o.id)} /></td>
+
+    <td>
+      <span class="ident">${o.municipio}</span>
+      <span class="sub">DANE ${o.cod_dane}${o.cod_oficina ? ' · dependencia ' + o.cod_oficina : ''}</span>
+      ${o.pide_correo
+        ? html`<${CampoCorreo} o=${o} alGuardar=${alGuardarCorreo} />`
+        : null}
+    </td>
+
+    <td>${o.impuesto}<span class="sub">${o.periodicidad.toLowerCase()}</span></td>
+    <td class="num">${o.periodo}</td>
+    <td class="num der">${o.vencimiento}
+      <span class=${'sub ' + nivel}>${diasTexto(o.dias)}</span></td>
+
+    <td class="num der"><${CampoValor} o=${o} alGuardar=${alGuardarValor} /></td>
+
+    <td>
+      <span class=${'pildora p-' + o.estado}>${o.estado}</span>
+      ${o.soportes > 1 ? html`<span class="sub">${o.soportes} archivos</span>` : null}
+      ${!puedo && o.motivo ? html`<span class="sub vencido">${o.motivo}</span>` : null}
+      ${o.falta.length ? html`<span class="sub porvencer">
+        ${'falta: ' + o.falta.join(', ')}</span>` : null}
+    </td>
+
+    <td class="der">
+      <button class="btn" disabled=${subiendo}
+        onClick=${() => alSubir(o.id, o.soportes > 0)}>
+        ${subiendo ? 'Subiendo…' : (o.soportes ? 'Añadir' : 'Subir soporte')}
+      </button>
+    </td>
+  </tr>`;
+}
+
+/** El valor liquidado: se escribe en la tabla y se guarda al salir o con Enter. */
+function CampoValor({ o, alGuardar }) {
+  const [texto, setTexto] = useState(o.valor == null ? '' : String(o.valor));
+  const [tocado, setTocado] = useState(false);
+  const previo = useRef(o.valor == null ? '' : String(o.valor));
+
+  useEffect(() => {
+    if (tocado) return;
+    const v = o.valor == null ? '' : String(o.valor);
+    previo.current = v;
+    setTexto(v);
+  }, [o.valor, tocado]);
+
+  async function salir() {
+    setTocado(false);
+    if (texto.trim() === previo.current.trim()) return;
+    const ok = await alGuardar(o.id, texto);
+    if (!ok) setTexto(previo.current);
+  }
+
+  return html`<input type="text" inputMode="numeric" class="entrada"
+    placeholder="—" value=${texto}
+    aria-label=${'Valor de ' + o.municipio + ' ' + o.impuesto}
+    onInput=${(e) => { setTocado(true); setTexto(e.target.value); }}
+    onBlur=${salir}
+    onKeyDown=${(e) => { if (e.key === 'Enter') e.target.blur(); }} />`;
+}
+
+/**
+ * El correo que falta. Solo sale cuando no hay ninguno, y lo que se escriba
+ * queda guardado para siempre: no se vuelve a preguntar por ese municipio.
+ */
+function CampoCorreo({ o, alGuardar }) {
+  const [texto, setTexto] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar() {
+    if (!texto.trim()) return;
+    setGuardando(true);
+    await alGuardar(o.id, texto);
+    setGuardando(false);
+  }
+
+  return html`<div style=${{ marginTop: '6px' }}>
+    <span class="sub vencido">Sin correo registrado. Escríbelo una vez y queda guardado.</span>
+    <input type="text" class="entrada ancha" placeholder="alguien@municipio.gov.co"
+      value=${texto} disabled=${guardando}
+      aria-label=${'Correo de la oficina de ' + o.municipio}
+      onInput=${(e) => setTexto(e.target.value)}
+      onKeyDown=${(e) => { if (e.key === 'Enter') guardar(); }} />
+    <button class="btn" style=${{ marginTop: '4px' }}
+      disabled=${guardando || !texto.trim()} onClick=${guardar}>
+      ${guardando ? 'Guardando…' : 'Guardar correo'}
+    </button>
+  </div>`;
+}
+
+/**
+ * La ventana de envio: los datos a la izquierda y el documento a la derecha.
+ * Autorizar es UN boton, no tres pantallas.
+ */
+function Revisar({ soportes, alMarcar, alCerrar, trabajando }) {
+  const [i, setI] = useState(0);
+  const s = soportes[i];
+  if (!s) return null;
+
+  const listos = soportes.filter((x) => x.revisado).length;
+  const todo = listos === soportes.length;
+  const avanzar = () => setI((n) => Math.min(n + 1, soportes.length - 1));
+
+  const ficha = (et, valor, nota) => html`<div class="ficha" key=${et}>
+    <span class="sub">${et}</span><b>${valor || '—'}</b>
+    ${nota ? html`<span class="sub">${nota}</span>` : null}</div>`;
+
+  return html`<div class="velo">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t-rev">
+      <div class="modal-cab">
+        <div>
+          <h2 id="t-rev">${s.municipio} · ${s.impuesto} · ${s.periodo}</h2>
+          <span class="sub">${'Vence ' + (s.vencimiento || 'sin fecha') +
+            ' · dependencia ' + (s.cod_oficina || '—')}</span>
+        </div>
+        <span class="cuenta">${i + 1} de ${soportes.length}</span>
+      </div>
+
+      <div class="envio">
+        <aside class="fichas">
+          <span class="sub">Esto es lo que va en la comunicación</span>
+          ${ficha('Valor a girar', s.valor_texto)}
+          ${ficha('NIT del municipio', s.nit)}
+          ${ficha('Consecutivo de giro', s.consecutivo)}
+          ${ficha('Sticker de correspondencia', s.adhesivo)}
+          ${ficha('Forma de pago', s.forma_pago)}
+          ${ficha('Destinatarios', s.destinatarios,
+                  s.copias_cuantas ? 'con copia a ' + s.copias_cuantas + ' más' : '')}
+          ${ficha('Archivo', s.nombre, s.peso_kb ? s.peso_kb + ' KB' : '')}
+        </aside>
+        <div>
+          ${s.vista
+            ? html`<iframe class="vista" src=${s.vista}
+                title=${'Soporte de ' + s.municipio}></iframe>`
+            : html`<p class="vacio">Esta obligación no tiene soporte.</p>`}
+        </div>
+      </div>
+
+      <div class="modal-pie">
+        <button class=${'btn ' + (s.revisado ? '' : 'btn-principal')}
+          disabled=${trabajando}
+          onClick=${async () => { await alMarcar(s.id, true, s.soporte_id); avanzar(); }}>
+          ${s.revisado ? 'Verificado ✓' : 'El documento es correcto'}
+        </button>
+        <button class="btn btn-malo" disabled=${trabajando}
+          onClick=${async () => {
+            const r = await alMarcar(s.id, false, s.soporte_id);
+            if (r !== 'cerrado') avanzar();
+          }}>No corresponde</button>
+        <span class="sub">${listos} de ${soportes.length} verificados</span>
+        <button class=${'btn ' + (todo ? 'btn-principal' : '')}
+          style=${{ marginLeft: 'auto' }} disabled=${trabajando} onClick=${alCerrar}>
+          ${todo ? 'Autorizar el envío de ' + soportes.length : 'Cancelar'}
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- RESPUESTAS ---------------------------------------------------- */
+
+function Respuestas({ filas, alRecargar }) {
+  const [trabajando, setTrabajando] = useState(false);
+  const [resumen, setResumen] = useState(null);
+  const [fallo, setFallo] = useState('');
+
+  async function revisar() {
+    setTrabajando(true);
+    setFallo('');
+    try {
+      const r = await llamar('apiRevisarRespuestas');
+      setResumen(r);
+      await alRecargar();
+    } catch (e) { setFallo(String(e.message || e)); }
+    finally { setTrabajando(false); }
+  }
+
+  async function abrir(id) {
+    try { window.open(await llamar('apiEnlaceSellado', id), '_blank'); }
+    catch (e) { setFallo(String(e.message || e)); }
+  }
+
+  return html`<${Fragment}>
+    <div class="cab">
+      <h1>Respuestas</h1>
+      <span class="der">
+        <button class="btn btn-principal" disabled=${trabajando} onClick=${revisar}>
+          ${trabajando ? 'Revisando…' : 'Revisar respuestas ahora'}
+        </button>
+      </span>
+    </div>
+
+    ${fallo ? html`<div class="error">${fallo}</div>` : null}
+    ${resumen ? html`<div class="ok">
+      ${resumen.con_respuesta} con respuesta nueva ·
+      ${resumen.con_sellado} documentos guardados
+      ${resumen.pendientes ? ' · ' + resumen.pendientes + ' quedaron para la próxima' : ''}
+    </div>` : null}
+
+    <div class="panel">
+      <div class="panel-cab"><h2>Enviadas</h2>
+        <span class="der">${filas.length}</span></div>
+      <table>
+        <thead><tr>
+          <th>Municipio</th><th>Impuesto</th><th class="num">Periodo</th>
+          <th>Respondieron</th><th>Estado</th><th class="der">Documento</th>
+        </tr></thead>
+        <tbody>
+          ${filas.map((o) => html`<tr key=${o.id}>
+            <td><span class="ident">${o.municipio}</span>
+              <span class="sub">DANE ${o.cod_dane}</span></td>
+            <td>${o.impuesto}</td>
+            <td class="num">${o.periodo}</td>
+            <td>${o.fecha_respuesta
+              ? html`${o.fecha_respuesta.slice(0, 10)}`
+              : html`<span class="sub">sin respuesta</span>`}</td>
+            <td><span class=${'pildora p-' + o.estado}>${o.estado}</span></td>
+            <td class="der">${o.tiene_sellado
+              ? html`<button class="btn" onClick=${() => abrir(o.id)}>Ver sellado</button>`
+              : html`<span class="sub">—</span>`}</td>
+          </tr>`)}
+        </tbody>
+      </table>
+      ${!filas.length ? html`<p class="vacio">Todavía no has enviado nada.</p>` : null}
+    </div>
+  <//>`;
+}
+
+/* ---------- arranque ------------------------------------------------------ */
+
+llamar('apiInicio').then((inicio) => {
+  ReactDOM.createRoot(document.getElementById('raiz'))
+    .render(html`<${App} inicio=${inicio} />`);
+}).catch((e) => {
+  document.getElementById('raiz').innerHTML =
+    '<main><div class="error">No se pudo abrir SINAV: ' +
+    String(e && e.message ? e.message : e) + '</div></main>';
+});
+</script>
+</body>
+</html>
