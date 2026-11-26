@@ -1,3 +1,4 @@
+<!-- SINAV-VERSION: pagina v3.0.2 · 2026-11-26 -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -139,6 +140,9 @@ tr[data-elegida="si"] td { background:var(--realce); }
 const { createElement, useState, useEffect, useRef, useCallback, Fragment } = React;
 const html = htm.bind(createElement);
 
+/** La version de ESTE archivo. Se ve abajo a la izquierda y en probarPagina(). */
+const VERSION = 'v3.0.2 · 2026-11-26';
+
 /** google.script.run, pero con promesas. */
 function llamar(fn, ...args) {
   return new Promise((ok, mal) => {
@@ -207,6 +211,7 @@ function App({ inicio }) {
       <div class="pie">
         <b>${datos.yo.nombre || datos.yo.correo}</b><br/>
         ${datos.yo.perfil}<br/>${datos.yo.correo}
+        <br/><br/>SINAV ${VERSION}
       </div>
     </aside>
 

@@ -1764,24 +1764,44 @@ function apiAlertas() {
   };
 }
 
-/** ¿Existen los dos HTML y los ve el proyecto? */
+/**
+ * Que archivos HTML ve el proyecto, y de QUE VERSION son.
+ *
+ * Comparar tamaños no sirve de nada: el editor guarda el texto a su manera y
+ * los numeros nunca cuadran. Por eso cada HTML lleva una marca en su primera
+ * linea, y esto la saca. Si la marca no aparece, el archivo pegado no es el
+ * del repositorio.
+ */
 function probarPagina() {
   var l = [];
   ['pagina', 'correos'].forEach(function (n) {
     try {
       var c = HtmlService.createHtmlOutputFromFile(n).getContent();
-      l.push(n + ': OK, ' + c.length + ' caracteres.');
-      l.push('   empieza con: ' + c.slice(0, 60).replace(/\s+/g, ' '));
+      var m = c.match(/SINAV-VERSION:\s*(\S+)\s+(\S+)/);
+      l.push(n + ': ' + (m ? 'VERSION ' + m[2] : 'SIN MARCA DE VERSION') +
+             '   (' + c.length + ' caracteres)');
+      if (!m) {
+        l.push('   → el archivo pegado NO es el del repositorio, o se pegó a medias');
+      }
     } catch (e) {
       l.push(n + ': NO SE PUDO LEER → ' + e.message);
     }
   });
+
   try {
-    var salida = doGet();
-    l.push('doGet() devolvió ' + salida.getContent().length + ' caracteres.');
+    l.push('doGet() devolvió ' + doGet().getContent().length + ' caracteres.');
   } catch (e) {
     l.push('doGet() falló → ' + e.message);
   }
+
+  l.push('', 'Proyecto: ' + (ScriptApp.getScriptId ? ScriptApp.getScriptId() : '?'));
+  try {
+    l.push('Libro:    ' + libro().getName() + '  ' + libro().getId());
+  } catch (e) {
+    l.push('Libro:    NO HAY LIBRO ENLAZADO → este proyecto no está unido a ' +
+           'ningún Sheets. Ábrelo desde el Sheets: Extensiones → Apps Script.');
+  }
+
   Logger.log(l.join('\n'));
   return l.join('\n');
 }
