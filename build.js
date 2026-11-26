@@ -13,6 +13,8 @@
  */
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const child = require('child_process');
 
 const raiz = __dirname;
 const src = path.join(raiz, 'src');
@@ -109,6 +111,36 @@ fs.copyFileSync(path.join(raiz, 'appsscript.json'), path.join(dist, 'appsscript.
 
 /* ---- comprobaciones ------------------------------------------------------ */
 const codigo = fs.readFileSync(path.join(dist, 'Codigo.gs'), 'utf8');
+
+// 0. que el javascript de la interfaz al menos PARSEE.
+// No se puede ejecutar aqui (necesita navegador y React desde CDN), pero un
+// parentesis sin cerrar en una plantilla htm deja la pantalla en blanco sin
+// decir nada, y eso se descubre en Apps Script con el usuario delante.
+{
+  const indice = fs.readFileSync(path.join(dist, 'Index.html'), 'utf8');
+  const bloques = [...indice.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
+    .map((m) => m[1]);
+  const tmp = path.join(os.tmpdir(), 'sinav-ui-' + process.pid + '.mjs');
+  fs.writeFileSync(tmp, bloques.join('\n;\n'), 'utf8');
+  const r = child.spawnSync(process.execPath, ['--check', tmp], { encoding: 'utf8' });
+  fs.unlinkSync(tmp);
+  // htm NO entiende <>...</> como fragmento: crea una etiqueta con el nombre
+  // vacio y React tumba la pagina entera, en blanco y sin decir nada. El
+  // fragmento se escribe <${React.Fragment}> ... <//>. Ya paso una vez.
+  const fragmentoMalo = bloques.join('\n').match(/html`\s*<>/);
+  if (fragmentoMalo) {
+    console.error('Hay un html`<> en src/ui: htm no lo entiende como fragmento,');
+    console.error('crea una etiqueta con el nombre vacio y la pagina sale EN BLANCO.');
+    console.error('Escribelo asi:  html`<${React.Fragment}> ... <//>`');
+    process.exit(1);
+  }
+
+  if (r.status !== 0) {
+    console.error('El javascript de src/ui no parsea:');
+    console.error((r.stderr || '').split('\n').slice(0, 12).join('\n'));
+    process.exit(1);
+  }
+}
 
 // 1. que compile
 try {

@@ -31,6 +31,14 @@ function pruebas() {
   pruebasCarga(esIgual);
   pruebasAusencias(esIgual);
   pruebasCargaMensual(esIgual);
+  pruebasProduccion(esIgual);
+  pruebasVariosSoportes(esIgual);
+  pruebasVariosSellados(esIgual);
+  pruebasCorreoOficina(esIgual);
+  pruebasConcepto25(esIgual);
+  pruebasCorreosOficina(esIgual);
+  pruebasCodigoComoFecha(esIgual);
+  pruebasReemplazo(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -590,15 +598,28 @@ function pruebasAusencias(esIgual) {
 
   // REQ-010: en PRUEBA la respuesta llega de uno mismo, y tiene que contar
   var falso = { getFrom: function () { return 'yo@davivienda.com'; } };
-  esIgual('en PRUEBA el primer mensaje es el que mandamos',
-          cuentaComoRespuesta(falso, 0, 'yo@davivienda.com', 'PRUEBA'), false);
-  esIgual('en PRUEBA lo que viene después sí cuenta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRUEBA'), true);
-  esIgual('en producción lo mío nunca cuenta como respuesta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRODUCCION'), false);
-  esIgual('en producción lo de la oficina sí',
-          cuentaComoRespuesta({ getFrom: function () { return 'oficina@muni.gov.co'; } },
-                              1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  // el unico que se descarta siempre es el primero: el que mando SINAV
+  var adjunto = function (kb) {
+    return { getFrom: function () { return 'yo@davivienda.com'; },
+             getAttachments: function () {
+               return kb ? [{ getSize: function () { return kb * 1024; } }] : [];
+             } };
+  };
+  var oficina = { getFrom: function () { return 'hacienda@cali.gov.co'; },
+                  getAttachments: function () { return []; } };
+
+  esIgual('el primero del hilo nunca cuenta',
+          cuentaComoRespuesta(adjunto(0), 0, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('la oficina cuenta, traiga o no adjunto',
+          cuentaComoRespuesta(oficina, 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('lo mio sin adjunto no cuenta: es un recordatorio',
+          cuentaComoRespuesta(adjunto(0), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('lo mio CON adjunto si cuenta: es el sellado reenviado',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('una firma incrustada no es un adjunto',
+          cuentaComoRespuesta(adjunto(0.2), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('y en PRUEBA vale lo mismo, sin reglas aparte',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRUEBA'), true);
 }
 
 /**
@@ -637,4 +658,364 @@ function pruebasCargaMensual(esIgual) {
 
   esIgual('hay doce nombres de mes', NOMBRE_MES.length, 12);
   esIgual('noviembre es el 11', NOMBRE_MES[10], 'noviembre');
+}
+
+/**
+ * El paso a produccion se niega si hay algo de prueba a punto de salir. Estas
+ * dos funciones son las que lo deciden, asi que se prueban.
+ */
+function pruebasProduccion(esIgual) {
+  // correos inventados por instalar() y por el generador de ejemplo
+  esIgual('oficina.chapinero es inventado',
+          correoInventado('oficina.chapinero@davivienda.com'), true);
+  esIgual('tambien el segundo de una lista',
+          correoInventado('alcaldia@cali.gov.co,oficina.granada@davivienda.com'), true);
+  esIgual('un correo de alcaldia de verdad no',
+          correoInventado('hacienda@barranquilla.gov.co'), false);
+  esIgual('una cuenta del banco que no es oficina.* tampoco',
+          correoInventado('elizabeth@davivienda.com'), false);
+  esIgual('vacio no es inventado', correoInventado(''), false);
+  esIgual('nulo no revienta', correoInventado(null), false);
+
+  // soportes
+  esIgual('el txt de prueba no es real',
+          soporteNoReal('Chapinero RETEICA 2026-09 (prueba).txt'), true);
+  esIgual('cualquier txt tampoco',
+          soporteNoReal('declaracion.txt'), true);
+  esIgual('un PDF si es real',
+          soporteNoReal('05001_ICA_2026-10.pdf'), false);
+  esIgual('un PDF en mayusculas tambien',
+          soporteNoReal('05001_ICA_2026-10.PDF'), false);
+  esIgual('un PDF que se llama prueba, no',
+          soporteNoReal('prueba.pdf'), true);
+  esIgual('sin nombre no es real', soporteNoReal(''), true);
+}
+
+/**
+ * Una obligacion puede llevar varios archivos: la declaracion y sus anexos,
+ * todos en la misma celda separados por coma. El visto bueno es POR ARCHIVO,
+ * asi que anadir un anexo despues vuelve a frenar el envio.
+ */
+function pruebasVariosSoportes(esIgual) {
+  esIgual('un solo archivo', listaSoportes('abc'), ['abc']);
+  esIgual('dos separados por coma', listaSoportes('abc,def'), ['abc', 'def']);
+  esIgual('con espacios de sobra', listaSoportes(' abc , def '), ['abc', 'def']);
+  esIgual('con punto y coma tambien', listaSoportes('abc;def'), ['abc', 'def']);
+  esIgual('no repite el mismo archivo', listaSoportes('abc,abc'), ['abc']);
+  esIgual('vacio es ninguno', listaSoportes(''), []);
+  esIgual('nulo no revienta', listaSoportes(null), []);
+  esIgual('tambien acepta la fila entera',
+          listaSoportes({ soporte_id: 'abc,def' }), ['abc', 'def']);
+
+  // el visto bueno tiene que cubrirlos TODOS
+  esIgual('los dos revisados, pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a,b' }), true);
+  esIgual('en otro orden, igual pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'b,a' }), true);
+  esIgual('falta revisar el anexo, no pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a' }), false);
+  esIgual('se anadio un anexo despues del visto bueno, no pasa',
+          soporteRevisado({ soporte_id: 'a,b,c', soporte_revisado: 'a,b' }), false);
+  esIgual('un visto bueno de un archivo que ya no esta no cuenta',
+          soporteRevisado({ soporte_id: 'b', soporte_revisado: 'a' }), false);
+  esIgual('sin archivos no hay nada revisado',
+          soporteRevisado({ soporte_id: '', soporte_revisado: 'a' }), false);
+
+  // y el envio sigue abierto a la seleccion con varios archivos
+  esIgual('con dos archivos la fila se puede seleccionar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'a,b',
+                        requiere_envio: 'SI',
+                        correo_oficina: 'x@muni.gov.co' }).ok, true);
+}
+
+/**
+ * La oficina puede mandar primero una queja sin nada, despues el sellado, y
+ * mas tarde el recibo en otro correo del mismo hilo. Cada adjunto es
+ * evidencia y se SUMA: ninguno pisa al anterior.
+ */
+function pruebasVariosSellados(esIgual) {
+  esIgual('un sellado', listaIds('abc'), ['abc']);
+  esIgual('dos sellados', listaIds('abc,def'), ['abc', 'def']);
+  esIgual('sin sellado todavia', listaIds(''), []);
+  esIgual('nulo no revienta', listaIds(null), []);
+  esIgual('no cuenta dos veces el mismo archivo',
+          listaIds('abc,abc,def').length, 2);
+
+  // RESPONDIDA sigue en la lista de estados que miran el hilo: por eso una
+  // respuesta sin adjunto no cierra la puerta al sellado que venga despues
+  esIgual('ENVIADA mira el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.ENVIADA) >= 0, true);
+  esIgual('RESPONDIDA SIGUE mirando el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.RESPONDIDA) >= 0, true);
+  esIgual('SIN_EVIDENCIA tambien, por si contestan tarde',
+          estadosEsperanRespuesta().indexOf(ESTADO.SIN_EVIDENCIA) >= 0, true);
+  esIgual('APROBADA ya no',
+          estadosEsperanRespuesta().indexOf(ESTADO.APROBADA) >= 0, false);
+}
+
+/**
+ * El correo a la oficina. Lo que se prueba aqui no es la redaccion sino los
+ * datos que la oficina necesita para girar la plata: a quien va, cuanto es y
+ * con que consecutivo.
+ */
+function pruebasCorreoOficina(esIgual) {
+  var base = {
+    id: '25488|AUTORRETEICA|GENERAL|2026-11',
+    municipio: 'Nilo', cod_dane: '25488', cod_oficina: '1689',
+    impuesto: 'AUTORRETEICA', periodicidad: 'MENSUAL', periodo: '2026-11',
+    valor: 1773000, nit_municipio: '8999997078', consecutivo_giro: 'LR-09-74',
+    paga_quien: 'OFICINA', tipo_presentacion: 'OFICINA',
+    adhesivo: '55622944', correo_oficina: '', vigencia: '2026'
+  };
+  var con = function (extra) {
+    var o = {};
+    Object.keys(base).forEach(function (k) { o[k] = base[k]; });
+    Object.keys(extra || {}).forEach(function (k) { o[k] = extra[k]; });
+    return o;
+  };
+
+  // la dependencia pierde el cero de relleno: director851@, no director0851@
+  esIgual('dependencia sin cero', dependenciaDe({ cod_oficina: '0851' }), '851');
+  esIgual('dependencia de cuatro cifras', dependenciaDe({ cod_oficina: '1689' }), '1689');
+  esIgual('sin oficina, nada', dependenciaDe({ cod_oficina: '' }), '');
+
+  // los pesos del asunto: sin decimales y con punto de mil
+  esIgual('el valor se escribe como lo escriben ellos',
+          pesosCortos(1773000), '$1.773.000');
+  esIgual('un valor chico', pesosCortos(5000), '$5.000');
+  esIgual('sin valor no revienta', pesosCortos(''), '$0');
+
+  esIgual('la fecha en letras', fechaLarga(new Date(2026, 10, 24)),
+          '24 de noviembre de 2026');
+  esIgual('sin fecha lo dice', fechaLarga(''), 'sin fecha');
+
+  // el asunto, con el formato del equipo
+  var asunto = asuntoOficina(con({}));
+  esIgual('el asunto empieza por la dependencia', asunto.indexOf('1689 -') === 0, true);
+  esIgual('nombra el impuesto largo',
+          asunto.indexOf('Declaración Autorretención de ICA NILO') > 0, true);
+  esIgual('lleva la periodicidad', asunto.indexOf('MENSUAL') > 0, true);
+  esIgual('lleva el valor', asunto.indexOf('$1.773.000') > 0, true);
+  esIgual('lleva el consecutivo de giro', asunto.indexOf('LR-09-74') > 0, true);
+  esIgual('y la marca, que es como se encuentra el hilo',
+          asunto.indexOf('[SINAV-') > 0, true);
+
+  // lo que falta para que el correo tenga sentido
+  esIgual('completa no falta nada', faltaParaElCorreo(con({})).length, 0);
+  esIgual('sin valor falta el valor',
+          faltaParaElCorreo(con({ valor: '' })).length, 1);
+  esIgual('un valor en cero tampoco sirve',
+          faltaParaElCorreo(con({ valor: 0 })).length, 1);
+  // el sobre viaja con ese numero: sin el, la oficina no sabe que recibe
+  esIgual('sin adhesivo no sale el correo',
+          faltaParaElCorreo(con({ adhesivo: '' }))[0], 'Sticker de correspondencia');
+  // el consecutivo de giro NO se pide: lo asigna el envio
+  esIgual('sin giro no se bloquea: se asigna al enviar',
+          faltaParaElCorreo(con({ consecutivo_giro: '' })).length, 0);
+
+  // LR-09-74: iniciales de quien envia, mes del PERIODO, consecutivo del mes
+  esIgual('iniciales de nombre y apellido', inicialesDe('Liliana Ramirez'), 'LR');
+  esIgual('con tilde tambien', inicialesDe('Andrea Galvis Díaz'), 'AG');
+  esIgual('en minusculas', inicialesDe('jesus jaimes'), 'JJ');
+  esIgual('un solo nombre', inicialesDe('Elizabeth'), 'EL');
+  esIgual('vacio no revienta', inicialesDe(''), '');
+  esIgual('nulo no revienta', inicialesDe(null), '');
+
+  // aqui se trabaja MES VENCIDO: el mes es el del periodo, no el del envio,
+  // y en los periodos largos es el ultimo mes, que es el que se declara
+  esIgual('mensual', mesDelPeriodo('2026-09'), 9);
+  esIgual('mensual de un digito', mesDelPeriodo('2026-9'), 9);
+  esIgual('bimestre 5 son sept-oct: se declara octubre',
+          mesDelPeriodo('2026-B5'), 10);
+  esIgual('bimestre 1', mesDelPeriodo('2026-B1'), 2);
+  esIgual('trimestre 3', mesDelPeriodo('2026-T3'), 9);
+  esIgual('cuatrimestre 2', mesDelPeriodo('2026-C2'), 8);
+  esIgual('anual cierra en diciembre', mesDelPeriodo('2026'), 12);
+  esIgual('basura no inventa un mes', mesDelPeriodo('xyz'), 0);
+  esIgual('vacio tampoco', mesDelPeriodo(''), 0);
+
+  esIgual('el formato del ejemplo', formatoGiro('LR', 9, 74), 'LR-09-74');
+  esIgual('mes de dos cifras', formatoGiro('AG', 11, 3), 'AG-11-03');
+  esIgual('consecutivo largo', formatoGiro('HC', 12, 140), 'HC-12-140');
+
+  // la cuenta es por persona y por mes del periodo
+  esIgual('la clave separa personas',
+          claveGiro('LR', 2026, 9) === claveGiro('AG', 2026, 9), false);
+  esIgual('y separa meses',
+          claveGiro('LR', 2026, 9) === claveGiro('LR', 2026, 10), false);
+
+  // la dependencia vale como destinatario: es lo que desbloquea los
+  // municipios que nunca tuvieron correo escrito
+  esIgual('con dependencia se puede enviar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '1689' }).ok, true);
+  esIgual('sin correo NI dependencia, no',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).ok, false);
+  esIgual('y lo dice',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).motivo,
+          'sin correo ni dependencia');
+
+  // los adhesivos del archivo de correspondencia
+  esIgual('ADHESIVO Sept es septiembre', mesDeEncabezado('ADHESIVO Sept'), 9);
+  esIgual('con espacio al final tambien', mesDeEncabezado('ADHESIVO Agosto '), 8);
+  esIgual('Label Febrero tambien cuenta', mesDeEncabezado('Label Febrero '), 2);
+  esIgual('una columna que no es de adhesivos, no',
+          mesDeEncabezado('DESCRIPCION CARTERO'), 0);
+  esIgual('un numero de adhesivo', adhesivoValido('55285303.0'), '55285303');
+  esIgual('REGISTRADO EN CARTERO no es un adhesivo',
+          adhesivoValido('REGISTRADO EN CARTERO'), '');
+  esIgual('#N/A tampoco', adhesivoValido('#N/A'), '');
+  esIgual('vacio tampoco', adhesivoValido(''), '');
+}
+
+/**
+ * Los consecutivos no se inventan: cada municipio tiene el suyo y lo unico
+ * que cambia de un periodo a otro es el mes. Revisoria busca esos numeros.
+ */
+function pruebasConcepto25(esIgual) {
+  esIgual('solo cambia el mes', giroDesdePlantilla('LR-09-74', 10), 'LR-10-74');
+  esIgual('el mes se rellena a dos cifras',
+          giroDesdePlantilla('LR-09-74', 3), 'LR-03-74');
+  esIgual('un prefijo con año tambien funciona',
+          giroDesdePlantilla('HC26-10-141', 11), 'HC26-11-141');
+  esIgual('el numero del municipio no se toca',
+          giroDesdePlantilla('AG-10-116', 12), 'AG-12-116');
+  esIgual('sin mes se devuelve igual',
+          giroDesdePlantilla('LR-09-74', 0), 'LR-09-74');
+  esIgual('algo que no es una plantilla no revienta',
+          giroDesdePlantilla('XYZ', 10), 'XYZ');
+  esIgual('vacio tampoco', giroDesdePlantilla('', 10), '');
+
+  // las claves se escriben sin tildes y sin dobles espacios
+  esIgual('clave normal', claveConcepto('NILO', 'ICA'), 'NILO|ICA');
+  esIgual('con tilde', claveConcepto('Medellín', 'ICA'), 'MEDELLIN|ICA');
+  esIgual('con enie', claveConcepto('Muña', 'ICA'), 'MUNA|ICA');
+  esIgual('con espacios de sobra', claveConcepto('  SAN  GIL ', 'ICA'), 'SAN GIL|ICA');
+  esIgual('sin impuesto, solo el municipio', claveConcepto('NILO', ''), 'NILO');
+
+  // las tablas de verdad, que son las que se van a usar
+  esIgual('NILO tiene consecutivo de ICA',
+          !!CONSECUTIVOS['NILO|ICA'], true);
+  esIgual('y su numero es el 74',
+          CONSECUTIVOS['NILO|ICA'].split('-').pop(), '74');
+  esIgual('ABEJORRAL tiene el de RETEICA',
+          CONSECUTIVOS['ABEJORRAL|RETEICA'].split('-').pop(), '141');
+  esIgual('hay mas de 300 consecutivos',
+          Object.keys(CONSECUTIVOS).length > 300, true);
+
+  esIgual('TOCANCIPA paga por PSE', formaPagoDe('TOCANCIPA'), 'PSE');
+  esIgual('FILANDIA por transferencia', formaPagoDe('FILANDIA'), 'TRANSFERENCIA');
+  esIgual('PALESTINA en oficina', formaPagoDe('PALESTINA'), 'OFICINA');
+  esIgual('un municipio que no esta, vacio', formaPagoDe('NARNIA'), '');
+
+  // el consecutivo de una obligacion lleva el mes de SU periodo
+  esIgual('bimestre 5 se declara en octubre',
+          consecutivoDe('NILO', 'ICA', '2026-B5').split('-')[1], '10');
+  esIgual('mensual de noviembre',
+          consecutivoDe('NILO', 'ICA', '2026-11').split('-')[1], '11');
+  esIgual('un municipio sin tabla no inventa nada',
+          consecutivoDe('NARNIA', 'ICA', '2026-11'), '');
+}
+
+/** El directorio de oficinas: 317 municipios con sus correos. */
+function pruebasCorreosOficina(esIgual) {
+  // el DANE se escribe con cinco cifras: 5002 es 05002, no 5002
+  esIgual('cinco cifras con cero delante', dane5('5002'), '05002');
+  esIgual('el que ya viene bien no cambia', dane5('19698'), '19698');
+  esIgual('acepta numero', dane5(5002), '05002');
+  esIgual('el .0 que deja Sheets se cae', dane5('05002.0'), '05002');
+  esIgual('vacio no revienta', dane5(''), '');
+  esIgual('nulo tampoco', dane5(null), '');
+
+  esIgual('Santander de Quilichao tiene correos',
+          !!correosDeOficina('19698'), true);
+  esIgual('y el director va primero',
+          correosDeOficina('19698').split(',')[0], 'director0118@davivienda.com');
+  esIgual('el subdirector va segundo',
+          correosDeOficina('19698').split(',')[1], 'subdirector0118@davivienda.com');
+  esIgual('un municipio que no esta, vacio', correosDeOficina('99999'), '');
+
+  esIgual('hay mas de 300 municipios con correo',
+          Object.keys(CORREOS_OFICINA).length > 300, true);
+  esIgual('todos los correos son del banco o de una alcaldia',
+          Object.keys(CORREOS_OFICINA).every(function (k) {
+            return CORREOS_OFICINA[k].indexOf('@') > 0;
+          }), true);
+  esIgual('ningun municipio quedo con la lista vacia',
+          Object.keys(CORREOS_OFICINA).every(function (k) {
+            return CORREOS_OFICINA[k].length > 5;
+          }), true);
+
+  esIgual('Quilichao paga en oficina', pagoDeOficina('19698'), 'OFICINA');
+}
+
+/**
+ * El DANE leido como fecha.
+ *
+ * Si la columna del codigo en CALENDARIO quedo con formato de fecha, la hoja
+ * guarda 5659 pero devuelve «29 de junio de 1915», y entonces el municipio de
+ * una obligacion es una fecha y su id tambien. Se deshace la conversion: el
+ * numero de serie de la hoja ES el codigo.
+ */
+function pruebasCodigoComoFecha(esIgual) {
+  esIgual('el origen de la hoja es el 30/12/1899',
+          diasDesdeElOrigen(new Date(1899, 11, 30)), 0);
+  esIgual('el 31/12/1899 es el dia 1',
+          diasDesdeElOrigen(new Date(1899, 11, 31)), 1);
+
+  esIgual('29/06/1915 era el DANE 05659',
+          normCodigo(new Date(1915, 5, 29), 5), '05659');
+  esIgual('01/11/1942 era el 15646',
+          normCodigo(new Date(1942, 10, 1), 5), '15646');
+  esIgual('05/04/2049 era el 54518',
+          normCodigo(new Date(2049, 3, 5), 5), '54518');
+  esIgual('y dane5 tambien lo deshace',
+          dane5(new Date(1915, 5, 29)), '05659');
+
+  esIgual('una fecha invalida no inventa un codigo',
+          normCodigo(new Date('x'), 5), '');
+  esIgual('una fecha anterior al origen tampoco',
+          normCodigo(new Date(1800, 0, 1), 5), '');
+
+  // lo de siempre sigue igual
+  esIgual('un codigo normal no se toca', normCodigo('05001', 5), '05001');
+  esIgual('y se rellena con ceros', normCodigo('851', 4), '0851');
+
+  // los ids mal formados se reconocen
+  esIgual('un id bueno', idEsValido('05001|ICA|GENERAL|2026-11'), true);
+  esIgual('uno con fecha por DANE',
+          idEsValido('Mon Apr 05 2049 00:00:00 GMT-0500|RETEICA|GENERAL|2026-11'), false);
+  esIgual('vacio no es valido', idEsValido(''), false);
+}
+
+/**
+ * Cuando alguien sale, sus iniciales siguen en el consecutivo durante meses
+ * si nadie las cambia. El NUMERO no se toca: es del municipio.
+ */
+function pruebasReemplazo(esIgual) {
+  esIgual('AG pasa a LR y el resto queda igual',
+          cambiarPrefijo('AG-10-74', 'AG', 'LR'), 'LR-10-74');
+  esIgual('el numero no se toca, por largo que sea',
+          cambiarPrefijo('AG-10-148', 'AG', 'LR'), 'LR-10-148');
+  esIgual('el mes tampoco', cambiarPrefijo('AG-03-01', 'AG', 'LR'), 'LR-03-01');
+  esIgual('un prefijo con año',
+          cambiarPrefijo('HC26-10-141', 'HC26', 'LR'), 'LR-10-141');
+  esIgual('se puede poner un prefijo con año',
+          cambiarPrefijo('AG-10-74', 'AG', 'LR26'), 'LR26-10-74');
+
+  // lo que NO es suyo no se toca
+  esIgual('el de otra persona se queda',
+          cambiarPrefijo('HC26-10-141', 'AG', 'LR'), 'HC26-10-141');
+  esIgual('sin prefijos no cambia nada',
+          cambiarPrefijo('AG-10-74', '', ''), 'AG-10-74');
+  esIgual('algo que no es un consecutivo tampoco',
+          cambiarPrefijo('PENDIENTE', 'AG', 'LR'), 'PENDIENTE');
+  esIgual('vacio no revienta', cambiarPrefijo('', 'AG', 'LR'), '');
+  esIgual('nulo tampoco', cambiarPrefijo(null, 'AG', 'LR'), '');
+
+  // el prefijo se compara entero: AG no es A
+  esIgual('no cambia por un prefijo que solo empieza igual',
+          cambiarPrefijo('AG-10-74', 'A', 'LR'), 'AG-10-74');
 }

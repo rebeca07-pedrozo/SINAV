@@ -44,9 +44,60 @@ function camposEditables() {
                        norm: 'normSiNoCampo', solo: 'AUTORRETEICA' },
   valor:             { et: 'Valor liquidado', tipo: 'valor', norm: 'normValor' },
   presentacion_fecha:{ et: 'Fecha de presentación', tipo: 'fecha', norm: 'normFecha' },
+  // El envio FISICO por correspondencia, con su adhesivo. No es la fecha en
+  // que sale el correo: esa la pone SINAV sola.
+  fecha_despacho:    { et: 'Fecha de despacho', tipo: 'fecha', vacio: true,
+                       norm: 'normFecha' },
+  adhesivo:          { et: 'Sticker de correspondencia', tipo: 'texto',
+                       norm: 'normTexto' },
+  consecutivo_giro:  { et: 'Consecutivo de giro', tipo: 'texto', norm: 'normTexto' },
     nota:              { et: 'Nota', tipo: 'texto', norm: 'normTexto' }
   };
   return _camposEditables;
+}
+
+/**
+ * Lo que el correo a la oficina necesita SI O SI, en el orden en que se pide.
+ *
+ * No es una regla de la maquina de estados: una obligacion sin valor existe
+ * perfectamente. Es que el correo quedaria diciendo "por el valor de $0", y
+ * eso lo lee un director de oficina que tiene que girar esa plata.
+ */
+function camposDelCorreo() {
+  // Solo el valor. Todo lo demas esta definido en los datos y no se vuelve a
+  // preguntar: quien paga, la forma de pago y el tipo de presentacion los
+  // carga Concepto25.gs; el adhesivo, repartirAdhesivos(); el consecutivo
+  // sale de la tabla de conceptos; y la fecha de despacho la pone el envio.
+  return ['valor'];
+}
+
+/**
+ * Los que no pueden ir vacios.
+ *
+ * El adhesivo SI esta: el sobre viaja con ese numero y sin el la oficina no
+ * sabe que esta recibiendo. En teoria nunca falta, porque lo trae
+ * repartirAdhesivos(); cuando falta, la pantalla deja escribirlo a mano, pero
+ * el correo no sale sin el.
+ */
+function camposObligatoriosDelCorreo() {
+  return ['valor', 'adhesivo'];
+}
+
+/**
+ * Que le falta a una obligacion para poder mandar el correo.
+ * Pura: recibe la fila y devuelve las etiquetas de lo que falta.
+ */
+function faltaParaElCorreo(fila) {
+  var f = fila || {};
+  var mapa = camposEditables();
+  var falta = [];
+  camposObligatoriosDelCorreo().forEach(function (k) {
+    var v = f[k];
+    var vacio = v === null || v === undefined || String(v).trim() === '' ||
+                (k === 'valor' && !Number(v));
+    if (vacio) falta.push(mapa[k] ? mapa[k].et : k);
+  });
+  return falta;
 }
 
 /* los normalizadores que solo usa esta pantalla */
@@ -116,6 +167,11 @@ function apiGuardarCampos(id, campos) {
   });
   if (!claves.length) throw new Error('No llegó ningún campo editable.');
 
+  // las columnas nuevas pueden no existir todavia en un libro creado antes:
+  // mejor decirlo que escribir en la columna de al lado
+  var ixHoja = indices(HOJA.OBLIGACIONES);
+  claves.forEach(function (k) { exigeColumna(ixHoja, k); });
+
   return conCerrojo(function () {
     var fila = buscarFila(id);
     if (!fila) throw new Error('No existe la obligación ' + id);
@@ -157,45 +213,19 @@ function apiGuardarCampos(id, campos) {
     escribirCampos(HOJA.OBLIGACIONES, fila, aEscribir);
     registrar(id, EVENTO.CAMPOS_EDITADOS, bitacora.join(' · '));
 
-    return { id: id, cambios: bitacora.length, detalle: bitacora.join(' · ') };
+    // la fila ya decorada, para que la pantalla no tenga que recargar la
+    // lista entera despues de escribir un solo valor
+    var fresca = null;
+    try {
+      fresca = registros(HOJA.OBLIGACIONES).filter(function (r) {
+        return String(r.id) === String(id);
+      })[0];
+      fresca = fresca ? decorar(fresca) : null;
+    } catch (e) {
+      fresca = null;
+    }
+
+    return { id: id, cambios: bitacora.length, detalle: bitacora.join(' · '),
+             fila: fresca };
   });
-}
-
-/**
- * La lista de la pantalla de digitalizacion: todo lo que el usuario puede
- * tocar, con los campos manuales por delante y lo incompleto arriba.
- */
-function apiListaCampos() {
-  var mias = puede('editarAjenas') ? listarTodas()
-           : listarTodas().filter(function (o) { return o.mia; });
-
-  var lista = mias
-    .filter(function (o) { return o.estado !== ESTADO.APROBADA; })
-    .map(function (o) {
-      var faltan = [];
-      if (!o.valor) faltan.push('valor');
-      if (!o.forma_pago) faltan.push('forma de pago');
-      if (o.requiere_envio === 'REVISAR') faltan.push('si se envía');
-      if (!o.periodicidad) faltan.push('periodicidad');
-      o.faltan = faltan;
-      return o;
-    })
-    .sort(function (a, b) {
-      if (a.faltan.length !== b.faltan.length) return b.faltan.length - a.faltan.length;
-      var da = a.dias === null ? 9999 : a.dias;
-      var db = b.dias === null ? 9999 : b.dias;
-      return da - db;
-    });
-
-  return {
-    filas: lista,
-    opciones: apiCamposOpciones(),
-    resumen: {
-      todas: lista.length,
-      incompletas: lista.filter(function (o) { return o.faltan.length; }).length,
-      sin_valor: lista.filter(function (o) { return !o.valor; }).length,
-      por_revisar: lista.filter(function (o) { return o.requiere_envio === 'REVISAR'; }).length
-    },
-    generado: fechaHoraTexto(new Date())
-  };
 }

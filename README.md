@@ -27,6 +27,7 @@ estados y secuencia · [DESIGN.md](DESIGN.md) — decisiones visuales.
 
 ## Índice
 
+- [**Qué ejecutar para cada tarea**](#qué-ejecutar-para-cada-tarea)
 - [El problema que resuelve](#el-problema-que-resuelve)
 - [El recorrido de una obligación](#el-recorrido-de-una-obligación)
 - [La arquitectura](#la-arquitectura)
@@ -40,6 +41,153 @@ estados y secuencia · [DESIGN.md](DESIGN.md) — decisiones visuales.
 - [Qué hace cada archivo](#qué-hace-cada-archivo)
 - [Decisiones que conviene no deshacer](#decisiones-que-conviene-no-deshacer)
 - [Lo que falta](#lo-que-falta)
+
+---
+
+## Qué ejecutar para cada tarea
+
+Las funciones viven en tres archivos del editor de Apps Script. **El archivo
+que tengas abierto da igual**: todos comparten el mismo ámbito. Lo más cómodo
+es el menú del Sheets; la columna «función» está por si prefieres el
+desplegable del editor.
+
+| Archivo del editor | Qué contiene |
+|---|---|
+| **Codigo.gs** | La aplicación entera: instalar, migrar, diagnósticos, producción |
+| **Mensuales.gs** | El mes, los adhesivos, los correos de oficina, el archivado |
+| **Carga.gs** | La carga inicial de una vigencia. Se corre una vez al año |
+| **Concepto25.gs** | Los consecutivos de giro, las formas de pago y los traspasos |
+| **Arranque.gs** | Los correos de las oficinas y la preparación del mes de una corrida |
+| **Reemplazo.gs** | Cuando alguien sale del equipo |
+
+### Dejar el mes listo de una sola corrida
+
+Esto hace, en orden, todo lo de las secciones siguientes:
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Pega la hoja de correspondencia en la pestaña `ADHESIVOS` | — | — |
+| 2 | — | **SINAV · Preparar el mes → DEJAR EL MES LISTO** | `prepararElMes` · Arranque.gs |
+
+Crea columnas, trae las obligaciones del mes y del siguiente, escribe los
+correos de las oficinas, los consecutivos y las formas de pago, reparte los
+adhesivos y termina contando cuántas quedaron listas y qué les falta a las
+demás.
+
+Se puede correr las veces que haga falta: nada se duplica y **lo escrito a
+mano siempre gana**. Si el paso 1 no está hecho, los adhesivos se saltan y lo
+dice; el resto se hace igual.
+
+### Cargar las obligaciones de un mes nuevo
+
+Normalmente **no hay que hacer nada**: el activador lo hace el día 1 a las 5am.
+Si hay que adelantarlo o repetirlo:
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | — | **SINAV · Mes → Cargar el mes en curso y el siguiente** | `cargarMesVigente` · Mensuales.gs |
+| 2 | Comprobar que el activador sigue puesto | **SINAV · Mes → ¿Está programada?** | `estadoCargaMensual` · Mensuales.gs |
+
+Se puede correr las veces que quieras: lo que ya existe no se duplica.
+
+### Cargar los adhesivos de un mes
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Abre la pestaña **ADHESIVOS**, **borra todo** y pega la hoja del Excel de correspondencia (AUTORRETENCIÓN o RETEICA), encabezados incluidos | — | — |
+| 2 | — | **SINAV · Mes → Repartir los adhesivos del mes** | `repartirAdhesivos` · Mensuales.gs |
+| 3 | Repite 1 y 2 con la otra hoja del Excel | — | — |
+
+No pisa un adhesivo ya escrito, así que repetirlo es seguro. Al final lista
+las obligaciones del mes que quedaron sin número.
+
+### Cargar los consecutivos de giro y las formas de pago
+
+Una sola vez, y después solo si cambian las tablas:
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | — | **SINAV · Concepto 25 → Cargar consecutivos y formas de pago** | `cargarConcepto25` · Concepto25.gs |
+
+Escribe en PROGRAMACION (de donde heredan los meses siguientes) y en las
+obligaciones abiertas. **No pisa nada escrito a mano.** Al final lista los
+municipios que no están en las tablas.
+
+### Cuando alguien sale del equipo
+
+Quien sale deja **tres** rastros, y el tercero es el que se olvida:
+
+1. El responsable en PROGRAMACION
+2. El responsable en las obligaciones abiertas
+3. **Sus iniciales en el consecutivo de giro**: `AG-10-74` es de Andrea Galvis
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Ver cómo están escritos los correos | **SINAV · Reemplazo → Ver los usuarios** | `listarUsuarios` · Reemplazo.gs |
+| 2 | Hacer el reemplazo | **SINAV · Reemplazo → Reemplazar a una persona** | `reemplazar` · Reemplazo.gs |
+| 3 | En USUARIOS: `activo = NO` a quien sale, y revisar `backup` | — | — |
+
+El paso 2 pregunta los cuatro datos: el correo que sale, el que entra, y los
+prefijos del consecutivo (`AG` → `LR`). Si dejas el prefijo vacío, solo cambia
+el responsable.
+
+**El número del consecutivo no se toca**, porque es del municipio y no de la
+persona: AGUACHICA es el 01 lo declare quien lo declare. Por eso cambiar
+`AG-10-01` por `LR-10-01` da exactamente la numeración que ya usaba Liliana.
+
+Lo que **no** se toca: las `APROBADA`, que son historia, y las que ya tienen
+el correo enviado, porque ese consecutivo ya viajó en el asunto.
+
+### Agregar o corregir correos de oficina
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Escribe el correo en la hoja **PROGRAMACION**, columna `correo_oficina` | — | — |
+| 2 | — | **SINAV · Mes → Refrescar los correos de oficina** | `refrescarCorreos` · Mensuales.gs |
+
+El paso 2 baja lo nuevo a las obligaciones que ya existen. Sin él, lo escrito
+solo vale para las que se creen de aquí en adelante.
+
+### Después de pegar código nuevo
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Pega `dist/Codigo.gs`, `dist/Index.html` y `dist/Mensuales.gs` | — | — |
+| 2 | Crear las columnas que falten | **SINAV → Instalar / verificar** | `instalar` · Codigo.gs |
+| 3 | Poner al día los valores viejos | **SINAV → Migrar columnas** | `migrar` · Codigo.gs |
+| 4 | Si el despliegue está en versión fija, crear **versión nueva** | Implementar → Gestionar implementaciones | — |
+
+**El paso 2 no se salta.** `instalar()` crea las columnas; `migrar()` solo
+arregla valores. Si falta una columna, la pantalla da un error que lo dice.
+
+### Cuando algo no funciona
+
+| Síntoma | Menú | Función |
+|---|---|---|
+| Subí el soporte y no deja enviar | **SINAV → ¿Por qué no se envía?** | `porQueNoSeEnvia` · Codigo.gs |
+| Respondieron y no lo detecta | **SINAV → ¿Por qué no ve la respuesta?** | `porQueNoVeLaRespuesta` · Codigo.gs |
+| ¿Está puesto el activador del día 1? | **SINAV · Mes → ¿Está programada?** | `estadoCargaMensual` · Mensuales.gs |
+| El libro va lento | **SINAV · Mes → Archivar los meses cerrados** | `archivarCerradas` · Mensuales.gs |
+
+### Pasar a producción, o volver atrás
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Ver qué saldría | **SINAV → Revisar antes de producción** | `revisarAntesDeProduccion` · Codigo.gs |
+| 2 | Dar el paso | **SINAV → PASAR A PRODUCCIÓN** | `pasarAProduccion` · Codigo.gs |
+| — | Parar todo y volver a la bandeja propia | — | `volverAPruebas` · Codigo.gs |
+
+### Una vigencia nueva (una vez al año)
+
+| # | Qué haces | Menú | Función |
+|---|---|---|---|
+| 1 | Pega el calendario del año en la pestaña **CALENDARIO** | — | — |
+| 2 | Habilitar el año con los ids de sus carpetas de Drive | — | `habilitarVigencia("2027")` · Codigo.gs |
+| 3 | **NO vuelvas a correr `cargarProgramacion`**: borraría los correos llenados a mano durante todo el año | — | — |
+| 4 | Deja que la carga mensual haga el resto | — | — |
+
+`cargarProgramacion` (Carga.gs) solo se corre **la primera vez**, cuando
+PROGRAMACION está vacía.
 
 ---
 
@@ -263,8 +411,27 @@ municipio. Pasa al arrastrar el archivo equivocado o al renombrar mal, y no se
 descubre hasta que la oficina lo recibe.
 
 El visto bueno es **del documento, no de la obligación**: la columna
-`soporte_revisado` guarda el `soporte_id` que se miró, no un SI/NO. Si alguien
-reemplaza el archivo, deja de coincidir y hay que revisarlo otra vez.
+`soporte_revisado` guarda los `soporte_id` que se miraron, no un SI/NO. Si
+alguien reemplaza el archivo, deja de coincidir y hay que revisarlo otra vez.
+
+### Varios archivos en un mismo envío
+
+Una obligación puede ir con **la declaración y sus anexos** — el comprobante
+de pago, el formulario, lo que haga falta. En la fila: *Añadir otro* los suma,
+*Reemplazar* deja solo el nuevo.
+
+Van todos en la misma celda `soporte_id`, separados por coma, no en columnas
+nuevas: el número de anexos no se sabe de antemano y una columna por anexo
+sería adivinar cuántos caben. El primero es la declaración.
+
+El visto bueno es **por archivo**, y hay que tenerlos todos: si se añade un
+anexo después de dar el visto bueno, el envío se vuelve a frenar hasta que se
+mire el nuevo. Marcar *Incorrecto* quita **ese** archivo y deja los otros; si
+era el único, la obligación vuelve a `PENDIENTE`.
+
+Dos topes: **10 archivos** por obligación, y **24 MB** en total, porque Gmail
+corta en 25 MB. Si se pasa, el envío se rechaza con el peso en el mensaje en
+vez de fallar a medias.
 
 Y la revisión **no entra en `puedeEnviar()`**, a propósito: esa función responde
 «¿se puede *seleccionar* esta fila?», y si exigiera la revisión no se podría

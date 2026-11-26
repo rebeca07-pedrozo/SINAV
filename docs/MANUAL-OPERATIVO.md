@@ -72,7 +72,18 @@ correr el `ADMIN`.
 |---|---|---|
 | `cargarMesVigente()` | **SINAV · Mes → Cargar el mes en curso y el siguiente** | Lo hace el activador el día 1. A mano, cuando quieras adelantarlo |
 | `instalarCargaMensual()` | **SINAV · Mes → Programar la carga mensual** | Una vez, para dejar el activador puesto |
+| `refrescarCorreos()` | **SINAV · Mes → Refrescar los correos de oficina** | Cada vez que el equipo llene correos en PROGRAMACION |
+| `arreglarExogena()` | **SINAV · Mes → Arreglar EXOGENA** | Una vez, si el libro se cargó cuando EXOGENA nacía como `REVISAR` |
+| `repartirAdhesivos()` | **SINAV · Mes → Repartir los adhesivos del mes** | Cada mes, después de pegar la hoja ADHESIVOS |
 | `archivarCerradas()` | **SINAV · Mes → Archivar los meses cerrados** | Cuando el libro se vaya poniendo pesado |
+
+Y en el menú **SINAV**:
+
+| Función | Cómo se corre | Cuándo |
+|---|---|---|
+| `porQueNoSeEnvia()` | **SINAV → ¿Por qué no se envía?** | Cuando una fila con soporte no se deja enviar |
+| `revisarAntesDeProduccion()` | **SINAV → Revisar antes de producción** | Antes de dar el paso. No cambia nada |
+| `pasarAProduccion()` | **SINAV → PASAR A PRODUCCIÓN** | Una vez, el día del lanzamiento |
 
 Las dos cargas **se reanudan**: Apps Script corta a los 6 minutos, y si te dicen
 que quedó algo pendiente, vuelves a darle y sigue. Nada se duplica, porque el id
@@ -163,6 +174,13 @@ Esto deja hecho, en este orden:
 
 ### 4 · Correr `migrar()`
 
+> **Quien crea las columnas que falten es `instalar()`, no `migrar()`.**
+> `instalar()` pone los encabezados al día sin tocar los datos; `migrar()`
+> arregla los valores que ya están escritos. Después de pegar código nuevo,
+> siempre en ese orden: primero **Instalar / verificar**, después **Migrar
+> columnas**.
+
+
 Menú **SINAV → Migrar columnas**. Hace falta siempre que vengas de una versión
 anterior, aunque creas que el libro está limpio: además de repartir columnas,
 convierte el rol `JEFE`, que ya no existe, en `PROFESIONAL` nivel `III`.
@@ -203,11 +221,10 @@ El de Elizabeth y los de administración. Ver
 
 ### 9 · Cuando vayas a producción
 
-Edita `modo` en CONFIG y ponlo en cualquier cosa distinta de `PRUEBA`. Mientras
-diga `PRUEBA`, **todos los correos llegan a la bandeja de quien envía**, no a
-las oficinas. El código nunca cambia ese valor solo.
-
-Repasa también [Antes de pasar a producción](#11--antes-de-pasar-a-producción).
+**No edites `modo` a mano.** Usa **SINAV → PASAR A PRODUCCIÓN**, que antes te
+muestra lo que está a punto de salir y se niega si queda algo de prueba. El
+detalle está en [Antes de pasar a
+producción](#11--antes-de-pasar-a-producción).
 
 ---
 
@@ -436,6 +453,24 @@ cambió de manos.
 Al enviar, SINAV guarda el **`hilo_id`** de Gmail. La pestaña **Respuestas** lee
 **ese hilo y nada más**.
 
+### Si contestan sin adjuntar nada
+
+Pasa a menudo: la oficina responde con una queja, una pregunta o un «recibido»
+y el sellado llega después, en otro correo del mismo hilo.
+
+Eso está cubierto. La obligación pasa a `RESPONDIDA` y **sigue mirando el
+hilo**: cada vez que se revisan las respuestas se leen solo los mensajes
+nuevos, y el adjunto se guarda cuando aparezca, en el mensaje cinco o en el
+quince. Lo que ya se leyó no se vuelve a procesar, porque la columna
+`ultimo_mensaje` recuerda dónde iba.
+
+Los adjuntos **se suman**, no se reemplazan: si mandan el sellado y más tarde
+el recibo de pago, quedan los dos en la carpeta de Sellados, numerados. La
+pantalla dice *«2 documentos guardados»*.
+
+Deja de mirar el hilo cuando la obligación llega a `REVISADA` o `APROBADA`:
+ahí ya se cerró y lo que llegue después es otra conversación.
+
 ### Qué hace el botón «Revisar respuestas ahora»
 
 1. Recorre las obligaciones enviadas que tengan `hilo_id`.
@@ -453,6 +488,23 @@ no el sellado.
 Va **por lotes con guardia de tiempo**: cada llamada a Gmail es lenta y Apps
 Script corta a los 6 minutos. Si queda a medias, se vuelve a darle y sigue donde
 iba, sin repetir lo ya procesado.
+
+### Qué cuenta como respuesta
+
+| Mensaje del hilo | ¿Cuenta? |
+|---|---|
+| El primero, el que mandó SINAV | **Nunca.** Es el nuestro |
+| De la oficina | **Siempre**, traiga o no adjunto |
+| De tu propia cuenta, **con** adjunto | **Sí.** Es el sellado, aunque lo reenvíes tú |
+| De tu propia cuenta, sin adjunto | No. Es un recordatorio, no una respuesta |
+
+La regla no mira quién escribe sino **si trae evidencia**. Así, si la alcaldía
+te manda el sellado por fuera (WhatsApp, otra cuenta) y tú lo adjuntas sobre
+el hilo, queda archivado igual. Y un recordatorio tuyo no marca la obligación
+como respondida.
+
+Un adjunto cuenta desde **512 bytes**; por debajo suelen ser firmas y logos
+incrustados, no documentos.
 
 ### Probar en modo PRUEBA
 
@@ -499,9 +551,18 @@ desde otra cuenta.
 De los 315 del calendario, solo **98 tienen correo**. Sin correo la obligación
 se queda en `LISTA` para siempre: el soporte está cargado, pero no sale nada.
 
-**Cómo se comprueba:** `SINAV → ¿Por qué no se envía?`. Los correos se escriben
-en PROGRAMACION, columna `correo_oficina`. Las obligaciones **que ya existen no
-lo heredan solas**: hay que escribirlo también en su fila de OBLIGACIONES.
+**Cómo se comprueba:** `SINAV → ¿Por qué no se envía?`
+
+Los correos se escriben **en un solo sitio**: PROGRAMACION, columna
+`correo_oficina`. Después, **SINAV · Mes → Refrescar los correos de oficina**
+baja lo nuevo a las obligaciones que ya existen y siguen abiertas, porque esas
+nacieron con el correo vacío y no lo heredan solas.
+
+`refrescarCorreos()` **no pisa** un correo escrito a mano en OBLIGACIONES: si
+no coincide con PROGRAMACION, lo reporta y deja que alguien decida. Las
+`APROBADA` no se tocan. Se puede correr las veces que haga falta, y de paso
+lista los municipios que PROGRAMACION tampoco tiene: esos son los que hay que
+averiguar.
 
 ### 3 · `modo` en CONFIG
 
@@ -509,8 +570,9 @@ Mientras diga `PRUEBA`, **todos los correos van al propio usuario** y ninguna
 alcaldía recibe nada. Es el valor por defecto a propósito, y el código no lo
 cambia nunca.
 
-El día que se pase a `PRODUCCION` se edita a mano en CONFIG, y a partir de ese
-segundo los correos salen de verdad. **No hay vuelta atrás para lo ya enviado.**
+El día del paso se usa **SINAV → PASAR A PRODUCCIÓN**, no la celda: a partir de
+ese segundo los correos salen de verdad y **no hay vuelta atrás para lo ya
+enviado**. `volverAPruebas()` devuelve el modo, pero no desenvía nada.
 
 ### 4 · La cuota de Gmail
 
@@ -521,13 +583,99 @@ sin enviar.
 En un mes de vencimientos fuertes con 500 envíos no hay problema. El riesgo real
 es que una sola persona intente mandar todo lo del equipo.
 
-### 5 · EXOGENA no se envía sola
+### 5 · Los anexos también se revisan
 
-`cargarProgramacion()` pone `requiere_envio = REVISAR` a todo lo de medios
-magnéticos, a propósito: esas no siempre se mandan por correo. **Hasta que no se
-cambie a `SI`, no se envían**, y la fila lo dice.
+Una obligación puede llevar varios archivos: *Añadir otro* en su fila. Pero el
+visto bueno es **por archivo**, así que si alguien añade un anexo a una
+obligación que ya estaba revisada, **el envío se frena otra vez** y la fila
+dice *se revisa al enviar*. No es un fallo: es que falta mirar el nuevo.
 
-### 6 · El `hilo_id`
+Topes: 10 archivos por obligación y 24 MB en total, por el límite de Gmail.
+
+En **Carga masiva**, varios archivos para la misma obligación ya no son un
+error: el primero de cada obligación reemplaza lo que hubiera y los siguientes
+se añaden. Así, volver a subir un archivo corregido sigue reemplazando, y
+subir la declaración y su anexo de golpe los deja los dos.
+
+### 6 · Las tres fechas, que no son la misma
+
+| Columna | Qué es | Quién la escribe |
+|---|---|---|
+| `vencimiento` | Cuándo hay que presentar. **Sale del CALENDARIO** | La carga mensual |
+| `fecha_despacho` | Cuándo salió el sobre físico con su sticker | La persona, al digitalizar |
+| `fecha_envio` | Cuándo salió el correo | SINAV, sola |
+| `presentacion_fecha` | Cuándo se presentó ante el municipio | La persona |
+
+Confundirlas es fácil y caro: el vencimiento nunca se toca a mano, porque es
+el dato del que cuelga todo lo demás.
+
+### 7 · El correo necesita cuatro datos o no sale
+
+El correo a la oficina dice cuánto girar, con qué sticker viaja el sobre y con
+qué consecutivo de giro. Sin eso saldría *«por el valor de $0»* a un director
+que tiene que mover esa plata. Por eso SINAV no deja enviar sin:
+
+**Valor · Quién paga · Sticker de correspondencia · Consecutivo de giro**
+
+**El valor liquidado se escribe en la propia tabla de Enviar**, en su columna,
+sin abrir nada: es el dato que más se repite y el que cambia en cada periodo.
+Se guarda al salir del campo o al dar Enter, y queda escrito en la hoja. Si el
+guardado falla, el campo vuelve a lo que decía antes y la pantalla lo avisa.
+
+El resto **no tiene pantalla aparte**: se llenan en el primer paso del
+envío. Al darle a *Enviar seleccionadas*, si a alguna le falta algo se abre el
+formulario, una por una, y de ahí se pasa solo a revisar los PDF.
+
+Dos datos **no se escriben nunca**:
+
+- **El sticker** lo trajo `repartirAdhesivos()` de la hoja ADHESIVOS y se
+  muestra tal cual. Si falta, el envío **se bloquea** —el sobre viaja con ese
+  número y sin él la oficina no sabe qué recibe— y la pantalla deja
+  escribirlo a mano como última salida.
+- **El consecutivo de giro** lo arma SINAV en el momento de enviar.
+
+### Cómo se arma el consecutivo de giro
+
+`LR-09-74` se lee así:
+
+| | | |
+|---|---|---|
+| `LR` | Las iniciales de **quien envía**, en ese momento | Si Andrea cubre a Yasneidy y manda ella, dice `AG` |
+| `09` | El mes del **periodo**, no el del envío | Aquí se trabaja mes vencido: lo que se presenta en diciembre es de noviembre |
+| `74` | Un consecutivo que **arranca de nuevo cada mes**, por persona | |
+
+En los periodos largos el mes es el **último** del periodo, que es el que se
+declara: el bimestre 5 son septiembre y octubre, así que dice `10`.
+
+Se asigna **en el momento del envío**, no al digitalizar: si se asignara
+antes, una obligación que luego no se manda dejaría un hueco en la
+numeración. Una vez asignado no se renumera nunca.
+
+La cuenta vive en las Propiedades del script, una por persona y mes
+(`giro:LR:2026-09`). Si alguna vez hay que empezar de otro número, se edita
+ahí.
+
+El envío es, entonces, tres pasos encadenados:
+
+1. **Los datos** del correo, solo de las que les falte algo
+2. **Revisar los PDF**, uno por uno
+3. **Confirmar** y el correo sale
+
+### 8 · `requiere_envio` manda sobre el envío
+
+Si la fila no dice **`SI`**, no se envía, y la fila lo explica: *«marcada como
+que no se envía por correo»*. Sale de PROGRAMACION, y ahí es donde se cambia.
+
+Todo nace en `SI`, EXOGENA (medios magnéticos) incluida: se adjunta y se manda
+igual que las demás. Si algún municipio concreto no la recibe por correo, se le
+pone **`NO`** a mano en su fila de PROGRAMACION y esa deja de enviarse.
+
+En los libros cargados antes de este cambio, EXOGENA nació como `REVISAR`: se
+arregla con **SINAV · Mes → Arreglar EXOGENA**, que lo pasa a `SI` en
+PROGRAMACION y en las obligaciones abiertas, respetando los `NO` escritos a
+mano.
+
+### 9 · El `hilo_id`
 
 Si al enviar no se encuentra el hilo, la fila se queda sin `hilo_id` y se
 escribe un `ERROR` en EVENTOS. Esa obligación **nunca va a detectar la respuesta
@@ -535,7 +683,7 @@ sola**: hay que archivar el sellado a mano.
 
 **Cómo se comprueba:** buscar `ERROR` en EVENTOS de vez en cuando.
 
-### 7 · Las columnas nuevas van al final
+### 10 · Las columnas nuevas van al final
 
 `asegurarHojas()` reescribe la fila 1 **sin mover los datos de abajo**. Insertar
 una columna en la mitad desalinea todo lo que ya está escrito: los valores
@@ -544,14 +692,14 @@ quedan en la columna de al lado y no hay forma limpia de deshacerlo.
 Lo mismo con el orden de `COLS` en `00_Constantes.gs`. Una columna nueva, al
 final, siempre.
 
-### 8 · Los códigos son texto, no números
+### 11 · Los códigos son texto, no números
 
 `cod_dane`, `cod_oficina`, `periodo`, `nit_municipio` y los ids de Drive tienen
 formato `@` en la hoja. Si alguien los pasa a número, **`05001` se convierte en
 `5001`** y deja de emparejar con el calendario: la carga masiva no encuentra el
 municipio y la obligación se queda sin soporte.
 
-### 9 · La hoja CALENDARIO al cambiar de año
+### 12 · La hoja CALENDARIO al cambiar de año
 
 El calendario del año nuevo se pega **encima** de CALENDARIO, y ahí es donde se
 pierden cosas si no se tiene cuidado: PROGRAMACION **no** se vuelve a cargar,
@@ -562,7 +710,7 @@ Lo que sí hay que hacer al cambiar de año: habilitar la vigencia nueva en
 VIGENCIAS con los ids de sus carpetas de Drive, con
 `habilitarVigencia("2027")`.
 
-### 10 · Nadie debe editar OBLIGACIONES a mano
+### 13 · Nadie debe editar OBLIGACIONES a mano
 
 Se puede, y a veces hace falta para una prueba. Pero cambiar el `estado` a mano
 se salta `validarPaso()`, y un estado al que no se llegó por el camino correcto
@@ -584,6 +732,72 @@ queda en EVENTOS, así que en una auditoría no hay quién responda por ese camb
   que sigue abierto.
 
 ---
+
+## 8b · El correo a la oficina
+
+No es un aviso: es una instrucción de trabajo. Dice qué egreso elaborar, con
+qué consecutivo de giro, a qué código devolver el sellado y que si no lo
+devuelven se reporta como evento SARO. Vive en `src/23_Correo.gs`.
+
+### A quién llega
+
+| Si la obligación tiene… | Va a… |
+|---|---|
+| `correo_oficina` escrito | ese correo, tal cual |
+| solo la dependencia (`cod_oficina`) | `director<dep>@` y `subdirector<dep>@` |
+| ninguno de los dos | no se envía, y la fila lo dice |
+
+Esto es lo que desbloquea los municipios que nunca tuvieron correo escrito: la
+dependencia ya estaba en los datos. El cero de relleno se quita, así que la
+oficina `0851` va a `director851@`, no a `director0851@`.
+
+Las copias fijas (Elizabeth, GRP Conceptos Especiales…) se escriben una vez en
+**CONFIG → `copias_fijas`**, separadas por coma.
+
+### Lo que sale de CONFIG y lo que sale de la obligación
+
+| De CONFIG, se cambia una vez | De la obligación, se digitaliza |
+|---|---|
+| `egreso` (25) | `valor` |
+| `codigo_departamento` (9413) | `adhesivo` |
+| `nombre_recibe` | `consecutivo_giro` |
+| `copias_fijas` | `fecha_despacho` |
+| `dominio_oficinas` | `paga_quien` |
+
+### Los logos: son dos, no uno
+
+| Propiedad del script | Dónde se usa | Cómo tiene que ser |
+|---|---|---|
+| `logo_id` | La aplicación, sobre fondo blanco | **Oscuro** |
+| `logo_correo_id` | El correo, sobre la franja roja | **Claro** (blanco) |
+
+Si solo hay `logo_id`, el correo lo usa igual pero **la cabecera se vuelve
+blanca con una regla roja debajo**, para que un logo oscuro no quede ahogado
+en rojo. La cabecera roja solo aparece cuando hay una versión clara en
+`logo_correo_id`.
+
+Las dos aceptan el id pelado o el enlace completo de Drive, y las dos tienen
+respaldo en CONFIG (`logo_id`, `logo_correo_id`) por si alguien prefiere
+ponerlas ahí.
+
+El logo se **incrusta** en el correo, no se enlaza: Gmail bloquea las imágenes
+remotas hasta que quien lee da permiso, y entonces el correo llega roto. Si no
+hay ninguno, el correo sale con el nombre del banco en texto.
+
+## 8c · Los adhesivos de correspondencia
+
+El número del sticker (`55285303`) es por municipio, impuesto y **mes**. Entra
+de dos formas:
+
+1. **A mano**, en el botón *Digitalizar* de la fila.
+2. **En bloque**: pega la hoja del archivo de correspondencia en una pestaña
+   llamada **ADHESIVOS** y corre **SINAV · Mes → Repartir los adhesivos del
+   mes**.
+
+El repartidor busca la columna del mes por su encabezado (*ADHESIVO Sept*,
+*Label Febrero*…), cruza por municipio + impuesto y **no pisa** un adhesivo ya
+escrito. Lo que diga `REGISTRADO EN CARTERO` o `#N/A` no es un número y se
+ignora. Al final lista las obligaciones del mes que se quedaron sin adhesivo.
 
 ## 9 · Si algo sale mal
 
@@ -666,6 +880,29 @@ necesita compilar nada y se pega directo en el editor.
 
 ## 11 · Antes de pasar a producción
 
+El aviso de «ambiente de pruebas» **no se quita del código**: desaparece solo
+cuando `CONFIG.modo` pasa a `PRODUCCION`. Quitar el cartel dejando el modo en
+`PRUEBA` sería lo peor de los dos mundos — los correos seguirían yendo a la
+propia bandeja y nadie se enteraría.
+
+Y al revés: en el segundo en que se pasa a `PRODUCCION`, los correos salen a
+las alcaldías de verdad y lo enviado no se puede desenviar. Por eso no se edita
+la celda a mano:
+
+1. **SINAV → Revisar antes de producción.** No cambia nada. Lista las
+   obligaciones que están en `LISTA` con el correo al que irían, y avisa de lo
+   que huele a prueba: correos inventados (`oficina.*@davivienda.com`) y
+   soportes que no son un PDF de verdad.
+2. Arregla lo que señale.
+3. **SINAV → PASAR A PRODUCCIÓN.** Vuelve a mostrar la lista y pide
+   confirmación. **Se niega** si sigue habiendo datos de prueba en `LISTA`.
+4. Recarga la aplicación: el aviso ya no está.
+
+Queda un `AVISO` en EVENTOS con quién lo hizo y cuándo. Y si hay que parar
+todo: `volverAPruebas()`.
+
+### Lo que conviene dejar listo antes
+
 - **El logo.** Sube el archivo oficial a Drive y pon su id en **Configuración
   del proyecto → Propiedades del script → `logo_id`**. Es cableado del
   despliegue, no un parámetro del negocio, así que no ocupa una fila de CONFIG
@@ -674,5 +911,11 @@ necesita compilar nada y se pega directo en el editor.
   permiso). Se sigue leyendo `CONFIG.logo_id` como respaldo. Mientras no haya
   id, la interfaz muestra el espacio reservado punteado.
 - **Las tres filas de prueba** de `instalar()` y su soporte `.txt` en Drive,
-  incluidos los correos `oficina.*@davivienda.com`, que son inventados.
-- **`modo`** en CONFIG, que sale en `PRUEBA`.
+  incluidos los correos `oficina.*@davivienda.com`, que son inventados. Estas
+  son justo las que bloquean el paso a producción si están en `LISTA`.
+- **Los correos de oficina que falten.** No bloquean: sin correo la obligación
+  se queda en `LISTA` esperando, no se envía a nadie equivocado. Se pueden ir
+  llenando con la herramienta ya en producción.
+- **EXOGENA**, si el libro se cargó antes del cambio: `SINAV · Mes → Arreglar
+  EXOGENA`.
+- **El activador del día 1**: `SINAV · Mes → ¿Está programada?`

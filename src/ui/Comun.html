@@ -79,6 +79,47 @@ function frase(partes) {
     typeof x === 'number' ? html`<b key=${i}>${x}</b>` : x);
 }
 
+/** Un campo del formulario, pintado segun lo que dijo el servidor. */
+function CampoEdit({ clave, def, valor, alCambiar }) {
+  const id = 'c-' + clave;
+
+  if (def.tipo === 'lista') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <select id=${id} value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)}>
+        ${def.vacio ? html`<option value="">— sin dato —</option>` : null}
+        ${def.valores.map((v) => html`<option key=${v} value=${v}>
+          ${bonito(v)}</option>`)}
+      </select>
+    </label>`;
+  }
+
+  if (def.tipo === 'valor') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="text" inputMode="numeric" class="num"
+        placeholder="0" value=${valor == null ? '' : String(valor)}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+      <small>Se liquida en pesos. Acepta $ y puntos de mil.</small>
+    </label>`;
+  }
+
+  if (def.tipo === 'fecha') {
+    return html`<label class="campo" key=${clave}>
+      <span>${def.et}</span>
+      <input id=${id} type="date" value=${valor || ''}
+        onChange=${(e) => alCambiar(clave, e.target.value)} />
+    </label>`;
+  }
+
+  return html`<label class="campo ancho" key=${clave}>
+    <span>${def.et}</span>
+    <textarea id=${id} rows="2" value=${valor == null ? '' : String(valor)}
+      onChange=${(e) => alCambiar(clave, e.target.value)}></textarea>
+  </label>`;
+}
+
 /* ---------- piezas --------------------------------------------------------- */
 
 /** Un solo juego de iconos: trazo de 1.5px, 16px, sin relleno. */

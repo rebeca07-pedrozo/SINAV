@@ -47,6 +47,10 @@ function decorar(o) {
     exogena: String(o.exogena || ''),
     incluye_retencion: String(o.incluye_retencion || ''),
     presentacion_fecha: fechaTexto(o.presentacion_fecha),
+    // el envio fisico por correspondencia, que el correo necesita nombrar
+    fecha_despacho: fechaTexto(o.fecha_despacho),
+    adhesivo: String(o.adhesivo || ''),
+    consecutivo_giro: String(o.consecutivo_giro || ''),
     revision_fecha: fechaTexto(o.revision_fecha),
     revision_por: String(o.revision_por || ''),
     estado: String(o.estado),
@@ -68,8 +72,11 @@ function decorar(o) {
     // cubriendo mientras esta de vacaciones.
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
-    soporte_revisado: !!String(o.soporte_revisado || '').trim() &&
-      String(o.soporte_revisado).trim() === String(o.soporte_id || '').trim(),
+    soportes: listaSoportes(o.soporte_id).length,
+    // lo que hay que digitalizar antes de que el correo tenga sentido
+    falta_correo: faltaParaElCorreo(o),
+    sellados: listaIds(o.sellado_id).length,
+    soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
     motivo_no_enviable: env.motivo,
     nivel: nivel
@@ -224,6 +231,10 @@ function apiInicio() {
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
     filas: lista,
     conteos: conteos(lista),
+    // la digitalizacion se hace dentro de Enviar, asi que las definiciones
+    // tienen que venir en la PRIMERA carga, no solo al refrescar la lista
+    campos: apiCamposOpciones(),
+    orden_campos: camposDelCorreo(),
     generado: fechaHoraTexto(new Date())
   };
 }
@@ -238,6 +249,10 @@ function apiListaEnviar(ventana) {
     filas: lista,
     conteos: conteos(lista),
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
+    // la digitalizacion vive dentro de esta pantalla: se llena justo antes de
+    // enviar, que es cuando la persona tiene los datos delante
+    campos: apiCamposOpciones(),
+    orden_campos: camposDelCorreo(),
     generado: fechaHoraTexto(new Date())
   };
 }

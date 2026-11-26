@@ -377,6 +377,9 @@ function archivarCerradas() {
 function menuMensuales() {
   SpreadsheetApp.getUi().createMenu('SINAV · Mes')
     .addItem('Cargar el mes en curso y el siguiente', 'cargarMesDesdeMenu')
+    .addItem('Refrescar los correos de oficina', 'refrescarCorreosDesdeMenu')
+    .addItem('Arreglar EXOGENA (REVISAR → SI)', 'arreglarExogenaDesdeMenu')
+    .addItem('Repartir los adhesivos del mes', 'repartirAdhesivosDesdeMenu')
     .addSeparator()
     .addItem('Programar la carga mensual (día 1)', 'instalarCargaMensualDesdeMenu')
     .addItem('¿Está programada?', 'estadoCargaMensualDesdeMenu')
@@ -387,6 +390,9 @@ function menuMensuales() {
 }
 
 function cargarMesDesdeMenu() { avisoMensual(cargarMesVigente()); }
+function refrescarCorreosDesdeMenu() { avisoMensual(refrescarCorreos()); }
+function arreglarExogenaDesdeMenu() { avisoMensual(arreglarExogena()); }
+function repartirAdhesivosDesdeMenu() { avisoMensual(repartirAdhesivos()); }
 function instalarCargaMensualDesdeMenu() { avisoMensual(instalarCargaMensual()); }
 function estadoCargaMensualDesdeMenu() { avisoMensual(estadoCargaMensual()); }
 function quitarCargaMensualDesdeMenu() { avisoMensual(quitarCargaMensual()); }
@@ -395,4 +401,302 @@ function archivarCerradasDesdeMenu() { avisoMensual(archivarCerradas()); }
 function avisoMensual(texto) {
   SpreadsheetApp.getUi().alert('SINAV · Carga mensual', String(texto),
                                SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/* ---------------------------------------------------------------------------
+   REFRESCAR LOS CORREOS DE OFICINA
+
+   De 315 municipios solo 98 tenian correo. El equipo los va llenando en
+   PROGRAMACION, que es la hoja que manda. Pero las obligaciones que YA se
+   crearon se quedaron con el correo vacio: nacieron antes.
+
+   Esto baja el correo de PROGRAMACION a las obligaciones que siguen abiertas,
+   para que nadie tenga que escribirlo dos veces.
+   --------------------------------------------------------------------------- */
+
+/** Las obligaciones ya cerradas no se tocan: su correo es historia. */
+var ESTADOS_CERRADOS_REFRESCO = ['APROBADA'];
+
+/**
+ * Copia correo_oficina (y el NIT, si falta) de PROGRAMACION a las
+ * obligaciones abiertas que lo tengan vacio.
+ *
+ * NO pisa un correo ya escrito: si alguien lo puso a mano en la obligacion,
+ * ese gana, y si no coincide con PROGRAMACION se reporta para que alguien
+ * decida. Se puede correr las veces que haga falta.
+ */
+function refrescarCorreos() {
+  exige('configurar');
+
+  var prog = leerProgramacion();
+  var ix = indices(HOJA.OBLIGACIONES);
+  exigeColumna(ix, 'correo_oficina');
+  var h = libro().getSheetByName(HOJA.OBLIGACIONES);
+  var todas = filas(HOJA.OBLIGACIONES);
+
+  var puestos = 0, siguenSin = [], distintos = [], correos = [], nits = [];
+
+  todas.forEach(function (f, i) {
+    var estado = String(f[ix.estado] || '').trim().toUpperCase();
+    if (ESTADOS_CERRADOS_REFRESCO.indexOf(estado) >= 0) return;
+
+    var quien = String(f[ix.municipio]) + ' · ' + String(f[ix.impuesto]) +
+                ' · ' + String(f[ix.periodo]);
+    var clave = [String(f[ix.cod_dane] || '').trim(),
+                 String(f[ix.impuesto] || '').trim(),
+                 String(f[ix.periodicidad] || '').trim(),
+                 String(f[ix.entidad] || '').trim()].join('|');
+    var regla = prog.mapa[clave];
+    var deProg = regla ? normCorreos(regla.correo_oficina) : '';
+    var actual = normCorreos(f[ix.correo_oficina]);
+
+    if (!actual && deProg) {
+      correos.push({ fila: i + 2, valor: deProg });
+      if (!String(f[ix.nit_municipio] || '').trim() && regla.nit_municipio) {
+        nits.push({ fila: i + 2, valor: String(regla.nit_municipio) });
+      }
+      puestos++;
+    } else if (!actual && !deProg) {
+      siguenSin.push(quien);
+    } else if (actual && deProg && actual !== deProg) {
+      distintos.push(quien + ': la obligación dice ' + actual +
+                     ' y PROGRAMACION dice ' + deProg);
+    }
+  });
+
+  if (correos.length) {
+    conCerrojo(function () {
+      correos.forEach(function (c) {
+        h.getRange(c.fila, ix.correo_oficina + 1).setValue(c.valor);
+      });
+      nits.forEach(function (c) {
+        h.getRange(c.fila, ix.nit_municipio + 1).setValue(c.valor);
+      });
+    });
+    registrar('', EVENTO.AVISO, 'correos de oficina refrescados: ' + puestos);
+  }
+
+  var l = [puestos + ' obligaciones recibieron el correo de su oficina.'];
+  if (nits.length) l.push(nits.length + ' recibieron además el NIT que les faltaba.');
+
+  if (siguenSin.length) {
+    l.push('', siguenSin.length + ' siguen sin correo porque PROGRAMACION tampoco');
+    l.push('lo tiene. Esas son las que hay que averiguar y escribir allí:');
+    var vistos = {};
+    siguenSin.forEach(function (x) {
+      var mun = x.split(' · ')[0];
+      if (!vistos[mun]) { vistos[mun] = true; }
+    });
+    Object.keys(vistos).sort().slice(0, 30).forEach(function (m) { l.push('   ' + m); });
+    var n = Object.keys(vistos).length;
+    if (n > 30) l.push('   … y ' + (n - 30) + ' municipios más');
+  }
+
+  if (distintos.length) {
+    l.push('', 'No se tocaron estas, porque ya tenían un correo distinto escrito');
+    l.push('a mano. Decide cuál vale:');
+    distintos.slice(0, 10).forEach(function (x) { l.push('   ' + x); });
+    if (distintos.length > 10) l.push('   … y ' + (distintos.length - 10) + ' más');
+  }
+
+  var txt = l.join('\n');
+  Logger.log(txt);
+  return txt;
+}
+
+/**
+ * EXOGENA (medios magnéticos) nacio marcada como REVISAR, por si no se
+ * mandaba por correo. Se manda igual que las demas, asi que esto lo corrige
+ * en PROGRAMACION y en las obligaciones que siguen abiertas.
+ *
+ * Si algun municipio concreto NO la recibe por correo, se le pone NO a mano
+ * en su fila de PROGRAMACION: eso si se respeta y no se toca.
+ */
+function arreglarExogena() {
+  exige('configurar');
+
+  var cambios = [];
+
+  // PROGRAMACION
+  var hp = libro().getSheetByName(HOJA_PROGRAMACION);
+  if (hp && hp.getLastRow() > 1) {
+    var cab = hp.getRange(1, 1, 1, hp.getLastColumn()).getValues()[0];
+    var col = -1;
+    for (var i = 0; i < cab.length; i++) {
+      if (String(cab[i]).trim() === 'requiere_envio') col = i;
+    }
+    if (col >= 0) {
+      var vals = hp.getRange(2, col + 1, hp.getLastRow() - 1, 1).getValues();
+      var n = 0;
+      for (var r = 0; r < vals.length; r++) {
+        if (String(vals[r][0]).trim().toUpperCase() === 'REVISAR') {
+          vals[r][0] = 'SI';
+          n++;
+        }
+      }
+      if (n) hp.getRange(2, col + 1, vals.length, 1).setValues(vals);
+      cambios.push(n + ' reglas de PROGRAMACION pasaron de REVISAR a SI');
+    }
+  }
+
+  // OBLIGACIONES abiertas
+  var ix = indices(HOJA.OBLIGACIONES);
+  var ho = libro().getSheetByName(HOJA.OBLIGACIONES);
+  var abiertas = 0;
+  filas(HOJA.OBLIGACIONES).forEach(function (f, i) {
+    if (String(f[ix.estado] || '').trim().toUpperCase() === ESTADO.APROBADA) return;
+    if (String(f[ix.requiere_envio] || '').trim().toUpperCase() !== 'REVISAR') return;
+    ho.getRange(i + 2, ix.requiere_envio + 1).setValue('SI');
+    abiertas++;
+  });
+  cambios.push(abiertas + ' obligaciones abiertas pasaron de REVISAR a SI');
+
+  registrar('', EVENTO.AVISO, 'EXOGENA: REVISAR -> SI');
+  var txt = cambios.join('\n') + '\n\nLas que tengan NO escrito a mano se quedan como están.';
+  Logger.log(txt);
+  return txt;
+}
+
+/* ---------------------------------------------------------------------------
+   LOS ADHESIVOS DE CORRESPONDENCIA
+
+   El archivo de correspondencia trae, por municipio e impuesto, una columna
+   por mes con el numero del adhesivo con el que viaja el sobre:
+
+     MUNICIPIO | PERIODICIDAD | DEPENDENCIA | CONCEPTO | ADHESIVO Ene | ...
+     AMAGA     | BIMESTRAL    | 3974        | AUTORRE. | 55285088     | ...
+
+   Se pega esa hoja en una pestana llamada ADHESIVOS y esto reparte la columna
+   del mes que toque entre las obligaciones de ese mes.
+   --------------------------------------------------------------------------- */
+
+var HOJA_ADHESIVOS = 'ADHESIVOS';
+
+/** Como se llama cada impuesto en la hoja de correspondencia. */
+var CONCEPTO_IMPUESTO = {
+  'RETEICA': 'RETEICA',
+  'RETENCION ICA': 'RETEICA',
+  'AUTORRETENCION ICA': 'AUTORRETEICA',
+  'AUTORRETEICA': 'AUTORRETEICA',
+  'ICA': 'ICA',
+  'ICA ANUAL': 'ICA',
+  'MEDIOS MAGNETICOS': 'EXOGENA',
+  'EXOGENA': 'EXOGENA'
+};
+
+/** 'ADHESIVO Sept' -> 9. Devuelve 0 si el encabezado no nombra un mes. */
+function mesDeEncabezado(texto) {
+  var t = limpiar(texto);
+  if (t.indexOf('ADHESIVO') < 0 && t.indexOf('LABEL') < 0) return 0;
+  var meses = [
+    ['ENE', 1], ['FEB', 2], ['MAR', 3], ['ABR', 4], ['MAY', 5], ['JUN', 6],
+    ['JUL', 7], ['AGO', 8], ['SEP', 9], ['OCT', 10], ['NOV', 11], ['DIC', 12]
+  ];
+  for (var i = 0; i < meses.length; i++) {
+    if (t.indexOf(meses[i][0]) >= 0) return meses[i][1];
+  }
+  return 0;
+}
+
+/** Un adhesivo de verdad es un numero largo, no 'REGISTRADO EN CARTERO'. */
+function adhesivoValido(v) {
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  if (!s) return '';
+  if (s.indexOf('#N/A') >= 0) return '';
+  var soloDigitos = s.replace(/\.0+$/, '').replace(/[^\d]/g, '');
+  if (soloDigitos.length < 6) return '';
+  return soloDigitos;
+}
+
+/**
+ * Reparte los adhesivos de un mes entre las obligaciones de ese mes.
+ *
+ *   repartirAdhesivos()        el mes en curso
+ *   repartirAdhesivos(2026, 11) uno concreto
+ *
+ * Cruza por municipio + impuesto. No pisa un adhesivo ya escrito: si alguien
+ * lo corrigio a mano, ese gana.
+ */
+function repartirAdhesivos(anio, mes) {
+  exige('configurar');
+
+  var hoy = new Date();
+  var a = Number(anio) || hoy.getFullYear();
+  var m = Number(mes) || (hoy.getMonth() + 1);
+
+  var h = libro().getSheetByName(HOJA_ADHESIVOS);
+  if (!h || h.getLastRow() < 2) {
+    throw new Error('Falta la hoja ' + HOJA_ADHESIVOS + ' o está vacía. Pega ahí ' +
+      'la hoja del archivo de correspondencia, con sus encabezados en la fila 1 ' +
+      '(MUNICIPIO, CONCEPTO y una columna ADHESIVO por mes).');
+  }
+
+  var todo = h.getRange(1, 1, h.getLastRow(), h.getLastColumn()).getValues();
+  var cab = todo[0];
+
+  var colMun = -1, colConcepto = -1, colMes = -1;
+  for (var i = 0; i < cab.length; i++) {
+    var k = limpiar(cab[i]);
+    if (colMun < 0 && k.indexOf('MUNICIPIO') >= 0) colMun = i;
+    if (colConcepto < 0 && (k === 'CONCEPTO' || k === 'IMPUESTO')) colConcepto = i;
+    if (colMes < 0 && mesDeEncabezado(cab[i]) === m) colMes = i;
+  }
+  if (colMun < 0) throw new Error('No encontré la columna del municipio en ' + HOJA_ADHESIVOS + '.');
+  if (colMes < 0) {
+    throw new Error('No hay una columna de adhesivos para ' + NOMBRE_MES[m - 1] +
+      ' en ' + HOJA_ADHESIVOS + '. Los encabezados tienen que decir, por ejemplo, ' +
+      '«ADHESIVO ' + NOMBRE_MES[m - 1].slice(0, 3) + '».');
+  }
+
+  // municipio|impuesto -> adhesivo
+  var mapa = {}, sinConcepto = 0;
+  for (var r = 1; r < todo.length; r++) {
+    var mun = limpiar(todo[r][colMun]);
+    if (!mun) continue;
+    var adh = adhesivoValido(todo[r][colMes]);
+    if (!adh) continue;
+    var imp = colConcepto >= 0
+      ? (CONCEPTO_IMPUESTO[limpiar(todo[r][colConcepto])] || '') : '';
+    if (!imp) sinConcepto++;
+    mapa[mun + '|' + imp] = adh;
+  }
+
+  // repartir entre las obligaciones que vencen en ese mes
+  var ix = indices(HOJA.OBLIGACIONES);
+  exigeColumna(ix, 'adhesivo');
+  var ho = libro().getSheetByName(HOJA.OBLIGACIONES);
+  var puestos = 0, yaTenian = 0, sinPareja = {};
+
+  filas(HOJA.OBLIGACIONES).forEach(function (f, k) {
+    var vence = f[ix.vencimiento];
+    if (!venceEnElMes(vence instanceof Date ? vence : normFecha(vence), a, m)) return;
+    if (String(f[ix.estado] || '').trim().toUpperCase() === ESTADO.APROBADA) return;
+    if (String(f[ix.adhesivo] || '').trim()) { yaTenian++; return; }
+
+    var mun = limpiar(f[ix.municipio]);
+    var imp = String(f[ix.impuesto] || '').trim();
+    var adh = mapa[mun + '|' + imp] || mapa[mun + '|'];
+    if (!adh) { sinPareja[mun + ' · ' + imp] = true; return; }
+
+    ho.getRange(k + 2, ix.adhesivo + 1).setValue(adh);
+    puestos++;
+  });
+
+  if (puestos) registrar('', EVENTO.AVISO, 'adhesivos repartidos: ' + puestos);
+
+  var l = [NOMBRE_MES[m - 1] + ' de ' + a + ': ' + puestos + ' adhesivos escritos.'];
+  if (yaTenian) l.push(yaTenian + ' ya tenían uno y no se tocaron.');
+  if (sinConcepto) {
+    l.push(sinConcepto + ' filas de ' + HOJA_ADHESIVOS + ' no dicen de qué impuesto ' +
+           'son; valen para cualquiera de ese municipio.');
+  }
+  var faltan = Object.keys(sinPareja);
+  if (faltan.length) {
+    l.push('', faltan.length + ' obligaciones del mes se quedaron sin adhesivo:');
+    faltan.sort().slice(0, 25).forEach(function (x) { l.push('   ' + x); });
+    if (faltan.length > 25) l.push('   … y ' + (faltan.length - 25) + ' más');
+  }
+  var txt = l.join('\n');
+  Logger.log(txt);
+  return txt;
 }

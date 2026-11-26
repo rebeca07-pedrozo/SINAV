@@ -32,18 +32,33 @@ function esMiMensaje(mensaje, miCorreo) {
 /**
  * Decide si un mensaje del hilo cuenta como respuesta.
  *
- * En PRODUCCION la respuesta viene de la oficina, asi que lo mio se descarta:
- * si contesto yo mismo sobre el hilo, eso no es que la oficina respondiera.
+ * La regla de antes era "lo mio no cuenta", y estaba mal planteada: el unico
+ * mensaje que hay que descartar siempre es EL QUE MANDO SINAV, que es el
+ * primero del hilo. Lo que venga despues es respuesta, venga de quien venga.
  *
- * En PRUEBA el correo se manda a mi propia bandeja a proposito, de modo que la
- * respuesta TAMBIEN es mia. Si se aplicara la regla de produccion, probar seria
- * imposible: se responde y la herramienta no ve nada. Por eso en PRUEBA lo
- * unico que se descarta es el primer mensaje del hilo, que es el que salio de
- * SINAV; todo lo que venga despues cuenta.
+ * De los mios se pide una condicion mas: que traigan adjunto. Asi un
+ * recordatorio que yo escriba sobre el hilo no marca la obligacion como
+ * respondida, pero el sellado que yo mismo reenvie —porque la alcaldia me lo
+ * paso por otro lado— si queda archivado, que es lo que importa.
+ *
+ * El modo ya no cambia nada: en PRUEBA el correo se manda a la propia bandeja
+ * y la respuesta tambien es propia, y con esta regla eso funciona solo.
  */
 function cuentaComoRespuesta(mensaje, indice, miCorreo, modo) {
-  if (modo === 'PRUEBA') return indice > 0;
-  return !esMiMensaje(mensaje, miCorreo);
+  if (indice === 0) return false;                // el que salio de SINAV
+  if (!esMiMensaje(mensaje, miCorreo)) return true;
+  return tieneAdjuntoUtil(mensaje);
+}
+
+/** Trae algo que valga como evidencia, no la firma ni un logo incrustado. */
+function tieneAdjuntoUtil(mensaje) {
+  try {
+    var adj = mensaje.getAttachments();
+    for (var i = 0; i < adj.length; i++) {
+      if (adj[i].getSize() >= MINIMO_ADJUNTO) return true;
+    }
+  } catch (e) { /* si no se puede leer, no cuenta */ }
+  return false;
 }
 
 /**
@@ -84,7 +99,7 @@ function leerHilo(o, miCorreo, modo) {
       // las firmas y los logos incrustados no son el sellado. El minimo es
       // bajo a proposito: un PDF de una pagina ronda los 10 KB, pero en una
       // prueba puede ser mucho mas pequeno y tiene que verse igual.
-      if (a.getSize() < 512) return;
+      if (a.getSize() < MINIMO_ADJUNTO) return;
       adjuntos.push(a);
     });
   }
@@ -143,22 +158,37 @@ function revisarRespuestas() {
 
     var campos = { ultimo_mensaje: r.ultimo };
 
-    // el adjunto va a Sellados, en la carpeta del municipio y el impuesto
-    var guardado = null;
+    // Los adjuntos van a Sellados, en la carpeta del municipio y el impuesto.
+    // TODOS los que vengan, y se SUMAN a los que ya hubiera: la oficina puede
+    // mandar primero una queja sin nada, luego el sellado, y mas tarde el
+    // recibo de pago en otro correo del mismo hilo. Cada uno es evidencia.
+    var guardados = [];
     if (r.adjuntos.length) {
+      var yaHabia = listaIds(o.sellado_id);
       try {
         var dir = carpetaSellado(o.vigencia, o.municipio, o.impuesto);
-        var a = r.adjuntos[r.adjuntos.length - 1];   // el ultimo que mandaron
-        var ext = a.getName().indexOf('.') > 0
-          ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
-        var nombre = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
-          .replace(/[\\/:*?"<>|]/g, '-') + ext;
-        guardado = dir.createFile(a.copyBlob().setName(nombre));
-        campos.sellado_id = guardado.getId();
-        conSellado++;
+        var base = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
+          .replace(/[\\/:*?"<>|]/g, '-');
+        for (var k = 0; k < r.adjuntos.length; k++) {
+          var a = r.adjuntos[k];
+          var ext = a.getName().indexOf('.') > 0
+            ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
+          var cuantos = yaHabia.length + guardados.length;
+          var nombre = base + (cuantos ? ' ' + (cuantos + 1) : '') + ext;
+          guardados.push(dir.createFile(a.copyBlob().setName(nombre)));
+        }
+        campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+          return f.getId();
+        })).join(',');
+        conSellado += guardados.length;
       } catch (e) {
         registrar(o.id, EVENTO.ERROR, 'no se pudo guardar el sellado: ' + e.message);
         errores.push(o.municipio + ' ' + o.impuesto + ': ' + e.message);
+        if (guardados.length) {
+          campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+            return f.getId();
+          })).join(',');
+        }
       }
     }
 
@@ -168,8 +198,10 @@ function revisarRespuestas() {
       escribirCampos(HOJA.OBLIGACIONES, o._fila, campos);
       registrar(o.id, EVENTO.RESPONDIDA,
         r.respuestas + ' mensaje(s) de ' + r.de +
-        (guardado ? ' · sellado guardado: ' + guardado.getName()
-                  : ' · sin adjunto'));
+        (guardados.length
+          ? ' · ' + guardados.length + ' adjunto(s) guardado(s): ' +
+            guardados.map(function (f) { return f.getName(); }).join(', ')
+          : ' · sin adjunto'));
 
       // ENVIADA pasa a RESPONDIDA; lo que ya estaba RESPONDIDA se queda,
       // porque una respuesta mas no cambia el estado, solo suma evidencia
@@ -197,11 +229,14 @@ function apiEnlaceSellado(id) {
   var o = registros(HOJA.OBLIGACIONES).filter(function (r) {
     return String(r.id) === String(id);
   })[0];
-  if (!o || !String(o.sellado_id || '').trim()) {
+  var cuales = o ? listaIds(o.sellado_id) : [];
+  if (!cuales.length) {
     throw new Error('Esa obligación todavía no tiene sellado.');
   }
   exigeMia(o.responsable, 'editarAjenas');
-  return 'https://drive.google.com/file/d/' + String(o.sellado_id).trim() + '/view';
+  // si guardaron varios, se abre el primero; los demas estan en la misma
+  // carpeta de Sellados, y el hilo de Gmail los tiene todos
+  return 'https://drive.google.com/file/d/' + cuales[0] + '/view';
 }
 
 /** El enlace al hilo de Gmail, para leer la conversación entera. */
@@ -263,4 +298,121 @@ function apiRevisarRespuestas() {
   var r = revisarRespuestas();
   r.lista = apiRespuestas();
   return r;
+}
+
+/* ---------------------------------------------------------------------------
+   DIAGNOSTICO
+
+   «Respondi y no lo ve» tiene media docena de causas distintas y ninguna se
+   nota desde la pantalla. Esto las enseña todas de una vez.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Cuenta, mensaje por mensaje, que esta viendo SINAV en el hilo de una
+ * obligacion y por que descarta lo que descarta.
+ *
+ *   porQueNoVeLaRespuesta()                  la primera ENVIADA que encuentre
+ *   porQueNoVeLaRespuesta('13001|ICA|...')   una concreta
+ */
+function porQueNoVeLaRespuesta(idObligacion) {
+  var q = yo();
+  var modo = String(config('modo') || 'PRUEBA').toUpperCase();
+  var todas = registros(HOJA.OBLIGACIONES);
+
+  var o = String(idObligacion || '').trim()
+    ? todas.filter(function (r) { return String(r.id) === String(idObligacion).trim(); })[0]
+    : todas.filter(function (r) {
+        return String(r.hilo_id || '').trim() &&
+               estadosEsperanRespuesta().indexOf(String(r.estado).toUpperCase()) >= 0;
+      })[0];
+
+  if (!o) {
+    return 'No encontré ninguna obligación enviada con hilo guardado.\n' +
+           'Pásame el id: porQueNoVeLaRespuesta("13001|ICA|GENERAL|2026-B6")';
+  }
+
+  var l = [
+    o.municipio + ' · ' + o.impuesto + ' · ' + o.periodo,
+    'Estado: ' + o.estado + '   ·   Modo: ' + modo,
+    'Tu cuenta: ' + q.correo,
+    ''
+  ];
+
+  if (!String(o.hilo_id || '').trim()) {
+    l.push('NO TIENE hilo_id. Al enviar no se encontró el hilo en tus enviados,');
+    l.push('así que la respuesta no se puede asociar sola. Busca un ERROR en');
+    l.push('EVENTOS con esta obligación.');
+    return avisoDiagnostico(l);
+  }
+  if (estadosEsperanRespuesta().indexOf(String(o.estado).toUpperCase()) < 0) {
+    l.push('El estado ' + o.estado + ' ya no mira el hilo. Solo se revisan ' +
+           estadosEsperanRespuesta().join(', ') + '.');
+    return avisoDiagnostico(l);
+  }
+
+  var hilo;
+  try {
+    hilo = GmailApp.getThreadById(String(o.hilo_id).trim());
+  } catch (e) {
+    l.push('El hilo ' + o.hilo_id + ' no abre desde tu cuenta: ' + e.message);
+    l.push('Si lo envió otra persona, el hilo está en SU bandeja, no en la tuya.');
+    return avisoDiagnostico(l);
+  }
+  if (!hilo) {
+    l.push('El hilo ' + o.hilo_id + ' no está en tu bandeja.');
+    return avisoDiagnostico(l);
+  }
+
+  var mensajes = hilo.getMessages();
+  var visto = String(o.ultimo_mensaje || '').trim();
+  l.push('El hilo tiene ' + mensajes.length + ' mensaje(s).');
+  l.push(visto ? 'Ya se procesó hasta el mensaje ' + visto : 'No se ha procesado ninguno.');
+  l.push('');
+
+  var procesado = !visto;
+  var cuentan = 0, conAdjunto = 0;
+
+  for (var i = 0; i < mensajes.length; i++) {
+    var m = mensajes[i];
+    var de = String(m.getFrom() || '');
+    var nuevo = procesado;
+    if (visto && m.getId() === visto) procesado = true;
+
+    var vale = cuentaComoRespuesta(m, i, q.correo, modo);
+    var adj = m.getAttachments().filter(function (a) {
+      return a.getSize() >= MINIMO_ADJUNTO;
+    });
+
+    var por = [];
+    if (!nuevo) por.push('ya procesado antes');
+    if (!vale) {
+      por.push(i === 0
+        ? 'es el primero del hilo, el que mandó SINAV'
+        : 'salió de tu cuenta y no trae ningún adjunto');
+    }
+    if (nuevo && vale) { cuentan++; conAdjunto += adj.length; }
+
+    l.push((i + 1) + '. de ' + de);
+    l.push('   ' + (nuevo && vale ? 'CUENTA' : 'se descarta: ' + por.join(' y ')));
+    l.push('   adjuntos útiles: ' + adj.length +
+           (adj.length ? ' (' + adj.map(function (a) {
+             return a.getName() + ' ' + Math.round(a.getSize() / 1024) + ' KB';
+           }).join(', ') + ')' : ''));
+  }
+
+  l.push('');
+  if (cuentan) {
+    l.push('Hay ' + cuentan + ' mensaje(s) sin procesar que SÍ cuentan, con ' +
+           conAdjunto + ' adjunto(s).');
+    l.push('Dale a «Revisar respuestas ahora» y deberían entrar.');
+  } else {
+    l.push('No hay mensajes nuevos que contar.');
+  }
+  return avisoDiagnostico(l);
+}
+
+function avisoDiagnostico(lineas) {
+  var txt = lineas.join('\n');
+  Logger.log(txt);
+  return txt;
 }

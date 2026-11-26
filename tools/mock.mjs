@@ -23,7 +23,8 @@ const codigo = puros.map((f) => readFileSync(join(raiz, 'src', f + '.gs'), 'utf8
   .join('\n;\n');
 const S = new Function(codigo +
   '\n;return { agruparMetricas, apiCamposOpciones, leerNombreArchivo,' +
-  ' emparejarArchivo, agruparAlertas, ESTADO, ESTADOS_ADMITEN_SOPORTE };')();
+  ' emparejarArchivo, agruparAlertas, camposDelCorreo, faltaParaElCorreo,' +
+  ' ESTADO, ESTADOS_ADMITEN_SOPORTE };')();
 
 const dia = (n) => {
   const d = new Date();
@@ -47,7 +48,7 @@ const filas = [
     estado: 'LISTA', valor: 7905100,
     nota: '', reprocesos: 0, motivo_devuelta: '', fecha_envio: '', fecha_respuesta: '',
     cadena: { soporte: true, envio: false, respuesta: false, sellado: false },
-    soporte_revisado: true,
+    soporte_revisado: false, soportes: 2,
     mia: true, enviable: true, motivo_no_enviable: '', nivel: 'vencido'
   },
   {
@@ -98,6 +99,15 @@ filas.push({
   mia: false, enviable: false, motivo_no_enviable: 'sin soporte', nivel: 'porvencer'
 });
 
+// el adhesivo lo trae el repartidor desde la hoja ADHESIVOS: a unas si, a
+// otras todavia no, que es justo lo que distingue los dos casos en pantalla
+filas.forEach((o, k) => {
+  o.adhesivo = String(55285300 + k);
+  o.consecutivo_giro = 'LR-11-' + (70 + k);
+  // lo que falta para el correo lo calcula el servidor de verdad
+  o.falta_correo = S.faltaParaElCorreo(o);
+});
+
 const conteos = filas.reduce((c, o) => {
   c.todas++;
   if (!o.cadena.soporte) c.sin_soporte++;
@@ -123,7 +133,11 @@ const inicio = {
   ventanas: { mes: 3, proximo: 5, vencidas: 1, abiertas: 6, todo: 9 },
   filas: filas.filter((o) => o.requiere_envio === 'SI' &&
     ['PENDIENTE', 'LISTA', 'DEVUELTA', 'REBOTADO'].indexOf(o.estado) >= 0),
-  conteos, generado: ahora
+  conteos, generado: ahora,
+  // la digitalizacion vive dentro de Enviar: las definiciones salen de
+  // 14_Campos.gs de verdad, no de una copia escrita a mano aqui
+  campos: S.apiCamposOpciones(),
+  orden_campos: S.camposDelCorreo()
 };
 inicio.conteos = inicio.filas.reduce((c, o) => {
   c.todas++;
@@ -281,23 +295,48 @@ window.google = { script: { run: (function () {
     apiLogo: () => '',
     apiListaEnviar: (v) => ({ ventana: v || 'mes', ventanas: D.INICIO.ventanas,
                               filas: D.INICIO.filas, conteos: D.INICIO.conteos,
-                              cuota: D.INICIO.cuota, generado: D.INICIO.generado }),
+                              cuota: D.INICIO.cuota,
+                              campos: D.INICIO.campos,
+                              orden_campos: D.INICIO.orden_campos,
+                              generado: D.INICIO.generado }),
     apiSubirSoporte: () => ({ ok: true }),
+    // una entrada por ARCHIVO, como el servidor: una obligacion puede llevar
+    // la declaracion y sus anexos, y hay que ver todos
     apiSoportesParaRevisar: (ids) => ({
-      soportes: (ids || []).map((id) => {
+      soportes: (ids || []).reduce((acc, id) => {
         const o = D.INICIO.filas.find((f) => f.id === id) || {};
-        return { id: id, municipio: o.municipio || '?', cod_dane: o.cod_dane || '',
-                 impuesto: o.impuesto || '', periodo: o.periodo || '',
-                 vencimiento: o.vencimiento || '', correo_oficina: o.correo_oficina || '',
-                 soporte_id: 'EJEMPLO', nombre: (o.municipio || '') + ' ' +
-                   (o.impuesto || '') + ' ' + (o.periodo || '') + '.pdf',
-                 peso_kb: 142, vista: '', enlace: '#', revisado: false };
-      }) }),
-    apiMarcarSoporte: (id, ok) => ({ id: id, revisado: !!ok }),
+        const cuantos = Math.max(1, Number(o.soportes) || 1);
+        for (let k = 1; k <= cuantos; k++) {
+          acc.push({ id: id, municipio: o.municipio || '?', cod_dane: o.cod_dane || '',
+                     cod_oficina: o.cod_oficina || '',
+                     impuesto: o.impuesto || '', periodo: o.periodo || '',
+                     vencimiento: o.vencimiento || '',
+                     correo_oficina: o.correo_oficina || '',
+                     nit_municipio: o.nit_municipio || '',
+                     valor_texto: o.valor
+                       ? '$' + String(o.valor).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+                       : '$0',
+                     consecutivo_giro: o.consecutivo_giro || '',
+                     adhesivo: o.adhesivo || '',
+                     pago_texto: (o.paga_quien || '—') +
+                       (o.forma_pago ? ' (' + o.forma_pago + ')' : ''),
+                     destinatarios: o.correo_oficina ||
+                       ('director' + String(o.cod_oficina || '').replace(/^0+/, '') +
+                        '@davivienda.com'),
+                     copias: 'copias', copias_cuantas: 7,
+                     soporte_id: 'EJEMPLO-' + id + '-' + k,
+                     nombre: (o.municipio || '') + ' ' + (o.impuesto || '') + ' ' +
+                       (o.periodo || '') + (k > 1 ? ' anexo ' + (k - 1) : '') + '.pdf',
+                     peso_kb: 142, cual: k, de: cuantos,
+                     vista: '', enlace: '#', revisado: false });
+        }
+        return acc;
+      }, []) }),
+    apiMarcarSoporte: (id, ok, motivo, soporteId) => ({
+      id: id, revisado: !!ok, soporte_id: soporteId, quedan: ok ? 2 : 1 }),
     apiEnviar: (ids) => ({ enviadas: ids.map((id) => ({ id })), rechazadas: [],
                            pendientes: [], modo: 'PRUEBA',
                            cuota: { usada: ids.length, tope: 1500 } }),
-    apiListaCampos: () => D.LISTA_CAMPOS,
     apiCamposOpciones: () => D.LISTA_CAMPOS.opciones,
     apiGuardarCampos: (id, campos) => ({
       id, cambios: Object.keys(campos || {}).length,
@@ -385,7 +424,11 @@ window.google = { script: { run: (function () {
 let doc = readFileSync(join(ui, 'Index.html'), 'utf8');
 doc = doc.replace(/<\?!=\s*include\('ui\/(\w+)'\);?\s*\?>/g,
   (_, n) => readFileSync(join(ui, n + '.html'), 'utf8'));
-doc = doc.replace('<div id="raiz"></div>', '<div id="raiz"></div>\n  ' + stub);
+// OJO con replace() y una cadena de reemplazo: $' , $& y $` son patrones
+// especiales, asi que un '$' dentro del stub se comia medio archivo y la
+// pagina salia en blanco. Con una funcion, el texto entra tal cual.
+doc = doc.replace('<div id="raiz"></div>',
+                  () => '<div id="raiz"></div>\n  ' + stub);
 
 const salida = join(raiz, '.taste-skill', 'mock');
 mkdirSync(salida, { recursive: true });

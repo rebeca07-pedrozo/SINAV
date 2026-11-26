@@ -6,6 +6,21 @@ var CUOTA_DIARIA = 1500;      // destinatarios por persona por dia
 var CARPETA_RAIZ = 'SINAV';
 var SEGUNDOS_MAX = 270;       // 4m30s del limite de 6 minutos
 
+/**
+ * Cuantos archivos puede llevar un envio. Gmail corta en 25 MB en total, asi
+ * que el tope de verdad es el peso, no la cantidad; esto es para que nadie
+ * suba cuarenta por error.
+ */
+/**
+ * Lo que tiene que pesar un adjunto para contar como evidencia. Por debajo
+ * suelen ser firmas y logos incrustados, no documentos. Bajo a proposito: un
+ * PDF de una pagina ronda los 10 KB, pero en una prueba puede ser menor.
+ */
+var MINIMO_ADJUNTO = 512;
+
+var MAX_SOPORTES = 10;
+var MAX_ADJUNTO_MB = 24;
+
 /** Para escribir fechas en mensajes, sin depender del locale del servidor. */
 var NOMBRE_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre',
@@ -72,7 +87,22 @@ var COLS = {
     'soporte_revisado',
     // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
     // Vacio = Banco Davivienda, que es el caso normal.
-    'entidad'
+    'entidad',
+    // --- lo que se agrego despues va SIEMPRE aqui abajo, nunca en la mitad:
+    // asegurarHojas() reescribe la fila 1 sin mover los datos, y una columna
+    // insertada en medio desalinea todo lo que ya esta escrito.
+    //
+    // El envio FISICO por correspondencia interna, que no es lo mismo que el
+    // correo: 'fecha_envio' la escribe SINAV cuando sale el correo,
+    // 'fecha_despacho' la escribe la persona y es cuando se despacho el sobre.
+    'fecha_despacho',
+    // El numero del adhesivo de correspondencia (55285303). Es por municipio,
+    // impuesto y MES: cambia en cada periodo, por eso vive en la obligacion y
+    // no en PROGRAMACION.
+    'adhesivo',
+    // El consecutivo de giro del pago (LR-09-74). Va en el asunto y en el
+    // cuerpo del correo.
+    'consecutivo_giro'
   ],
   EVENTOS: ['fecha', 'id_obligacion', 'actor', 'que_paso', 'detalle']
 };
@@ -264,7 +294,26 @@ var CONFIG_BASE = [
   ['nombre_remitente', 'Impuestos Davivienda'],
   ['carpeta_territoriales', CARPETA_TERRITORIALES],
   ['vigencia_actual', '2026'],
-  ['dias_aviso', '10,4,2,0'],
+  ['dias_aviso', '7,4,2,0'],
+  // Lo que es igual en todos los correos. Si cambia, se cambia aqui una vez.
+  ['egreso', '25'],
+  ['codigo_departamento', '9413'],
+  ['nombre_recibe', 'Liliana Ramirez'],
+  // Siempre en copia, en todos los envios. Si entra o sale alguien del
+  // equipo, se cambia aqui y ya.
+  ['copias_fijas', [
+    'merodriguez@davivienda.com',
+    'grpconceptosespeciales@davivienda.com',
+    'sptellez@davivienda.com',
+    'egomezg@davivienda.com',
+    'yasneidy.ramirez@davivienda.com',
+    'jesus.jaimes@davivienda.com',
+    'helen.cuadros@davivienda.com'
+  ].join(',')],
+  // El consecutivo de giro respeta el prefijo que tienen definido, porque es
+  // con el que concilia revisoria. SI = usa las iniciales de quien envia.
+  ['giro_sigue_al_remitente', 'NO'],
+  ['dominio_oficinas', 'davivienda.com'],
   ['modo', 'PRUEBA'],
   ['rol_defecto', 'PROFESIONAL'],
   ['area_defecto', 'MUNICIPALES'],

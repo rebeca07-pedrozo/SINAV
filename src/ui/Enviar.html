@@ -89,21 +89,64 @@ function TarjetasConteo({ conteos, filtro, alFiltrar }) {
  * y nadie sabia por que. Ahora se escribe en la fila.
  */
 function motivoLegible(o) {
-  if (o.mia === false) return 'es de otra persona';
+  if (o.mia === false) return 'asignada a otra persona';
   const m = String(o.motivo_no_enviable || '');
   if (!m) return '';
-  if (m === 'sin soporte') return 'falta subir el soporte';
-  if (m === 'sin correo de oficina') return 'la alcaldía no tiene correo registrado';
-  if (m === 'requiere_envio no es SI') return 'marcada como que no se envía por correo';
+  if (m === 'sin soporte') return 'pendiente cargar el soporte';
+  if (m === 'sin correo ni dependencia') {
+    return 'sin correo de oficina ni dependencia registrada';
+  }
+  if (m === 'requiere_envio no es SI') return 'no está marcada para envío por correo';
   if (m.indexOf('no LISTA') >= 0) {
-    return 'está en ' + o.estado + ': solo se envía desde LISTA';
+    return 'en estado ' + o.estado + '. El envío solo procede desde LISTA.';
   }
   return m;
 }
 
-function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
+/**
+ * El valor liquidado, editable en la misma fila.
+ *
+ * Es el dato que mas se escribe y el unico que cambia en cada periodo, asi
+ * que abrir una ventana por obligacion para escribir un numero no tiene
+ * sentido. Se guarda al salir del campo, no en cada tecla.
+ */
+function CeldaValor({ o, alGuardar, guardando }) {
+  const [texto, setTexto] = useState(o.valor == null ? '' : String(o.valor));
+  const [tocado, setTocado] = useState(false);
+  const previo = useRef(o.valor == null ? '' : String(o.valor));
+
+  // si la fila se recarga desde el servidor, el campo sigue lo que diga la
+  // hoja, salvo que la persona lo esté escribiendo
+  useEffect(() => {
+    if (tocado) return;
+    const v = o.valor == null ? '' : String(o.valor);
+    previo.current = v;
+    setTexto(v);
+  }, [o.valor, tocado]);
+
+  async function salir() {
+    setTocado(false);
+    if (texto.trim() === previo.current.trim()) return;
+    const ok = await alGuardar(o.id, texto);
+    if (!ok) setTexto(previo.current);        // no se pudo: se deja como estaba
+  }
+
+  return html`<td class="celda-valor num der">
+    <input type="text" inputMode="numeric" class="num entrada-valor"
+      aria-label=${'Valor liquidado de ' + o.municipio + ' ' + o.impuesto}
+      placeholder="—" value=${texto} disabled=${guardando}
+      onInput=${(e) => { setTocado(true); setTexto(e.target.value); }}
+      onBlur=${salir}
+      onKeyDown=${(e) => { if (e.key === 'Enter') e.target.blur(); }} />
+    ${guardando ? html`<span class="sub">guardando…</span>` : null}
+  </td>`;
+}
+
+function Fila({ o, elegida, alElegir, alSubir, subiendo, alGuardarValor,
+                guardandoValor }) {
   const puedo = o.enviable && o.mia !== false;
   const porque = puedo ? '' : motivoLegible(o);
+  const falta = o.falta_correo || [];
   const nivelVence = o.dias === null ? '' : (o.dias < 0 ? 'vencido' : (o.dias <= 4 ? 'porvencer' : ''));
 
   return html`<tr data-elegida=${elegida ? 'si' : 'no'}>
@@ -137,12 +180,20 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
       <span class=${'sub ' + nivelVence}>${textoDias(o.dias)}</span>
     </td>
 
+    <${CeldaValor} o=${o} alGuardar=${alGuardarValor}
+      guardando=${guardandoValor} />
+
     <td class="celda-linea2">
       <${Cadena} cadena=${o.cadena} trabada=${!o.enviable} />
+      ${o.soportes > 1
+        ? html`<span class="sub">${o.soportes + ' archivos adjuntos'}</span>` : null}
+      ${puedo && falta.length
+        ? html`<span class="sub porvencer">${'datos pendientes: ' + falta.join(', ')}</span>`
+        : null}
       ${porque
         ? html`<span class="sub vencido">${'no se puede enviar: ' + porque}</span>`
         : (o.cadena.soporte && !o.soporte_revisado
-            ? html`<span class="sub porvencer">se revisa al enviar</span>` : null)}
+            ? html`<span class="sub porvencer">pendiente de verificación</span>` : null)}
     </td>
 
     <td class="celda-linea2">
@@ -151,9 +202,11 @@ function Fila({ o, elegida, alElegir, alSubir, subiendo }) {
 
     <td class="celda-accion der">
       ${o.cadena.soporte
-        ? html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
-            <${Icono} nombre="subir" /> Reemplazar</button>`
-        : html`<button class="btn" disabled=${subiendo} onClick=${() => alSubir(o.id)}>
+        ? html`<button class="btn" disabled=${subiendo}
+            onClick=${() => alSubir(o.id, false)}>
+            ${subiendo ? 'Subiendo…' : 'Cambiar soporte'}</button>`
+        : html`<button class="btn" disabled=${subiendo}
+            onClick=${() => alSubir(o.id, false)}>
             <${Icono} nombre="subir" /> ${subiendo ? 'Subiendo…' : 'Subir soporte'}</button>`}
     </td>
   </tr>`;
@@ -173,50 +226,68 @@ function RevisarSoportes({ soportes, alMarcar, alCerrar, trabajando, listos }) {
   if (!s) return null;
 
   const avanzar = () => setI((n) => Math.min(n + 1, soportes.length - 1));
+  const todoListo = listos === soportes.length;
+
+  const dato = (et, valor, nota) => html`<div class="ficha" key=${et}>
+    <span class="sub">${et}</span>
+    <b>${valor || '—'}</b>
+    ${nota ? html`<span class="sub">${nota}</span>` : null}
+  </div>`;
 
   return html`<div class="velo">
-    <div class="modal modal-ancho" role="dialog" aria-modal="true"
+    <div class="modal modal-envio" role="dialog" aria-modal="true"
       aria-labelledby="t-rev">
       <div class="rev-cab">
         <div>
           <h2 id="t-rev">${s.municipio} · ${s.impuesto} · ${s.periodo}</h2>
-          <p class="sub">${[
-            'DANE ', s.cod_dane, ' · vence ', s.vencimiento || 'sin fecha',
-            ' · ', s.nombre || 'sin archivo',
-            s.peso_kb ? ' (' + s.peso_kb + ' KB)' : ''
-          ].join('')}</p>
+          <p class="sub">${'Vence ' + (s.vencimiento || 'sin fecha') +
+            ' · dependencia ' + (s.cod_oficina || '—')}</p>
         </div>
         <span class="rev-cuenta">${i + 1} de ${soportes.length}</span>
       </div>
 
-      ${s.vista
-        ? html`<iframe class="rev-vista" src=${s.vista} title=${'Soporte de ' + s.municipio}></iframe>`
-        : html`<p class="vacio">Esta obligación no tiene soporte.</p>`}
+      <div class="envio-cuerpo">
+        <aside class="envio-datos">
+          <p class="sub envio-titulo">Esto es lo que va en la comunicación</p>
+          ${dato('Valor a girar', s.valor_texto)}
+          ${dato('NIT del municipio', s.nit_municipio)}
+          ${dato('Consecutivo de giro', s.consecutivo_giro)}
+          ${dato('Sticker de correspondencia', s.adhesivo)}
+          ${dato('Forma de pago', s.pago_texto)}
+          ${dato('Destinatarios', s.destinatarios,
+                 s.copias ? 'con copia a ' + s.copias_cuantas + ' más' : '')}
+          ${dato('Archivo', s.nombre, s.peso_kb ? s.peso_kb + ' KB' : '')}
+        </aside>
 
-      <p class="sub rev-nota">
-        Comprueba que el documento sea <b>de este municipio y de este
-        periodo</b>. Si no lo es, márcalo como incorrecto: se quita el archivo
-        y habrá que subir el correcto.
-        ${' '}<a href=${s.enlace} target="_blank" rel="noopener">Abrir en Drive</a>
-      </p>
+        <div class="envio-vista">
+          ${s.vista
+            ? html`<iframe class="rev-vista" src=${s.vista}
+                title=${'Soporte de ' + s.municipio}></iframe>`
+            : html`<p class="vacio">Esta obligación no tiene soporte.</p>`}
+        </div>
+      </div>
 
       <div class="modal-pie">
-        <button class="btn btn-principal" disabled=${trabajando}
-          onClick=${async () => { await alMarcar(s.id, true); avanzar(); }}>
-          ${s.revisado ? 'Correcto ✓' : 'Correcto'}
+        <button class=${'btn ' + (s.revisado ? '' : 'btn-principal')}
+          disabled=${trabajando}
+          onClick=${async () => { await alMarcar(s.id, true, s.soporte_id); avanzar(); }}>
+          ${s.revisado ? 'Verificado ✓' : 'El documento es correcto'}
         </button>
         <button class="btn btn-malo" disabled=${trabajando}
           onClick=${async () => {
-            // marcar incorrecto cierra el visor: lo que sigue es subir otro PDF
-            const r = await alMarcar(s.id, false);
+            const r = await alMarcar(s.id, false, s.soporte_id);
             if (r !== 'cerrado') avanzar();
           }}>
-          Incorrecto
+          No corresponde
         </button>
-        <span class="sub">${listos} de ${soportes.length} revisados</span>
-        <button class="btn" style=${{ marginLeft: 'auto' }}
+        <span class="sub">${listos} de ${soportes.length} verificados</span>
+        <button class=${'btn ' + (todoListo ? 'btn-principal' : '')}
+          style=${{ marginLeft: 'auto' }}
           disabled=${trabajando} onClick=${alCerrar}>
-          ${listos === soportes.length ? 'Listo' : 'Dejarlo para después'}
+          ${todoListo
+            ? 'Autorizar el envío de ' + soportes.length +
+              (soportes.length === 1 ? ' comunicación' : ' comunicaciones')
+            : 'Cancelar'}
         </button>
       </div>
     </div>
@@ -234,8 +305,11 @@ function Enviar({ inicio }) {
   const [resultado, setResultado] = useState(null);
   const [fallo, setFallo] = useState('');
   const [revision, setRevision] = useState(null);
+  // el asistente de envio: datos -> revisar los PDF -> confirmar
+  const [valorEnCurso, setValorEnCurso] = useState('');
   const archivo = useRef(null);
   const destino = useRef('');
+  const anadir = useRef(false);        // true = anexo, false = reemplazar
 
   const filas = datos.filas || [];
   const visibles = useMemo(() => filas.filter((o) => aplicaFiltro(o, filtro)),
@@ -283,10 +357,38 @@ function Enviar({ inicio }) {
     setConfirmando(false);
   }
 
+  /* -------- el valor, escrito en la propia tabla -------- */
+
+  /**
+   * Guarda el valor de una fila sin recargar la lista entera: el servidor
+   * devuelve la fila ya decorada y se reemplaza solo esa.
+   */
+  async function guardarValor(id, texto) {
+    setValorEnCurso(id);
+    setFallo('');
+    try {
+      const r = await llamar('apiGuardarCampos', id, { valor: texto });
+      if (r && r.fila) {
+        setDatos((v) => Object.assign({}, v, {
+          filas: (v.filas || []).map((f) => (f.id === id ? r.fila : f))
+        }));
+      }
+      return true;
+    } catch (e) {
+      setFallo(String(e && e.message ? e.message : e));
+      return false;
+    } finally {
+      setValorEnCurso('');
+    }
+  }
+
+  /* -------- paso 1: los datos que el correo nombra -------- */
+
   /* -------- subir el soporte: un archivo por llamada -------- */
 
-  function pedirArchivo(id) {
+  function pedirArchivo(id, agregar) {
     destino.current = id;
+    anadir.current = !!agregar;
     archivo.current.value = '';
     archivo.current.click();
   }
@@ -305,27 +407,56 @@ function Enviar({ inicio }) {
         lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
         lector.readAsDataURL(f);
       });
-      await llamar('apiSubirSoporte', id, f.name, f.type, datosBase64);
+      const r = await llamar('apiSubirSoporte', id, f.name, f.type,
+                             datosBase64, anadir.current);
       await recargar();
-      setResultado({ clase: '', titulo: 'Soporte cargado: ' + f.name, lineas: [] });
+      setResultado({ clase: '',
+        titulo: (anadir.current ? 'Anexo cargado: ' : 'Soporte cargado: ') + f.name,
+        lineas: r && r.soportes > 1
+          ? ['Esa obligación va con ' + r.soportes + ' archivos adjuntos. ' +
+             'Al enviar hay que revisarlos todos.']
+          : [] });
     } catch (e) {
       setFallo('No se pudo subir ' + f.name + '. ' + (e && e.message ? e.message : e));
     } finally {
       setSubiendo('');
       destino.current = '';
+      anadir.current = false;
     }
   }
 
   /* -------- revisar los soportes: obligatorio antes de enviar -------- */
+
+  /**
+   * El botón de enviar. Si a alguna le falta un dato que el correo nombra, lo
+   * dice y no abre nada: esos datos se corrigen en los datos, no aquí.
+   */
+  function empezarEnvio() {
+    setResultado(null);
+    setFallo('');
+    const cojas = elegidasVivas
+      .map((id) => filas.find((f) => f.id === id))
+      .filter((o) => o && (o.falta_correo || []).length);
+    if (cojas.length) {
+      setResultado({ clase: 'malo',
+        titulo: 'Hay datos pendientes',
+        lineas: cojas.slice(0, 8).map((o) =>
+          o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ': ' +
+          o.falta_correo.join(', '))
+          .concat(cojas.length > 8 ? ['… y ' + (cojas.length - 8) + ' más'] : []) });
+      return;
+    }
+    abrirRevision();
+  }
 
   async function abrirRevision() {
     setTrabajando('revisando');
     setFallo('');
     try {
       const r = await llamar('apiSoportesParaRevisar', elegidasVivas);
-      // las que ya se revisaron y no han cambiado no hay que volver a mirarlas
-      if (r.soportes.every((s) => s.revisado)) setConfirmando(true);
-      else setRevision(r.soportes);
+      // El visor se abre siempre, aunque ya estén verificados: es la pantalla
+      // donde se ven los datos que van en la comunicación y donde se autoriza.
+      setRevision(r.soportes);
     } catch (e) {
       setFallo(String(e && e.message ? e.message : e));
     } finally {
@@ -333,12 +464,12 @@ function Enviar({ inicio }) {
     }
   }
 
-  async function marcarSoporte(id, correcto) {
+  async function marcarSoporte(id, correcto, soporteId) {
     setTrabajando('marcando');
     try {
-      await llamar('apiMarcarSoporte', id, correcto, '');
+      await llamar('apiMarcarSoporte', id, correcto, '', soporteId);
       setRevision((v) => v.map((s) =>
-        s.id === id ? Object.assign({}, s, { revisado: correcto }) : s));
+        s.soporte_id === soporteId ? Object.assign({}, s, { revisado: correcto }) : s));
       if (!correcto) {
         // se cierra el visor y se vuelve a la lista, donde esa fila ya pide
         // «Subir soporte» otra vez
@@ -347,7 +478,7 @@ function Enviar({ inicio }) {
         setRevision(null);
         setConfirmando(false);
         setResultado({ clase: 'malo',
-          titulo: 'Soporte marcado como incorrecto',
+          titulo: 'Soporte marcado como no válido',
           lineas: [
             frase(['Se quitó el archivo de',
                    o ? o.municipio + ' ' + o.impuesto + ' ' + o.periodo : 'la obligación',
@@ -364,11 +495,20 @@ function Enviar({ inicio }) {
     }
   }
 
+  /**
+   * Cerrar el visor con todo verificado ES la autorización: el correo sale.
+   * Antes había una confirmación más encima, y tres botones para mandar un
+   * correo es uno de más.
+   */
   async function cerrarRevision() {
+    const total = (revision || []).length;
     const buenos = (revision || []).filter((s) => s.revisado).length;
     setRevision(null);
+    if (total && buenos === total) {
+      await enviarYa();
+      return;
+    }
     await recargar();
-    if (buenos) setConfirmando(true);
   }
 
   /* -------- enviar -------- */
@@ -432,7 +572,7 @@ function Enviar({ inicio }) {
         </button>
         <button class="btn btn-principal"
           disabled=${!elegidasVivas.length || !!trabajando}
-          onClick=${abrirRevision}>
+          onClick=${empezarEnvio}>
           ${trabajando === 'enviando'
             ? 'Enviando…'
             : 'Enviar seleccionadas (' + elegidasVivas.length + ')'}
@@ -443,14 +583,9 @@ function Enviar({ inicio }) {
     <${TarjetasConteo} conteos=${conteosVista} filtro=${filtro}
       alFiltrar=${(f) => { setFiltro(f); setConfirmando(false); }} />
 
-    ${confirmando ? html`<div class="confirmar" role="alert">
-      <p><b>${elegidasVivas.length}</b>
-        ${elegidasVivas.length === 1 ? ' correo' : ' correos'} con su declaración adjunta.
-        ${modo === 'PRUEBA'
-          ? ' En modo prueba llegan a tu bandeja, no a las oficinas.'
-          : ' Van a ' + destinatarios + ' destinatarios en las oficinas.'}</p>
-      <button class="btn btn-principal" onClick=${enviarYa}>Confirmar envío</button>
-      <button class="btn" onClick=${() => setConfirmando(false)}>Cancelar</button>
+    ${modo === 'PRUEBA' && elegidasVivas.length ? html`<div class="confirmar">
+      <p>Modo prueba: las ${elegidasVivas.length} comunicaciones llegarán a tu
+        propia bandeja, no a las oficinas.</p>
     </div>` : null}
 
     ${resultado ? html`<div class=${'resultado ' + resultado.clase} role="status">
@@ -486,6 +621,7 @@ function Enviar({ inicio }) {
             <th>Impuesto</th>
             <th class="num">Periodo</th>
             <th class="num der">Vence</th>
+            <th class="num der">Valor</th>
             <th>Evidencia</th>
             <th>Estado</th>
             <th class="der">Soporte</th>
@@ -498,7 +634,9 @@ function Enviar({ inicio }) {
               ${visibles.map((o) => html`<${Fila} key=${o.id} o=${o}
                 elegida=${elegidas.indexOf(o.id) >= 0}
                 subiendo=${subiendo === o.id}
-                alElegir=${alternar} alSubir=${pedirArchivo} />`)}
+                alElegir=${alternar} alSubir=${pedirArchivo}
+                alGuardarValor=${guardarValor}
+                guardandoValor=${valorEnCurso === o.id} />`)}
             </tbody>`}
       </table>
 

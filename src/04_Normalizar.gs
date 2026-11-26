@@ -29,11 +29,36 @@ function normPeriodicidad(v) {
  */
 function normCodigo(v, ancho) {
   if (v === null || v === undefined) return '';
+
+  // UNA FECHA. Pasa cuando la columna del codigo quedo con formato de fecha:
+  // la hoja guarda 54001 pero devuelve «Mon Apr 05 2049», y entonces el DANE
+  // del municipio se vuelve una fecha y el id de la obligacion con el. Se
+  // deshace la conversion: el numero de serie de la hoja ES el codigo.
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return '';
+    var serie = diasDesdeElOrigen(v);
+    if (serie <= 0) return '';
+    var t = String(serie);
+    if (ancho) while (t.length < ancho) t = '0' + t;
+    return t;
+  }
+
   var s = String(v).trim();
   if (s.indexOf('E+') > 0 || s.indexOf('e+') > 0) s = Number(s).toFixed(0);
   s = s.replace(/\.0+$/, '');
   if (ancho && /^[0-9]+$/.test(s)) while (s.length < ancho) s = '0' + s;
   return s;
+}
+
+/**
+ * El numero de serie que la hoja de calculo guarda detras de una fecha: los
+ * dias desde el 30 de diciembre de 1899. Se cuenta con las piezas locales de
+ * la fecha, no con getTime(), para que el huso horario no corra un dia.
+ */
+function diasDesdeElOrigen(d) {
+  var utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  var origen = Date.UTC(1899, 11, 30);
+  return Math.round((utc - origen) / 86400000);
 }
 
 /** Periodo: 2026-09 | 2026-B4 | 2026-T3 | 2026-C2 | 2026. '' si no encaja. */

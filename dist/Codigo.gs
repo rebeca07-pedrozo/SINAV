@@ -11,6 +11,21 @@ var CUOTA_DIARIA = 1500;      // destinatarios por persona por dia
 var CARPETA_RAIZ = 'SINAV';
 var SEGUNDOS_MAX = 270;       // 4m30s del limite de 6 minutos
 
+/**
+ * Cuantos archivos puede llevar un envio. Gmail corta en 25 MB en total, asi
+ * que el tope de verdad es el peso, no la cantidad; esto es para que nadie
+ * suba cuarenta por error.
+ */
+/**
+ * Lo que tiene que pesar un adjunto para contar como evidencia. Por debajo
+ * suelen ser firmas y logos incrustados, no documentos. Bajo a proposito: un
+ * PDF de una pagina ronda los 10 KB, pero en una prueba puede ser menor.
+ */
+var MINIMO_ADJUNTO = 512;
+
+var MAX_SOPORTES = 10;
+var MAX_ADJUNTO_MB = 24;
+
 /** Para escribir fechas en mensajes, sin depender del locale del servidor. */
 var NOMBRE_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre',
@@ -77,7 +92,22 @@ var COLS = {
     'soporte_revisado',
     // Bogota tiene varias entidades (Banco Davivienda, Corporacion Financiera...).
     // Vacio = Banco Davivienda, que es el caso normal.
-    'entidad'
+    'entidad',
+    // --- lo que se agrego despues va SIEMPRE aqui abajo, nunca en la mitad:
+    // asegurarHojas() reescribe la fila 1 sin mover los datos, y una columna
+    // insertada en medio desalinea todo lo que ya esta escrito.
+    //
+    // El envio FISICO por correspondencia interna, que no es lo mismo que el
+    // correo: 'fecha_envio' la escribe SINAV cuando sale el correo,
+    // 'fecha_despacho' la escribe la persona y es cuando se despacho el sobre.
+    'fecha_despacho',
+    // El numero del adhesivo de correspondencia (55285303). Es por municipio,
+    // impuesto y MES: cambia en cada periodo, por eso vive en la obligacion y
+    // no en PROGRAMACION.
+    'adhesivo',
+    // El consecutivo de giro del pago (LR-09-74). Va en el asunto y en el
+    // cuerpo del correo.
+    'consecutivo_giro'
   ],
   EVENTOS: ['fecha', 'id_obligacion', 'actor', 'que_paso', 'detalle']
 };
@@ -269,7 +299,26 @@ var CONFIG_BASE = [
   ['nombre_remitente', 'Impuestos Davivienda'],
   ['carpeta_territoriales', CARPETA_TERRITORIALES],
   ['vigencia_actual', '2026'],
-  ['dias_aviso', '10,4,2,0'],
+  ['dias_aviso', '7,4,2,0'],
+  // Lo que es igual en todos los correos. Si cambia, se cambia aqui una vez.
+  ['egreso', '25'],
+  ['codigo_departamento', '9413'],
+  ['nombre_recibe', 'Liliana Ramirez'],
+  // Siempre en copia, en todos los envios. Si entra o sale alguien del
+  // equipo, se cambia aqui y ya.
+  ['copias_fijas', [
+    'merodriguez@davivienda.com',
+    'grpconceptosespeciales@davivienda.com',
+    'sptellez@davivienda.com',
+    'egomezg@davivienda.com',
+    'yasneidy.ramirez@davivienda.com',
+    'jesus.jaimes@davivienda.com',
+    'helen.cuadros@davivienda.com'
+  ].join(',')],
+  // El consecutivo de giro respeta el prefijo que tienen definido, porque es
+  // con el que concilia revisoria. SI = usa las iniciales de quien envia.
+  ['giro_sigue_al_remitente', 'NO'],
+  ['dominio_oficinas', 'davivienda.com'],
   ['modo', 'PRUEBA'],
   ['rol_defecto', 'PROFESIONAL'],
   ['area_defecto', 'MUNICIPALES'],
@@ -315,6 +364,10 @@ function onOpen() {
     .addItem('Migrar columnas', 'migrar')
     .addItem('Correr pruebas', 'pruebas')
     .addItem('¿Por qué no se envía?', 'porQueNoSeEnviaDesdeMenu')
+    .addItem('¿Por qué no ve la respuesta?', 'porQueNoVeLaRespuestaDesdeMenu')
+    .addSeparator()
+    .addItem('Revisar antes de producción', 'revisarAntesDeProduccionDesdeMenu')
+    .addItem('PASAR A PRODUCCIÓN', 'pasarAProduccionDesdeMenu')
     .addSeparator()
     .addSubMenu(SpreadsheetApp.getUi().createMenu('Datos de ejemplo')
       .addItem('Sembrar escenario de ejemplo (8 filas)', 'sembrarEjemploDesdeMenu')
@@ -329,6 +382,15 @@ function onOpen() {
   }
   if (typeof menuMensuales === 'function') {
     try { menuMensuales(); } catch (e) { /* idem */ }
+  }
+  if (typeof menuConcepto25 === 'function') {
+    try { menuConcepto25(); } catch (e) { /* idem */ }
+  }
+  if (typeof menuArranque === 'function') {
+    try { menuArranque(); } catch (e) { /* idem */ }
+  }
+  if (typeof menuReemplazo === 'function') {
+    try { menuReemplazo(); } catch (e) { /* idem */ }
   }
 }
 
@@ -758,6 +820,40 @@ function porQueNoSeEnviaDesdeMenu() {
                                SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
+function revisarAntesDeProduccionDesdeMenu() {
+  SpreadsheetApp.getUi().alert('SINAV · antes de producción',
+                               revisarAntesDeProduccion(),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Pasar a produccion manda correos de verdad a las alcaldias, asi que se
+ * pregunta dos veces: primero se muestra lo que esta a punto de salir.
+ */
+function pasarAProduccionDesdeMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.alert('SINAV · pasar a PRODUCCIÓN',
+    revisarAntesDeProduccion() +
+    '\n\n¿Pasar a PRODUCCIÓN? Desde ese momento los correos salen a las ' +
+    'alcaldías de verdad.',
+    ui.ButtonSet.YES_NO);
+  if (r !== ui.Button.YES) {
+    ui.alert('Sigue en PRUEBA. No se cambió nada.');
+    return;
+  }
+  try {
+    ui.alert('SINAV', pasarAProduccion(), ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('SINAV · no se pasó a producción', String(e.message || e), ui.ButtonSet.OK);
+  }
+}
+
+function porQueNoVeLaRespuestaDesdeMenu() {
+  SpreadsheetApp.getUi().alert('SINAV · ¿por qué no ve la respuesta?',
+                               porQueNoVeLaRespuesta(),
+                               SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
 
 // ═════ 02_Hojas.gs ═════
 
@@ -895,6 +991,21 @@ function guardarConfig(clave, valor) {
     _cacheConfig = null;
     return true;
   });
+}
+
+/**
+ * Corta con un mensaje util si a la hoja le falta una columna.
+ *
+ * Sin esto, escribir en una columna que no existe da «La columna inicial del
+ * intervalo es demasiado pequena», que no dice ni que columna ni que hacer.
+ * Pasa siempre por lo mismo: se pego codigo nuevo y no se corrio instalar().
+ */
+function exigeColumna(ix, nombre, hojaNombre) {
+  if (ix && typeof ix[nombre] === 'number') return ix[nombre];
+  throw new Error('A la hoja ' + (hojaNombre || HOJA.OBLIGACIONES) +
+    ' le falta la columna «' + nombre + '».\n\n' +
+    'Corre SINAV → Instalar / verificar: crea las columnas que falten sin ' +
+    'tocar los datos que ya están escritos.');
 }
 
 function hoy() {
@@ -1165,11 +1276,36 @@ function normPeriodicidad(v) {
  */
 function normCodigo(v, ancho) {
   if (v === null || v === undefined) return '';
+
+  // UNA FECHA. Pasa cuando la columna del codigo quedo con formato de fecha:
+  // la hoja guarda 54001 pero devuelve «Mon Apr 05 2049», y entonces el DANE
+  // del municipio se vuelve una fecha y el id de la obligacion con el. Se
+  // deshace la conversion: el numero de serie de la hoja ES el codigo.
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return '';
+    var serie = diasDesdeElOrigen(v);
+    if (serie <= 0) return '';
+    var t = String(serie);
+    if (ancho) while (t.length < ancho) t = '0' + t;
+    return t;
+  }
+
   var s = String(v).trim();
   if (s.indexOf('E+') > 0 || s.indexOf('e+') > 0) s = Number(s).toFixed(0);
   s = s.replace(/\.0+$/, '');
   if (ancho && /^[0-9]+$/.test(s)) while (s.length < ancho) s = '0' + s;
   return s;
+}
+
+/**
+ * El numero de serie que la hoja de calculo guarda detras de una fecha: los
+ * dias desde el 30 de diciembre de 1899. Se cuenta con las piezas locales de
+ * la fecha, no con getTime(), para que el huso horario no corra un dia.
+ */
+function diasDesdeElOrigen(d) {
+  var utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  var origen = Date.UTC(1899, 11, 30);
+  return Math.round((utc - origen) / 86400000);
 }
 
 /** Periodo: 2026-09 | 2026-B4 | 2026-T3 | 2026-C2 | 2026. '' si no encaja. */
@@ -1486,10 +1622,37 @@ function puedeEnviar(fila) {
   if (String(f.estado || '').toUpperCase() !== ESTADO.LISTA) {
     return { ok: false, motivo: 'el estado es ' + (f.estado || 'vacio') + ', no LISTA' };
   }
-  if (!normCorreos(f.correo_oficina)) {
-    return { ok: false, motivo: 'sin correo de oficina' };
+  // vale el correo escrito a mano, o la dependencia: de ella se arman
+  // director<dep>@ y subdirector<dep>@, que es el patron del banco
+  if (!normCorreos(f.correo_oficina) &&
+      !String(f.cod_oficina || '').trim().replace(/^0+/, '')) {
+    return { ok: false, motivo: 'sin correo ni dependencia' };
   }
   return { ok: true, motivo: '' };
+}
+
+/**
+ * Los soportes de una obligacion, en orden. El primero es la declaracion; los
+ * demas son anexos (el comprobante de pago, el formulario, lo que haga falta).
+ *
+ * Van todos en la MISMA celda separados por coma, no en columnas nuevas: el
+ * numero de anexos no se sabe de antemano, y una columna por anexo seria
+ * adivinar cuantos caben.
+ */
+function listaSoportes(v) {
+  return listaIds(v && typeof v === 'object' ? v.soporte_id : v);
+}
+
+/** Varios ids de Drive en una celda, separados por coma. Sin repetidos. */
+function listaIds(v) {
+  var salida = [], vistos = {};
+  String(v || '').split(/[,;\s]+/).forEach(function (x) {
+    var s = x.trim();
+    if (!s || vistos[s]) return;
+    vistos[s] = true;
+    salida.push(s);
+  });
+  return salida;
 }
 
 /**
@@ -1502,8 +1665,18 @@ function puedeEnviar(fila) {
  */
 function soporteRevisado(fila) {
   var f = fila || {};
-  var sid = String(f.soporte_id || '').trim();
-  return !!sid && String(f.soporte_revisado || '').trim() === sid;
+  var tiene = listaSoportes(f.soporte_id);
+  if (!tiene.length) return false;
+
+  var vistos = {};
+  listaSoportes(f.soporte_revisado).forEach(function (x) { vistos[x] = true; });
+
+  // TODOS los archivos que se van a adjuntar tienen que estar revisados: si se
+  // anade un anexo despues del visto bueno, ese anexo tambien hay que verlo
+  for (var i = 0; i < tiene.length; i++) {
+    if (!vistos[tiene[i]]) return false;
+  }
+  return true;
 }
 
 /**
@@ -1659,6 +1832,10 @@ function decorar(o) {
     exogena: String(o.exogena || ''),
     incluye_retencion: String(o.incluye_retencion || ''),
     presentacion_fecha: fechaTexto(o.presentacion_fecha),
+    // el envio fisico por correspondencia, que el correo necesita nombrar
+    fecha_despacho: fechaTexto(o.fecha_despacho),
+    adhesivo: String(o.adhesivo || ''),
+    consecutivo_giro: String(o.consecutivo_giro || ''),
     revision_fecha: fechaTexto(o.revision_fecha),
     revision_por: String(o.revision_por || ''),
     estado: String(o.estado),
@@ -1680,8 +1857,11 @@ function decorar(o) {
     // cubriendo mientras esta de vacaciones.
     titular_original: String(o.titular_original || ''),
     cubriendo: !!String(o.titular_original || '').trim(),
-    soporte_revisado: !!String(o.soporte_revisado || '').trim() &&
-      String(o.soporte_revisado).trim() === String(o.soporte_id || '').trim(),
+    soportes: listaSoportes(o.soporte_id).length,
+    // lo que hay que digitalizar antes de que el correo tenga sentido
+    falta_correo: faltaParaElCorreo(o),
+    sellados: listaIds(o.sellado_id).length,
+    soporte_revisado: soporteRevisado(o),
     enviable: env.ok,
     motivo_no_enviable: env.motivo,
     nivel: nivel
@@ -1836,6 +2016,10 @@ function apiInicio() {
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
     filas: lista,
     conteos: conteos(lista),
+    // la digitalizacion se hace dentro de Enviar, asi que las definiciones
+    // tienen que venir en la PRIMERA carga, no solo al refrescar la lista
+    campos: apiCamposOpciones(),
+    orden_campos: camposDelCorreo(),
     generado: fechaHoraTexto(new Date())
   };
 }
@@ -1850,6 +2034,10 @@ function apiListaEnviar(ventana) {
     filas: lista,
     conteos: conteos(lista),
     cuota: { usada: cuotaUsada(), tope: CUOTA_DIARIA },
+    // la digitalizacion vive dentro de esta pantalla: se llena justo antes de
+    // enviar, que es cuando la persona tiene los datos delante
+    campos: apiCamposOpciones(),
+    orden_campos: camposDelCorreo(),
     generado: fechaHoraTexto(new Date())
   };
 }
@@ -1890,11 +2078,16 @@ function nombreSoporte(val, ix, nombreOriginal) {
 }
 
 /**
- * Sube el soporte de una obligacion. Cualquier tipo de archivo.
+ * Sube un soporte de una obligacion. Cualquier tipo de archivo.
  * El cliente manda base64 porque google.script.run no pasa File.
  * Un archivo por llamada: google.script.run tiene tope de tamano.
+ *
+ * agregar = true lo ANADE a los que ya hay (un anexo). Sin eso, reemplaza:
+ * se quedan solo este. Los dos casos existen de verdad — unas veces el
+ * archivo estaba mal y hay que cambiarlo, otras hay que mandar la declaracion
+ * y ademas el comprobante de pago.
  */
-function apiSubirSoporte(id, nombre, tipo, datosBase64) {
+function apiSubirSoporte(id, nombre, tipo, datosBase64, agregar) {
   if (!id) throw new Error('Falta el id de la obligación.');
   if (!datosBase64) throw new Error('Llegó vacío el archivo ' + nombre);
 
@@ -1927,9 +2120,27 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
     if (!f) throw new Error('No existe la obligación ' + id);
     var ahora = String(h.getRange(f, ix.estado + 1).getValue()).toUpperCase();
 
-    // el visto bueno era del archivo anterior: con uno nuevo hay que volver a
-    // mirarlo, asi que se borra
-    var campos = { soporte_id: archivo.getId(), soporte_revisado: '' };
+    var previos = agregar
+      ? listaSoportes(String(h.getRange(f, ix.soporte_id + 1).getValue() || ''))
+      : [];
+    if (previos.length >= MAX_SOPORTES) {
+      throw new Error('Ya hay ' + previos.length + ' archivos en esa obligación. ' +
+        'Gmail no deja mandar muchos más, y si de verdad hacen falta, mejor ' +
+        'júntalos en un solo PDF.');
+    }
+    var todos = previos.concat([archivo.getId()]);
+
+    // el visto bueno es POR ARCHIVO: los que ya se revisaron siguen revisados,
+    // el nuevo nace sin revisar y por eso el envio se vuelve a frenar
+    var revisadosAntes = {};
+    listaSoportes(String(h.getRange(f, ix.soporte_revisado + 1).getValue() || ''))
+      .forEach(function (x) { revisadosAntes[x] = true; });
+    var siguenBuenos = previos.filter(function (x) { return revisadosAntes[x]; });
+
+    var campos = {
+      soporte_id: todos.join(','),
+      soporte_revisado: siguenBuenos.join(',')
+    };
     // el soporte era lo unico que faltaba: pasa a LISTA
     if (ahora === ESTADO.PENDIENTE || ahora === ESTADO.DEVUELTA ||
         ahora === ESTADO.REBOTADO) {
@@ -1938,12 +2149,13 @@ function apiSubirSoporte(id, nombre, tipo, datosBase64) {
 
     escribirCampos(HOJA.OBLIGACIONES, f, campos);
     registrar(id, EVENTO.SOPORTE_CARGADO,
+              (agregar ? 'anexo ' + todos.length + ': ' : '') +
               archivo.getName() + ' (' + archivo.getId() + ') en ' +
               'vigencia ' + (val[ix.vigencia] || '?') + ' · ' +
               nombreCarpeta(val[ix.municipio]) + '/' + nombreCarpeta(val[ix.impuesto]));
 
     return { id: id, soporte_id: archivo.getId(), nombre: archivo.getName(),
-             estado: campos.estado || ahora };
+             soportes: todos.length, estado: campos.estado || ahora };
   });
 }
 
@@ -1952,8 +2164,9 @@ function apiEnlaceSoporte(id) {
   var o = registros(HOJA.OBLIGACIONES).filter(function (r) {
     return String(r.id) === String(id);
   })[0];
-  if (!o || !o.soporte_id) throw new Error('Esa obligación no tiene soporte.');
-  return 'https://drive.google.com/file/d/' + o.soporte_id + '/view';
+  var l = o ? listaSoportes(o.soporte_id) : [];
+  if (!l.length) throw new Error('Esa obligación no tiene soporte.');
+  return 'https://drive.google.com/file/d/' + l[0] + '/view';
 }
 
 /* ===========================================================================
@@ -1976,34 +2189,59 @@ function apiSoportesParaRevisar(ids) {
   var buscados = {};
   lista.forEach(function (id) { buscados[String(id)] = true; });
 
-  var soportes = registros(HOJA.OBLIGACIONES)
+  var soportes = [];
+  registros(HOJA.OBLIGACIONES)
     .filter(function (o) { return buscados[String(o.id)]; })
-    .map(function (o) {
-      var sid = String(o.soporte_id || '').trim();
-      var nombre = '', pesoKB = 0;
-      if (sid) {
+    .forEach(function (o) {
+      var archivos = listaSoportes(o.soporte_id);
+      var vistos = {};
+      listaSoportes(o.soporte_revisado).forEach(function (x) { vistos[x] = true; });
+
+      // una entrada por ARCHIVO: si la obligacion lleva declaracion y anexo,
+      // hay que ver los dos, uno por uno
+      archivos.forEach(function (sid, k) {
+        var nombre = '', pesoKB = 0;
         try {
           var f = DriveApp.getFileById(sid);
           nombre = f.getName();
           pesoKB = Math.round(f.getSize() / 1024);
         } catch (e) { nombre = '(no se pudo abrir el archivo en Drive)'; }
-      }
-      return {
-        id: String(o.id),
-        municipio: String(o.municipio),
-        cod_dane: String(o.cod_dane),
-        impuesto: String(o.impuesto),
-        periodo: String(o.periodo),
-        vencimiento: fechaTexto(o.vencimiento),
-        correo_oficina: String(o.correo_oficina || ''),
-        soporte_id: sid,
-        nombre: nombre,
-        peso_kb: pesoKB,
-        // la vista previa de Drive se puede incrustar; el enlace es el respaldo
-        vista: sid ? 'https://drive.google.com/file/d/' + sid + '/preview' : '',
-        enlace: sid ? 'https://drive.google.com/file/d/' + sid + '/view' : '',
-        revisado: String(o.soporte_revisado || '').trim() === sid && !!sid
-      };
+
+        var destinos = '';
+        try { destinos = destinatariosDe(o); } catch (e) { destinos = ''; }
+        var copias = '';
+        try { copias = copiasFijas(); } catch (e) { copias = ''; }
+
+        soportes.push({
+          id: String(o.id),
+          municipio: String(o.municipio),
+          cod_dane: String(o.cod_dane),
+          cod_oficina: String(o.cod_oficina || ''),
+          impuesto: String(o.impuesto),
+          periodo: String(o.periodo),
+          vencimiento: fechaTexto(o.vencimiento),
+          correo_oficina: String(o.correo_oficina || ''),
+          // lo que va a leer la oficina, para verlo junto al documento
+          nit_municipio: String(o.nit_municipio || ''),
+          valor_texto: pesosCortos(o.valor),
+          consecutivo_giro: String(o.consecutivo_giro || '') ||
+            consecutivoDe(o.municipio, o.impuesto, o.periodo),
+          adhesivo: String(o.adhesivo || ''),
+          pago_texto: textoPago(o),
+          destinatarios: destinos,
+          copias: copias,
+          copias_cuantas: copias ? copias.split(',').length : 0,
+          soporte_id: sid,
+          nombre: nombre,
+          peso_kb: pesoKB,
+          cual: k + 1,
+          de: archivos.length,
+          // la vista previa de Drive se puede incrustar; el enlace es el respaldo
+          vista: 'https://drive.google.com/file/d/' + sid + '/preview',
+          enlace: 'https://drive.google.com/file/d/' + sid + '/view',
+          revisado: !!vistos[sid]
+        });
+      });
     });
 
   return { soportes: soportes };
@@ -2017,7 +2255,7 @@ function apiSoportesParaRevisar(ids) {
  * no es el que debia, dejarlo puesto solo invita a que alguien lo mande sin
  * mirar. La obligacion vuelve a PENDIENTE y pide un archivo nuevo.
  */
-function apiMarcarSoporte(id, correcto, motivo) {
+function apiMarcarSoporte(id, correcto, motivo, soporteId) {
   if (!id) throw new Error('Falta el id de la obligación.');
 
   return conCerrojo(function () {
@@ -2029,24 +2267,51 @@ function apiMarcarSoporte(id, correcto, motivo) {
     var val = h.getRange(fila, 1, 1, h.getLastColumn()).getValues()[0];
     exigeMia(val[ix.responsable], 'editarAjenas');
 
-    var sid = String(val[ix.soporte_id] || '').trim();
-    if (!sid) throw new Error('Esa obligación no tiene soporte que revisar.');
+    var archivos = listaSoportes(val[ix.soporte_id]);
+    if (!archivos.length) throw new Error('Esa obligación no tiene soporte que revisar.');
 
-    if (correcto) {
-      escribirCampos(HOJA.OBLIGACIONES, fila, { soporte_revisado: sid });
-      registrar(id, EVENTO.AVISO, 'soporte revisado y dado por bueno');
-      return { id: id, revisado: true };
+    // sin soporteId se entiende que es el unico que hay; con varios, hay que
+    // decir cual, o se marcaria el equivocado
+    var cual = String(soporteId || '').trim() || archivos[0];
+    if (archivos.indexOf(cual) < 0) {
+      throw new Error('Ese archivo ya no está en la obligación. Recarga la pantalla.');
+    }
+    if (!String(soporteId || '').trim() && archivos.length > 1) {
+      throw new Error('Esa obligación tiene ' + archivos.length + ' archivos: ' +
+                      'hay que decir cuál se está revisando.');
     }
 
+    var revisados = listaSoportes(val[ix.soporte_revisado]);
     var estado = String(val[ix.estado]).toUpperCase();
-    var campos = { soporte_revisado: '', soporte_id: '' };
-    if (estado === ESTADO.LISTA) campos.estado = ESTADO.PENDIENTE;
+
+    if (correcto) {
+      if (revisados.indexOf(cual) < 0) revisados.push(cual);
+      // solo los que siguen adjuntos
+      revisados = revisados.filter(function (x) { return archivos.indexOf(x) >= 0; });
+      escribirCampos(HOJA.OBLIGACIONES, fila, { soporte_revisado: revisados.join(',') });
+      registrar(id, EVENTO.AVISO, 'soporte revisado y dado por bueno (' + cual + ')');
+      return { id: id, revisado: true, soporte_id: cual, quedan: archivos.length };
+    }
+
+    // INCORRECTO quita ESE archivo y su visto bueno. Si era el unico, la
+    // obligacion vuelve a PENDIENTE; si quedan otros, sigue en LISTA y solo
+    // falta reponer el que se cayo.
+    var quedan = archivos.filter(function (x) { return x !== cual; });
+    var campos = {
+      soporte_id: quedan.join(','),
+      soporte_revisado: revisados.filter(function (x) {
+        return x !== cual && quedan.indexOf(x) >= 0;
+      }).join(',')
+    };
+    if (!quedan.length && estado === ESTADO.LISTA) campos.estado = ESTADO.PENDIENTE;
 
     escribirCampos(HOJA.OBLIGACIONES, fila, campos);
     registrar(id, EVENTO.ERROR, 'soporte marcado como INCORRECTO' +
-      (motivo ? ': ' + String(motivo).trim() : '') + '. Hay que subir otro.');
+      (motivo ? ': ' + String(motivo).trim() : '') + '. Hay que subir otro. ' +
+      'Quedan ' + quedan.length + ' archivos.');
 
-    return { id: id, revisado: false, estado: campos.estado || estado };
+    return { id: id, revisado: false, soporte_id: cual, quedan: quedan.length,
+             estado: campos.estado || estado };
   });
 }
 
@@ -2084,46 +2349,8 @@ function etiqueta() {
   return GmailApp.getUserLabelByName(ETIQUETA) || GmailApp.createLabel(ETIQUETA);
 }
 
-function asuntoDe(o) {
-  return 'Declaración ' + o.impuesto + ' ' + o.periodo + ' - ' + o.municipio +
-         ' - Banco Davivienda S.A. [' + marcador(o.id) + ']';
-}
-
-function pesos(v) {
-  if (v === '' || v === null || v === undefined) return '-';
-  return '$' + Number(v).toLocaleString('es-CO', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
-  });
-}
-
-function cuerpoDe(o, modo) {
-  var lineas = [
-    'Buen día,',
-    '',
-    'Adjuntamos la declaración de ' + o.impuesto + ' del periodo ' + o.periodo +
-      ' para que sea presentada y pagada en el municipio de ' + o.municipio + '.',
-    '',
-    'Municipio: ' + o.municipio + ' (DANE ' + o.cod_dane + ')',
-    'Oficina: ' + (o.cod_oficina || '-'),
-    'Impuesto: ' + o.impuesto + ' - régimen ' + o.regimen,
-    'Periodo: ' + o.periodo + ' (' + o.periodicidad + ')',
-    'Vence: ' + fechaTexto(o.vencimiento),
-    'NIT del municipio: ' + (o.nit_municipio || '-'),
-    'Presentación: ' + o.tipo_presentacion + ' - paga ' + textoPago(o),
-    'Valor: ' + pesos(o.valor),
-    '',
-    'Por favor RESPONDA SOBRE ESTE MISMO CORREO, no abra uno nuevo, y adjunte el',
-    'soporte sellado por el municipio. Así queda asociado automáticamente a esta',
-    'obligación y no hay que buscarlo después.',
-    '',
-    'Gracias,',
-    config('nombre_remitente')
-  ];
-  if (modo === 'PRUEBA') {
-    lineas.unshift('[MODO PRUEBA] Este correo iba para: ' + (o.correo_oficina || '-'), '');
-  }
-  return lineas.join('\n');
-}
+/* El asunto y el cuerpo del correo viven en 23_Correo.gs: no son mecanica de
+   envio, son una instruccion de trabajo para la oficina. */
 
 /**
  * Como se lee el pago en el correo. Son dos datos: quien paga y con que.
@@ -2140,40 +2367,6 @@ function textoPago(o) {
   var forma = ETIQUETA_PAGO[String(o.forma_pago || '').trim()] || '';
   if (!quien) return 'sin definir';
   return forma ? quien + ' (' + forma + ')' : quien;
-}
-
-function cuerpoHtmlDe(o, modo) {
-  var fila = function (k, v) {
-    return '<tr><td style="padding:2px 12px 2px 0;color:#5f6368">' + k +
-           '</td><td style="padding:2px 0;color:#111">' + v + '</td></tr>';
-  };
-  var aviso = modo === 'PRUEBA'
-    ? '<p style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;' +
-      'padding:8px 10px;margin:0 0 16px">MODO PRUEBA. Este correo iba para: ' +
-      (o.correo_oficina || '-') + '</p>'
-    : '';
-  return '<div style="font:14px/1.5 Arial,sans-serif;color:#111;max-width:640px">' +
-    aviso +
-    '<p>Buen día,</p>' +
-    '<p>Adjuntamos la declaración de <b>' + o.impuesto + '</b> del periodo <b>' +
-      o.periodo + '</b> para que sea presentada y pagada en el municipio de <b>' +
-      o.municipio + '</b>.</p>' +
-    '<table style="border-collapse:collapse;font-size:14px;margin:16px 0">' +
-      fila('Municipio', o.municipio + ' (DANE ' + o.cod_dane + ')') +
-      fila('Oficina', o.cod_oficina || '-') +
-      fila('Impuesto', o.impuesto + ' &middot; régimen ' + o.regimen) +
-      fila('Periodo', o.periodo + ' (' + o.periodicidad + ')') +
-      fila('Vence', fechaTexto(o.vencimiento)) +
-      fila('NIT del municipio', o.nit_municipio || '-') +
-      fila('Presentación', o.tipo_presentacion + ' &middot; paga ' + textoPago(o)) +
-      fila('Valor', pesos(o.valor)) +
-    '</table>' +
-    '<p style="background:#f2f2f2;padding:10px 12px;margin:16px 0">' +
-      '<b>Responda sobre este mismo correo, no abra uno nuevo</b>, y adjunte el ' +
-      'soporte sellado por el municipio. Así queda asociado automáticamente a esta ' +
-      'obligación y no hay que buscarlo después.</p>' +
-    '<p>Gracias,<br>' + config('nombre_remitente') + '</p>' +
-    '</div>';
 }
 
 /**
@@ -2241,8 +2434,10 @@ function apiEnviar(ids) {
       continue;
     }
 
-    var destinos = modo === 'PRUEBA' ? miCorreo : normCorreos(o.correo_oficina);
-    var cuantos = destinos.split(',').length;
+    var destinos = modo === 'PRUEBA' ? miCorreo : destinatariosDe(o);
+    var copias = modo === 'PRUEBA' ? '' : copiasFijas();
+    var cuantos = destinos.split(',').length +
+                  (copias ? copias.split(',').length : 0);
 
     if (cuotaUsada() + cuantos > CUOTA_DIARIA) {
       pendientes = ids.slice(i).map(String);
@@ -2251,14 +2446,46 @@ function apiEnviar(ids) {
       break;
     }
 
-    try {
-      var adjunto = DriveApp.getFileById(String(o.soporte_id).trim()).getBlob();
+    // el consecutivo de giro se toma AQUI, no antes: si se asignara al
+    // digitalizar, una obligacion que luego no se manda dejaria un hueco en
+    // la numeracion
+    if (!String(o.consecutivo_giro || '').trim()) {
+      try {
+        var giro = giroPara(o, yo().nombre);
+        if (giro) {
+          o.consecutivo_giro = giro;
+          escribirCampos(HOJA.OBLIGACIONES, buscarFila(o.id),
+                         { consecutivo_giro: giro });
+        }
+      } catch (e) {
+        registrar(id, EVENTO.ERROR, 'no se pudo asignar el consecutivo: ' + e.message);
+      }
+    }
 
-      GmailApp.sendEmail(destinos, asuntoDe(o), cuerpoDe(o, modo), {
-        name: remitente,
-        attachments: [adjunto],
-        htmlBody: cuerpoHtmlDe(o, modo)
+    try {
+      // todos los soportes de la obligacion: la declaracion y sus anexos
+      var adjuntos = [], bytes = 0;
+      listaSoportes(o.soporte_id).forEach(function (sid) {
+        var f = DriveApp.getFileById(sid);
+        bytes += f.getSize();
+        adjuntos.push(f.getBlob());
       });
+      if (!adjuntos.length) throw new Error('no se pudo abrir ningún soporte en Drive');
+      if (bytes > MAX_ADJUNTO_MB * 1024 * 1024) {
+        throw new Error('los adjuntos pesan ' + Math.round(bytes / 1024 / 1024) +
+          ' MB y Gmail corta en 25 MB. Junta los archivos en uno más liviano.');
+      }
+
+      var opciones = {
+        name: remitente,
+        attachments: adjuntos,
+        htmlBody: cuerpoHtmlOficina(o, modo)
+      };
+      if (copias) opciones.cc = copias;
+      var logo = blobDelLogo();
+      if (logo) opciones.inlineImages = { logo: logo };
+
+      GmailApp.sendEmail(destinos, asuntoOficina(o), cuerpoOficina(o, modo), opciones);
       sumarCuota(cuantos);
 
       var hilo = hiloDelEnvio(o.id);
@@ -2267,6 +2494,8 @@ function apiEnviar(ids) {
       conCerrojo(function () {
         escribirCampos(HOJA.OBLIGACIONES, buscarFila(idFila), {
           estado: ESTADO.ENVIADA,
+          // el despacho es el dia en que sale el correo: no hay que escribirlo
+          fecha_despacho: hoy(),
           fecha_envio: new Date(),
           hilo_id: hilo
         });
@@ -2350,12 +2579,12 @@ function porQueNoSeEnvia() {
     lineas.push('      p.ej. ' + ejemplos[k]);
   });
 
-  if (motivos['sin correo de oficina']) {
-    lineas.push('', 'El correo de la oficina sale de la hoja PROGRAMACION, ' +
-      'columna correo_oficina. De 315 municipios solo 98 lo tienen: ' +
-      'escríbelo ahí y vuelve a intentar. Las obligaciones que YA existen ' +
-      'no lo heredan solas, hay que escribirlo también en su fila de ' +
-      'OBLIGACIONES.');
+  if (motivos['sin correo ni dependencia']) {
+    lineas.push('', 'Esas no tienen a quién mandarse. El correo sale de dos sitios: ' +
+      'de correo_oficina si está escrito, y si no, de la dependencia ' +
+      '(cod_oficina), con la que se arman director<dep>@ y subdirector<dep>@. ' +
+      'Sin ninguno de los dos no hay destinatario: escribe el código de ' +
+      'dependencia en PROGRAMACION y corre «Refrescar los correos de oficina».');
   }
 
   var txt = lineas.join('\n');
@@ -2487,18 +2716,33 @@ function esMiMensaje(mensaje, miCorreo) {
 /**
  * Decide si un mensaje del hilo cuenta como respuesta.
  *
- * En PRODUCCION la respuesta viene de la oficina, asi que lo mio se descarta:
- * si contesto yo mismo sobre el hilo, eso no es que la oficina respondiera.
+ * La regla de antes era "lo mio no cuenta", y estaba mal planteada: el unico
+ * mensaje que hay que descartar siempre es EL QUE MANDO SINAV, que es el
+ * primero del hilo. Lo que venga despues es respuesta, venga de quien venga.
  *
- * En PRUEBA el correo se manda a mi propia bandeja a proposito, de modo que la
- * respuesta TAMBIEN es mia. Si se aplicara la regla de produccion, probar seria
- * imposible: se responde y la herramienta no ve nada. Por eso en PRUEBA lo
- * unico que se descarta es el primer mensaje del hilo, que es el que salio de
- * SINAV; todo lo que venga despues cuenta.
+ * De los mios se pide una condicion mas: que traigan adjunto. Asi un
+ * recordatorio que yo escriba sobre el hilo no marca la obligacion como
+ * respondida, pero el sellado que yo mismo reenvie —porque la alcaldia me lo
+ * paso por otro lado— si queda archivado, que es lo que importa.
+ *
+ * El modo ya no cambia nada: en PRUEBA el correo se manda a la propia bandeja
+ * y la respuesta tambien es propia, y con esta regla eso funciona solo.
  */
 function cuentaComoRespuesta(mensaje, indice, miCorreo, modo) {
-  if (modo === 'PRUEBA') return indice > 0;
-  return !esMiMensaje(mensaje, miCorreo);
+  if (indice === 0) return false;                // el que salio de SINAV
+  if (!esMiMensaje(mensaje, miCorreo)) return true;
+  return tieneAdjuntoUtil(mensaje);
+}
+
+/** Trae algo que valga como evidencia, no la firma ni un logo incrustado. */
+function tieneAdjuntoUtil(mensaje) {
+  try {
+    var adj = mensaje.getAttachments();
+    for (var i = 0; i < adj.length; i++) {
+      if (adj[i].getSize() >= MINIMO_ADJUNTO) return true;
+    }
+  } catch (e) { /* si no se puede leer, no cuenta */ }
+  return false;
 }
 
 /**
@@ -2539,7 +2783,7 @@ function leerHilo(o, miCorreo, modo) {
       // las firmas y los logos incrustados no son el sellado. El minimo es
       // bajo a proposito: un PDF de una pagina ronda los 10 KB, pero en una
       // prueba puede ser mucho mas pequeno y tiene que verse igual.
-      if (a.getSize() < 512) return;
+      if (a.getSize() < MINIMO_ADJUNTO) return;
       adjuntos.push(a);
     });
   }
@@ -2598,22 +2842,37 @@ function revisarRespuestas() {
 
     var campos = { ultimo_mensaje: r.ultimo };
 
-    // el adjunto va a Sellados, en la carpeta del municipio y el impuesto
-    var guardado = null;
+    // Los adjuntos van a Sellados, en la carpeta del municipio y el impuesto.
+    // TODOS los que vengan, y se SUMAN a los que ya hubiera: la oficina puede
+    // mandar primero una queja sin nada, luego el sellado, y mas tarde el
+    // recibo de pago en otro correo del mismo hilo. Cada uno es evidencia.
+    var guardados = [];
     if (r.adjuntos.length) {
+      var yaHabia = listaIds(o.sellado_id);
       try {
         var dir = carpetaSellado(o.vigencia, o.municipio, o.impuesto);
-        var a = r.adjuntos[r.adjuntos.length - 1];   // el ultimo que mandaron
-        var ext = a.getName().indexOf('.') > 0
-          ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
-        var nombre = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
-          .replace(/[\\/:*?"<>|]/g, '-') + ext;
-        guardado = dir.createFile(a.copyBlob().setName(nombre));
-        campos.sellado_id = guardado.getId();
-        conSellado++;
+        var base = (o.municipio + ' ' + o.impuesto + ' ' + o.periodo + ' sellado')
+          .replace(/[\\/:*?"<>|]/g, '-');
+        for (var k = 0; k < r.adjuntos.length; k++) {
+          var a = r.adjuntos[k];
+          var ext = a.getName().indexOf('.') > 0
+            ? a.getName().slice(a.getName().lastIndexOf('.')) : '';
+          var cuantos = yaHabia.length + guardados.length;
+          var nombre = base + (cuantos ? ' ' + (cuantos + 1) : '') + ext;
+          guardados.push(dir.createFile(a.copyBlob().setName(nombre)));
+        }
+        campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+          return f.getId();
+        })).join(',');
+        conSellado += guardados.length;
       } catch (e) {
         registrar(o.id, EVENTO.ERROR, 'no se pudo guardar el sellado: ' + e.message);
         errores.push(o.municipio + ' ' + o.impuesto + ': ' + e.message);
+        if (guardados.length) {
+          campos.sellado_id = yaHabia.concat(guardados.map(function (f) {
+            return f.getId();
+          })).join(',');
+        }
       }
     }
 
@@ -2623,8 +2882,10 @@ function revisarRespuestas() {
       escribirCampos(HOJA.OBLIGACIONES, o._fila, campos);
       registrar(o.id, EVENTO.RESPONDIDA,
         r.respuestas + ' mensaje(s) de ' + r.de +
-        (guardado ? ' · sellado guardado: ' + guardado.getName()
-                  : ' · sin adjunto'));
+        (guardados.length
+          ? ' · ' + guardados.length + ' adjunto(s) guardado(s): ' +
+            guardados.map(function (f) { return f.getName(); }).join(', ')
+          : ' · sin adjunto'));
 
       // ENVIADA pasa a RESPONDIDA; lo que ya estaba RESPONDIDA se queda,
       // porque una respuesta mas no cambia el estado, solo suma evidencia
@@ -2652,11 +2913,14 @@ function apiEnlaceSellado(id) {
   var o = registros(HOJA.OBLIGACIONES).filter(function (r) {
     return String(r.id) === String(id);
   })[0];
-  if (!o || !String(o.sellado_id || '').trim()) {
+  var cuales = o ? listaIds(o.sellado_id) : [];
+  if (!cuales.length) {
     throw new Error('Esa obligación todavía no tiene sellado.');
   }
   exigeMia(o.responsable, 'editarAjenas');
-  return 'https://drive.google.com/file/d/' + String(o.sellado_id).trim() + '/view';
+  // si guardaron varios, se abre el primero; los demas estan en la misma
+  // carpeta de Sellados, y el hilo de Gmail los tiene todos
+  return 'https://drive.google.com/file/d/' + cuales[0] + '/view';
 }
 
 /** El enlace al hilo de Gmail, para leer la conversación entera. */
@@ -2718,6 +2982,123 @@ function apiRevisarRespuestas() {
   var r = revisarRespuestas();
   r.lista = apiRespuestas();
   return r;
+}
+
+/* ---------------------------------------------------------------------------
+   DIAGNOSTICO
+
+   «Respondi y no lo ve» tiene media docena de causas distintas y ninguna se
+   nota desde la pantalla. Esto las enseña todas de una vez.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Cuenta, mensaje por mensaje, que esta viendo SINAV en el hilo de una
+ * obligacion y por que descarta lo que descarta.
+ *
+ *   porQueNoVeLaRespuesta()                  la primera ENVIADA que encuentre
+ *   porQueNoVeLaRespuesta('13001|ICA|...')   una concreta
+ */
+function porQueNoVeLaRespuesta(idObligacion) {
+  var q = yo();
+  var modo = String(config('modo') || 'PRUEBA').toUpperCase();
+  var todas = registros(HOJA.OBLIGACIONES);
+
+  var o = String(idObligacion || '').trim()
+    ? todas.filter(function (r) { return String(r.id) === String(idObligacion).trim(); })[0]
+    : todas.filter(function (r) {
+        return String(r.hilo_id || '').trim() &&
+               estadosEsperanRespuesta().indexOf(String(r.estado).toUpperCase()) >= 0;
+      })[0];
+
+  if (!o) {
+    return 'No encontré ninguna obligación enviada con hilo guardado.\n' +
+           'Pásame el id: porQueNoVeLaRespuesta("13001|ICA|GENERAL|2026-B6")';
+  }
+
+  var l = [
+    o.municipio + ' · ' + o.impuesto + ' · ' + o.periodo,
+    'Estado: ' + o.estado + '   ·   Modo: ' + modo,
+    'Tu cuenta: ' + q.correo,
+    ''
+  ];
+
+  if (!String(o.hilo_id || '').trim()) {
+    l.push('NO TIENE hilo_id. Al enviar no se encontró el hilo en tus enviados,');
+    l.push('así que la respuesta no se puede asociar sola. Busca un ERROR en');
+    l.push('EVENTOS con esta obligación.');
+    return avisoDiagnostico(l);
+  }
+  if (estadosEsperanRespuesta().indexOf(String(o.estado).toUpperCase()) < 0) {
+    l.push('El estado ' + o.estado + ' ya no mira el hilo. Solo se revisan ' +
+           estadosEsperanRespuesta().join(', ') + '.');
+    return avisoDiagnostico(l);
+  }
+
+  var hilo;
+  try {
+    hilo = GmailApp.getThreadById(String(o.hilo_id).trim());
+  } catch (e) {
+    l.push('El hilo ' + o.hilo_id + ' no abre desde tu cuenta: ' + e.message);
+    l.push('Si lo envió otra persona, el hilo está en SU bandeja, no en la tuya.');
+    return avisoDiagnostico(l);
+  }
+  if (!hilo) {
+    l.push('El hilo ' + o.hilo_id + ' no está en tu bandeja.');
+    return avisoDiagnostico(l);
+  }
+
+  var mensajes = hilo.getMessages();
+  var visto = String(o.ultimo_mensaje || '').trim();
+  l.push('El hilo tiene ' + mensajes.length + ' mensaje(s).');
+  l.push(visto ? 'Ya se procesó hasta el mensaje ' + visto : 'No se ha procesado ninguno.');
+  l.push('');
+
+  var procesado = !visto;
+  var cuentan = 0, conAdjunto = 0;
+
+  for (var i = 0; i < mensajes.length; i++) {
+    var m = mensajes[i];
+    var de = String(m.getFrom() || '');
+    var nuevo = procesado;
+    if (visto && m.getId() === visto) procesado = true;
+
+    var vale = cuentaComoRespuesta(m, i, q.correo, modo);
+    var adj = m.getAttachments().filter(function (a) {
+      return a.getSize() >= MINIMO_ADJUNTO;
+    });
+
+    var por = [];
+    if (!nuevo) por.push('ya procesado antes');
+    if (!vale) {
+      por.push(i === 0
+        ? 'es el primero del hilo, el que mandó SINAV'
+        : 'salió de tu cuenta y no trae ningún adjunto');
+    }
+    if (nuevo && vale) { cuentan++; conAdjunto += adj.length; }
+
+    l.push((i + 1) + '. de ' + de);
+    l.push('   ' + (nuevo && vale ? 'CUENTA' : 'se descarta: ' + por.join(' y ')));
+    l.push('   adjuntos útiles: ' + adj.length +
+           (adj.length ? ' (' + adj.map(function (a) {
+             return a.getName() + ' ' + Math.round(a.getSize() / 1024) + ' KB';
+           }).join(', ') + ')' : ''));
+  }
+
+  l.push('');
+  if (cuentan) {
+    l.push('Hay ' + cuentan + ' mensaje(s) sin procesar que SÍ cuentan, con ' +
+           conAdjunto + ' adjunto(s).');
+    l.push('Dale a «Revisar respuestas ahora» y deberían entrar.');
+  } else {
+    l.push('No hay mensajes nuevos que contar.');
+  }
+  return avisoDiagnostico(l);
+}
+
+function avisoDiagnostico(lineas) {
+  var txt = lineas.join('\n');
+  Logger.log(txt);
+  return txt;
 }
 
 
@@ -2897,9 +3278,60 @@ function camposEditables() {
                        norm: 'normSiNoCampo', solo: 'AUTORRETEICA' },
   valor:             { et: 'Valor liquidado', tipo: 'valor', norm: 'normValor' },
   presentacion_fecha:{ et: 'Fecha de presentación', tipo: 'fecha', norm: 'normFecha' },
+  // El envio FISICO por correspondencia, con su adhesivo. No es la fecha en
+  // que sale el correo: esa la pone SINAV sola.
+  fecha_despacho:    { et: 'Fecha de despacho', tipo: 'fecha', vacio: true,
+                       norm: 'normFecha' },
+  adhesivo:          { et: 'Sticker de correspondencia', tipo: 'texto',
+                       norm: 'normTexto' },
+  consecutivo_giro:  { et: 'Consecutivo de giro', tipo: 'texto', norm: 'normTexto' },
     nota:              { et: 'Nota', tipo: 'texto', norm: 'normTexto' }
   };
   return _camposEditables;
+}
+
+/**
+ * Lo que el correo a la oficina necesita SI O SI, en el orden en que se pide.
+ *
+ * No es una regla de la maquina de estados: una obligacion sin valor existe
+ * perfectamente. Es que el correo quedaria diciendo "por el valor de $0", y
+ * eso lo lee un director de oficina que tiene que girar esa plata.
+ */
+function camposDelCorreo() {
+  // Solo el valor. Todo lo demas esta definido en los datos y no se vuelve a
+  // preguntar: quien paga, la forma de pago y el tipo de presentacion los
+  // carga Concepto25.gs; el adhesivo, repartirAdhesivos(); el consecutivo
+  // sale de la tabla de conceptos; y la fecha de despacho la pone el envio.
+  return ['valor'];
+}
+
+/**
+ * Los que no pueden ir vacios.
+ *
+ * El adhesivo SI esta: el sobre viaja con ese numero y sin el la oficina no
+ * sabe que esta recibiendo. En teoria nunca falta, porque lo trae
+ * repartirAdhesivos(); cuando falta, la pantalla deja escribirlo a mano, pero
+ * el correo no sale sin el.
+ */
+function camposObligatoriosDelCorreo() {
+  return ['valor', 'adhesivo'];
+}
+
+/**
+ * Que le falta a una obligacion para poder mandar el correo.
+ * Pura: recibe la fila y devuelve las etiquetas de lo que falta.
+ */
+function faltaParaElCorreo(fila) {
+  var f = fila || {};
+  var mapa = camposEditables();
+  var falta = [];
+  camposObligatoriosDelCorreo().forEach(function (k) {
+    var v = f[k];
+    var vacio = v === null || v === undefined || String(v).trim() === '' ||
+                (k === 'valor' && !Number(v));
+    if (vacio) falta.push(mapa[k] ? mapa[k].et : k);
+  });
+  return falta;
 }
 
 /* los normalizadores que solo usa esta pantalla */
@@ -2969,6 +3401,11 @@ function apiGuardarCampos(id, campos) {
   });
   if (!claves.length) throw new Error('No llegó ningún campo editable.');
 
+  // las columnas nuevas pueden no existir todavia en un libro creado antes:
+  // mejor decirlo que escribir en la columna de al lado
+  var ixHoja = indices(HOJA.OBLIGACIONES);
+  claves.forEach(function (k) { exigeColumna(ixHoja, k); });
+
   return conCerrojo(function () {
     var fila = buscarFila(id);
     if (!fila) throw new Error('No existe la obligación ' + id);
@@ -3010,47 +3447,21 @@ function apiGuardarCampos(id, campos) {
     escribirCampos(HOJA.OBLIGACIONES, fila, aEscribir);
     registrar(id, EVENTO.CAMPOS_EDITADOS, bitacora.join(' · '));
 
-    return { id: id, cambios: bitacora.length, detalle: bitacora.join(' · ') };
+    // la fila ya decorada, para que la pantalla no tenga que recargar la
+    // lista entera despues de escribir un solo valor
+    var fresca = null;
+    try {
+      fresca = registros(HOJA.OBLIGACIONES).filter(function (r) {
+        return String(r.id) === String(id);
+      })[0];
+      fresca = fresca ? decorar(fresca) : null;
+    } catch (e) {
+      fresca = null;
+    }
+
+    return { id: id, cambios: bitacora.length, detalle: bitacora.join(' · '),
+             fila: fresca };
   });
-}
-
-/**
- * La lista de la pantalla de digitalizacion: todo lo que el usuario puede
- * tocar, con los campos manuales por delante y lo incompleto arriba.
- */
-function apiListaCampos() {
-  var mias = puede('editarAjenas') ? listarTodas()
-           : listarTodas().filter(function (o) { return o.mia; });
-
-  var lista = mias
-    .filter(function (o) { return o.estado !== ESTADO.APROBADA; })
-    .map(function (o) {
-      var faltan = [];
-      if (!o.valor) faltan.push('valor');
-      if (!o.forma_pago) faltan.push('forma de pago');
-      if (o.requiere_envio === 'REVISAR') faltan.push('si se envía');
-      if (!o.periodicidad) faltan.push('periodicidad');
-      o.faltan = faltan;
-      return o;
-    })
-    .sort(function (a, b) {
-      if (a.faltan.length !== b.faltan.length) return b.faltan.length - a.faltan.length;
-      var da = a.dias === null ? 9999 : a.dias;
-      var db = b.dias === null ? 9999 : b.dias;
-      return da - db;
-    });
-
-  return {
-    filas: lista,
-    opciones: apiCamposOpciones(),
-    resumen: {
-      todas: lista.length,
-      incompletas: lista.filter(function (o) { return o.faltan.length; }).length,
-      sin_valor: lista.filter(function (o) { return !o.valor; }).length,
-      por_revisar: lista.filter(function (o) { return o.requiere_envio === 'REVISAR'; }).length
-    },
-    generado: fechaHoraTexto(new Date())
-  };
 }
 
 
@@ -4578,6 +4989,645 @@ function periodoDe(anio, mes, periodicidad) {
 }
 
 
+// ═════ 22_Produccion.gs ═════
+
+/**
+ * SINAV · el paso a produccion.
+ *
+ * Pasar a produccion es UNA celda: CONFIG.modo de PRUEBA a PRODUCCION. Pero
+ * en el segundo siguiente los correos salen de verdad a las alcaldias, y lo
+ * enviado no se puede desenviar.
+ *
+ * Asi que no se edita a mano: se corre revisarAntesDeProduccion(), que mira
+ * lo que esta a punto de salir, y despues pasarAProduccion(), que se niega
+ * si encuentra algo de prueba listo para enviarse.
+ */
+
+/** Una declaracion de verdad es un PDF. Lo demas es de prueba. */
+var EXTENSIONES_REALES = ['.pdf'];
+
+/** Un correo inventado por los datos de ejemplo: oficina.algo@davivienda.com */
+function correoInventado(correos) {
+  var c = String(correos || '').toLowerCase();
+  if (!c) return false;
+  return c.indexOf('oficina.') === 0 || c.indexOf(',oficina.') >= 0 ||
+         c.indexOf('tesoreria.cali@') >= 0;
+}
+
+/** El nombre de un archivo que NO es una declaracion de verdad. */
+function soporteNoReal(nombre) {
+  var n = String(nombre || '').toLowerCase();
+  if (!n) return true;
+  if (n.indexOf('(prueba)') >= 0 || n.indexOf('prueba') >= 0) return true;
+  for (var i = 0; i < EXTENSIONES_REALES.length; i++) {
+    if (n.slice(-EXTENSIONES_REALES[i].length) === EXTENSIONES_REALES[i]) return false;
+  }
+  return true;                                   // ni PDF: no es una declaracion
+}
+
+/**
+ * Lo que pasaria si ahora mismo se pasara a produccion. No cambia nada.
+ *
+ * Mira solo lo que esta en LISTA, que es lo unico que puede salir: una
+ * obligacion en PENDIENTE no se envia aunque el modo cambie.
+ */
+function revisarAntesDeProduccion() {
+  var modo = String(config('modo') || 'PRUEBA').toUpperCase();
+  var ix = indices(HOJA.OBLIGACIONES);
+  var todas = filas(HOJA.OBLIGACIONES);
+
+  var listas = [], riesgos = [], sinCorreo = 0;
+
+  todas.forEach(function (f) {
+    if (String(f[ix.estado] || '').trim().toUpperCase() !== ESTADO.LISTA) return;
+
+    var quien = String(f[ix.municipio]) + ' · ' + String(f[ix.impuesto]) +
+                ' · ' + String(f[ix.periodo]);
+    var correo = String(f[ix.correo_oficina] || '').trim();
+    if (!correo) { sinCorreo++; return; }         // no sale: ya lo frena puedeEnviar
+
+    listas.push(quien + '  →  ' + correo);
+
+    if (correoInventado(correo)) {
+      riesgos.push(quien + ': el correo ' + correo + ' es inventado, de los datos de ejemplo');
+    }
+    listaSoportes(f[ix.soporte_id]).forEach(function (sid) {
+      var nombre = '';
+      try { nombre = DriveApp.getFileById(sid).getName(); } catch (e) { nombre = ''; }
+      if (soporteNoReal(nombre)) {
+        riesgos.push(quien + ': el soporte «' + (nombre || 'no se pudo abrir') +
+                     '» no parece una declaración real');
+      }
+    });
+  });
+
+  var l = ['Modo actual: ' + modo, ''];
+
+  if (!listas.length) {
+    l.push('Ahora mismo no hay ninguna obligación en LISTA, así que al pasar a');
+    l.push('PRODUCCION no saldría ningún correo hasta que alguien suba un soporte.');
+  } else {
+    l.push(listas.length + ' obligaciones están en LISTA. Al pasar a PRODUCCION,');
+    l.push('en cuanto alguien le dé a enviar, estos correos salen de verdad:');
+    l.push('');
+    listas.slice(0, 15).forEach(function (x) { l.push('   ' + x); });
+    if (listas.length > 15) l.push('   … y ' + (listas.length - 15) + ' más');
+  }
+
+  if (sinCorreo) {
+    l.push('', sinCorreo + ' en LISTA no tienen correo de oficina: esas no salen,');
+    l.push('se quedan esperando a que alguien escriba el correo.');
+  }
+
+  if (riesgos.length) {
+    l.push('', 'OJO — esto hay que arreglarlo ANTES:');
+    riesgos.forEach(function (x) { l.push('   ' + x); });
+    l.push('', 'Borra esas filas de prueba o cámbiales el soporte. pasarAProduccion()');
+    l.push('se va a negar mientras sigan en LISTA.');
+  } else if (modo === 'PRUEBA') {
+    l.push('', 'No hay datos de prueba a punto de salir. Puedes correr pasarAProduccion().');
+  }
+
+  var logo = '';
+  try {
+    logo = PropertiesService.getScriptProperties().getProperty('logo_id') || '';
+  } catch (e) { logo = ''; }
+  if (!String(logo || config('logo_id') || '').trim()) {
+    l.push('', 'Menor: no hay logo. La interfaz muestra el espacio punteado. Se arregla');
+    l.push('en Configuración del proyecto → Propiedades del script → logo_id.');
+  }
+  if (!idDeLogoCorreo()) {
+    l.push('', 'Menor: no hay logo_correo_id. El correo usa el logo de la aplicación,');
+    l.push('que es oscuro, así que la cabecera sale blanca en vez de roja. Para la');
+    l.push('cabecera roja hace falta una versión clara del logo en esa propiedad.');
+  }
+
+  var txt = l.join('\n');
+  Logger.log(txt);
+  return txt;
+}
+
+/**
+ * Pasa a PRODUCCION. Desde ese momento los correos salen a las alcaldias.
+ *
+ * Se niega si hay algo de prueba en LISTA. Queda registrado en EVENTOS con
+ * quien lo hizo y cuando.
+ */
+function pasarAProduccion() {
+  exige('configurar');
+
+  var modo = String(config('modo') || 'PRUEBA').toUpperCase();
+  if (modo === 'PRODUCCION') {
+    return 'Ya estaba en PRODUCCION. No se cambió nada.';
+  }
+
+  var informe = revisarAntesDeProduccion();
+  if (informe.indexOf('OJO — esto hay que arreglarlo ANTES:') >= 0) {
+    throw new Error('No se pasó a PRODUCCION: hay datos de prueba a punto de ' +
+      'salir a una alcaldía.\n\n' + informe);
+  }
+
+  guardarConfig('modo', 'PRODUCCION');
+  registrar('', EVENTO.AVISO, 'modo PRUEBA -> PRODUCCION');
+
+  return 'SINAV está en PRODUCCION.\n\n' +
+         'Desde ahora los correos salen a las alcaldías, desde el buzón de cada\n' +
+         'persona. El aviso de «ambiente de pruebas» desaparece de la interfaz al\n' +
+         'recargarla.\n\n' +
+         'Para volver atrás: volverAPruebas().';
+}
+
+/** El camino de vuelta, por si hay que parar todo. */
+function volverAPruebas() {
+  exige('configurar');
+  guardarConfig('modo', 'PRUEBA');
+  registrar('', EVENTO.AVISO, 'modo PRODUCCION -> PRUEBA');
+  return 'De vuelta en PRUEBA: los correos vuelven a la bandeja de cada quien.\n' +
+         'Lo que ya se envió no se puede deshacer.';
+}
+
+
+// ═════ 23_Correo.gs ═════
+
+/**
+ * SINAV · el correo que recibe la oficina.
+ *
+ * El texto no es decorativo: es una instrucción de trabajo. Dice qué egreso
+ * elaborar, con qué consecutivo de giro, a qué código devolver el sellado y
+ * qué pasa si no lo devuelven (evento SARO). Por eso vive en su propio archivo
+ * y no mezclado con la mecánica del envío.
+ *
+ * Lo que cambia por obligación sale de la fila. Lo que es igual en todos los
+ * correos (el egreso, el código del departamento, a nombre de quién se manda,
+ * las copias) sale de CONFIG y se cambia una sola vez.
+ */
+
+/** Los nombres largos, como los escribe el equipo en el asunto. */
+var IMPUESTO_LARGO = {
+  ICA: 'Industria y Comercio',
+  RETEICA: 'Retención de Industria y Comercio',
+  AUTORRETEICA: 'Autorretención de Industria y comercio',
+  EXOGENA: 'Medios magnéticos'
+};
+
+var IMPUESTO_ASUNTO = {
+  ICA: 'Declaración de ICA',
+  RETEICA: 'Declaración Retención de ICA',
+  AUTORRETEICA: 'Declaración Autorretención de ICA',
+  EXOGENA: 'Medios magnéticos'
+};
+
+/**
+ * La dependencia, sin el cero de relleno.
+ *
+ * En la hoja el codigo de oficina se guarda con cuatro posiciones ('0851')
+ * porque es un codigo y no un numero, pero las direcciones de correo no lo
+ * llevan: director851@, no director0851@.
+ */
+function dependenciaDe(o) {
+  var c = String(o.cod_oficina || '').trim().replace(/^0+/, '');
+  return c;
+}
+
+/**
+ * A quien va el correo.
+ *
+ * Si la obligacion tiene correo_oficina escrito, manda ese: alguien lo puso a
+ * proposito. Si no, se arma desde la dependencia, que es el patron del banco:
+ * director<dep>@ y subdirector<dep>@.
+ *
+ * Esto es lo que permite enviar a los municipios que nunca tuvieron correo
+ * escrito, que eran la mayoria.
+ */
+function destinatariosDe(o) {
+  var escrito = normCorreos(o.correo_oficina);
+  if (escrito) return escrito;
+
+  var dep = dependenciaDe(o);
+  if (!dep) return '';
+  var dominio = config('dominio_oficinas') || 'davivienda.com';
+  return ['director' + dep + '@' + dominio,
+          'subdirector' + dep + '@' + dominio].join(',');
+}
+
+/** Las copias fijas de CONFIG. Vacio si no hay. */
+function copiasFijas() {
+  return normCorreos(config('copias_fijas'));
+}
+
+/**
+ * El asunto, con el formato que usa el equipo:
+ *   1689 -Declaración Autorretención de ICA NILO - MENSUAL - $1.773.000 -
+ *   EGRESO 25 No - LR-09-74
+ *
+ * Al final va la marca SINAV-..., que es con la que luego se encuentra el
+ * hilo. Sin eso la respuesta de la oficina no se detecta sola.
+ */
+function asuntoOficina(o) {
+  var partes = [
+    dependenciaDe(o) + ' -' + (IMPUESTO_ASUNTO[o.impuesto] || o.impuesto) +
+      ' ' + String(o.municipio || '').toUpperCase(),
+    String(o.periodicidad || '').toUpperCase(),
+    pesosCortos(o.valor)
+  ];
+  var egreso = String(config('egreso') || '').trim();
+  var giro = String(o.consecutivo_giro || '').trim();
+  if (egreso) partes.push('EGRESO ' + egreso + ' No');
+  if (giro) partes.push(giro);
+  return partes.join(' - ') + ' [' + marcador(o.id) + ']';
+}
+
+/** $1.773.000 — sin decimales, que es como lo escriben en el asunto. */
+function pesosCortos(v) {
+  if (v === '' || v === null || v === undefined) return '$0';
+  var n = Math.round(Number(v) || 0);
+  return '$' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/** El mes y el ano en letras: "24 de noviembre de 2026". */
+function fechaLarga(v) {
+  var d = v instanceof Date ? v : normFecha(v);
+  if (!d) return 'sin fecha';
+  return d.getDate() + ' de ' + NOMBRE_MES[d.getMonth()] + ' de ' + d.getFullYear();
+}
+
+/**
+ * El parrafo de apertura. Es el que lleva los datos del envio fisico: el
+ * adhesivo con el que viaja el sobre, el valor, el NIT y la dependencia.
+ */
+function parrafoEnvio(o) {
+  var adhesivo = String(o.adhesivo || '').trim();
+  return 'Reciban un cordial saludo, les informo que enviamos por correo interno ' +
+    (adhesivo ? 'con el sticker No ' + adhesivo + ' ' : '') +
+    'la ' + (IMPUESTO_LARGO[o.impuesto] || o.impuesto) + ' ' +
+    String(o.periodicidad || '').toUpperCase() + ' del ' +
+    (o.vigencia || new Date().getFullYear()) + ', del Municipio ' +
+    String(o.municipio || '').toUpperCase() + ', por el valor de ' +
+    pesosCortos(o.valor) + ' con el NIT ' + (o.nit_municipio || '-') +
+    ' a la dependencia ' + (dependenciaDe(o) || '-') + '.';
+}
+
+/** El parrafo de instrucciones de pago. */
+function parrafoPago(o) {
+  var egreso = String(config('egreso') || '25').trim();
+  var giro = String(o.consecutivo_giro || '').trim();
+  return 'Favor realizar el pago por contingencia elaborando egreso ' + egreso +
+    (giro ? ', de acuerdo al consecutivo de giro asignado para este pago No ' + giro : '') +
+    ', realizar la presentación y el pago una vez reciban el soporte. Si el Banco ' +
+    'posee recaudo con el Municipio, timbrar en efectivo con abono a cuenta del ' +
+    'Municipio sin olvidar enviar el correo a GRP Conceptos Especiales; si no ' +
+    'poseemos recaudo con ellos elaborar el cheque con el mismo egreso ' + egreso +
+    ' y concepto 40 para pagar en otra entidad, o en la alcaldía.';
+}
+
+/** Los cuatro puntos de «aspectos a tener en cuenta». */
+function aspectos(o) {
+  var codigo = String(config('codigo_departamento') || '').trim();
+  var recibe = String(config('nombre_recibe') || '').trim();
+  return [
+    'Por favor una vez presentada la declaración (ante la entidad recaudadora y ' +
+      'sellada con fecha de recibido), enviar por este medio imagen del pago y ' +
+      'enviar la declaración con el sello de recibido a Dpto. de impuestos' +
+      (codigo ? ', código ' + codigo : '') +
+      (recibe ? ' a nombre de ' + recibe : '') +
+      '. Si el departamento de impuestos no es notificado mediante correo ' +
+      'electrónico, se reportará como evento SARO.',
+    'Si por alguna eventualidad el día anterior a la fecha del vencimiento de la ' +
+      'declaración no ha recibido en su oficina el formulario, por favor ' +
+      'comunicarse conmigo con carácter urgente. Solicitamos una vez recibido el ' +
+      'correo tramitar el pago del mismo, no es necesario esperar a la fecha de ' +
+      'vencimiento, para evitar sanciones tributarias; que de generarse, serán ' +
+      'cargadas a la oficina responsable del trámite.',
+    'Es responsabilidad de la oficina y/o área administrativa llevar a cabo el ' +
+      'trámite satisfactorio.',
+    'Sugerimos tomar fotocopia del recibido de la declaración y archivar para la ' +
+      'oficina. Recuerde que esta documentación es soporte si a futuro se requiere.'
+  ];
+}
+
+/** El correo en texto plano, para quien lea sin HTML. */
+function cuerpoOficina(o, modo) {
+  var l = [];
+  if (modo === 'PRUEBA') {
+    l.push('[MODO PRUEBA] Este correo iba para: ' + (destinatariosDe(o) || '-'), '');
+  }
+  l.push('Buenos días,', '', parrafoEnvio(o), '', parrafoPago(o), '',
+         'Fecha de vencimiento el ' + fechaLarga(o.vencimiento) + '.', '',
+         'ASPECTOS A TENER EN CUENTA:');
+  aspectos(o).forEach(function (a) { l.push('• ' + a); });
+  l.push('',
+    'Agradecemos dar respuesta SOBRE ESTE MISMO CORREO, sin iniciar uno nuevo,',
+    'adjuntando la declaración con el sello de recibido. De esta manera el',
+    'soporte queda asociado automáticamente a la obligación y debidamente',
+    'archivado.',
+    '', 'Cordialmente,', config('nombre_remitente'));
+  return l.join('\n');
+}
+
+/**
+ * El correo en HTML, con el logo del banco arriba.
+ *
+ * El logo se incrusta como imagen en linea (cid) desde el archivo de Drive que
+ * apunta logo_id. Se incrusta y no se enlaza porque Gmail bloquea las imagenes
+ * remotas hasta que el que lee da permiso, y entonces el correo llega roto.
+ */
+function cuerpoHtmlOficina(o, modo) {
+  var ROJO = '#e30518';
+  var TINTA = '#111111';
+  var APAGADO = '#5f6368';
+  var BORDE = '#e8e8e8';
+  var FUENTE = "-apple-system,'Segoe UI',Arial,Helvetica,sans-serif";
+
+  var aviso = modo === 'PRUEBA'
+    ? '<tr><td style="padding:0 0 16px">' +
+      '<div style="background:#fff6e0;border:1px solid #f0d9a0;color:#8a5500;' +
+      'padding:10px 14px;font-size:13px;border-radius:4px">' +
+      '<b>MODO PRUEBA.</b> Este correo iba para: ' +
+      (destinatariosDe(o) || '-') + '</div></td></tr>'
+    : '';
+
+  // cada dato en su celda, para que no se amontonen en el movil
+  var dato = function (k, v, ancho) {
+    return '<td width="' + (ancho || '50%') + '" valign="top" ' +
+      'style="padding:10px 14px;border:1px solid ' + BORDE + '">' +
+      '<div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;' +
+      'color:' + APAGADO + ';padding-bottom:3px">' + k + '</div>' +
+      '<div style="font-size:15px;color:' + TINTA + ';font-weight:700">' +
+      v + '</div></td>';
+  };
+
+  var punto = function (n, txt) {
+    return '<tr>' +
+      '<td valign="top" width="26" style="padding:0 0 12px">' +
+      '<div style="width:19px;height:19px;border-radius:10px;background:' + ROJO + ';' +
+      'color:#fff;font-size:11px;font-weight:700;text-align:center;' +
+      'line-height:19px">' + n + '</div></td>' +
+      '<td valign="top" style="padding:0 0 12px;font-size:13px;line-height:1.55;' +
+      'color:' + TINTA + '">' + txt + '</td></tr>';
+  };
+
+  var puntos = '';
+  aspectos(o).forEach(function (a, k) { puntos += punto(k + 1, a); });
+
+  var sticker = String(o.adhesivo || '').trim();
+  var giro = String(o.consecutivo_giro || '').trim();
+
+  return '' +
+  '<div style="background:#f1f3f4;padding:24px 12px;font-family:' + FUENTE + '">' +
+  '<table role="presentation" cellpadding="0" cellspacing="0" border="0" ' +
+    'width="100%" style="max-width:640px;margin:0 auto;background:#ffffff;' +
+    'border-radius:8px;overflow:hidden;border:1px solid ' + BORDE + '">' +
+
+    // ---- cabecera.
+    // Sobre rojo solo si hay un logo HECHO para el correo (claro). Con el
+    // logo de la aplicacion, que es oscuro, la franja roja se lo come: en ese
+    // caso la cabecera va blanca con una regla roja debajo.
+    (function () {
+      var propio = !!idDeLogoCorreo() && tieneLogo();
+      var fondo = propio ? ROJO : '#ffffff';
+      var texto = propio ? '#ffffff' : APAGADO;
+      var regla = propio ? '' : ';border-bottom:3px solid ' + ROJO;
+      return '<tr><td style="background:' + fondo + ';padding:18px 28px' +
+          regla + '">' +
+        '<table role="presentation" width="100%"><tr>' +
+          '<td valign="middle">' +
+            (tieneLogo()
+              ? '<img src="cid:logo" alt="Davivienda" height="26" ' +
+                'style="height:26px;display:block">'
+              : '<div style="color:' + (propio ? '#fff' : ROJO) +
+                ';font-size:17px;font-weight:700;letter-spacing:.02em">' +
+                'Davivienda</div>') +
+          '</td>' +
+          '<td valign="middle" align="right" style="color:' + texto +
+            ';font-size:12px">Departamento de Impuestos</td>' +
+        '</tr></table></td></tr>';
+    })() +
+
+    '<tr><td style="padding:26px 28px 0">' +
+      '<table role="presentation" width="100%">' + aviso +
+
+      // ---- de que se trata
+      '<tr><td style="padding:0 0 4px;font-size:11px;letter-spacing:.06em;' +
+        'text-transform:uppercase;color:' + APAGADO + '">' +
+        (IMPUESTO_LARGO[o.impuesto] || o.impuesto) + ' &middot; ' +
+        String(o.periodicidad || '').toLowerCase() + '</td></tr>' +
+      '<tr><td style="padding:0 0 18px;font-size:23px;line-height:1.25;' +
+        'font-weight:700;color:' + TINTA + '">' +
+        String(o.municipio || '').toUpperCase() +
+        '<span style="color:' + APAGADO + ';font-weight:400"> &middot; ' +
+        o.periodo + '</span></td></tr>' +
+
+      // ---- el vencimiento, que es lo que no se puede pasar por alto
+      '<tr><td style="padding:0 0 20px">' +
+        '<div style="background:#fce9e9;border-left:4px solid ' + ROJO + ';' +
+        'padding:12px 16px;border-radius:0 4px 4px 0">' +
+          '<div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;' +
+          'color:' + APAGADO + '">Fecha de vencimiento</div>' +
+          '<div style="font-size:18px;font-weight:700;color:' + ROJO + ';' +
+          'padding-top:2px">' + fechaLarga(o.vencimiento) + '</div>' +
+        '</div></td></tr>' +
+
+      '<tr><td style="padding:0 0 18px;font-size:14px;line-height:1.6;color:' +
+        TINTA + '">Buenos días,<br><br>' + parrafoEnvio(o) + '</td></tr>' +
+
+      // ---- la ficha
+      '<tr><td style="padding:0 0 20px">' +
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" ' +
+          'width="100%" style="border-collapse:collapse">' +
+          '<tr>' + dato('Valor a girar', pesosCortos(o.valor)) +
+                   dato('NIT del municipio', o.nit_municipio || '—') + '</tr>' +
+          '<tr>' + dato('Dependencia', dependenciaDe(o) || '—') +
+                   dato('Sticker de correspondencia', sticker || '—') + '</tr>' +
+          '<tr>' + dato('Consecutivo de giro', giro || '—') +
+                   dato('Presentación', (o.tipo_presentacion || '—') +
+                        ' &middot; paga ' + textoPago(o)) + '</tr>' +
+        '</table></td></tr>' +
+
+      '<tr><td style="padding:0 0 22px;font-size:14px;line-height:1.6;color:' +
+        TINTA + '">' + parrafoPago(o) + '</td></tr>' +
+
+      // ---- los cuatro aspectos, numerados
+      '<tr><td style="padding:0 0 6px;font-size:12px;letter-spacing:.06em;' +
+        'text-transform:uppercase;color:' + APAGADO + ';font-weight:700">' +
+        'Aspectos a tener en cuenta</td></tr>' +
+      '<tr><td style="padding:0 0 10px;border-top:1px solid ' + BORDE + '"></td></tr>' +
+      '<tr><td style="padding:0 0 8px">' +
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" ' +
+        'width="100%">' + puntos + '</table></td></tr>' +
+
+      // ---- la instruccion que hace que todo lo demas funcione
+      '<tr><td style="padding:4px 0 22px">' +
+        '<div style="background:#f7f5f5;border:1px solid ' + BORDE + ';' +
+        'padding:14px 16px;border-radius:4px;font-size:13px;line-height:1.55;' +
+        'color:' + TINTA + '">' +
+        'Agradecemos dar respuesta <b>sobre este mismo correo</b>, sin iniciar ' +
+        'uno nuevo, adjuntando la declaración con el sello de recibido. De esta ' +
+        'manera el soporte queda asociado automáticamente a la obligación y ' +
+        'debidamente archivado.</div></td></tr>' +
+
+      '<tr><td style="padding:0 0 26px;font-size:14px;color:' + TINTA + '">' +
+        'Cordialmente,<br><b>' + config('nombre_remitente') + '</b></td></tr>' +
+      '</table>' +
+    '</td></tr>' +
+
+    '<tr><td style="background:#f7f5f5;border-top:1px solid ' + BORDE + ';' +
+      'padding:14px 28px;font-size:11px;color:' + APAGADO + ';line-height:1.5">' +
+      'Comunicación generada por SINAV, sistema de control de obligaciones ' +
+      'tributarias territoriales del Departamento de Impuestos.</td></tr>' +
+
+  '</table></div>';
+}
+
+/** Hay logo configurado y se puede abrir. */
+function tieneLogo() {
+  return !!blobDelLogo();
+}
+
+/**
+ * El logo PARA EL CORREO. Sale de la propiedad del script 'logo_correo_id',
+ * con CONFIG.logo_correo_id de respaldo. Acepta el id o el enlace de Drive.
+ */
+function idDeLogoCorreo() {
+  var v = '';
+  try {
+    v = PropertiesService.getScriptProperties().getProperty('logo_correo_id') || '';
+  } catch (e) {
+    v = '';
+  }
+  if (!v) v = config('logo_correo_id');
+  var s = String(v || '').trim();
+  if (!s) return '';
+  var m = /\/d\/([A-Za-z0-9_-]+)/.exec(s) || /[?&]id=([A-Za-z0-9_-]+)/.exec(s);
+  return m ? m[1] : s;
+}
+
+/**
+ * El logo como blob, para incrustarlo en el correo. Se cachea en memoria
+ * durante la ejecucion: en un envio de 50 correos seria abrir Drive 50 veces.
+ */
+var _blobLogo;
+var _blobLogoBuscado = false;
+
+function blobDelLogo() {
+  if (_blobLogoBuscado) return _blobLogo;
+  _blobLogoBuscado = true;
+  _blobLogo = null;
+
+  // El logo del correo va sobre la franja roja; el de la aplicacion, sobre
+  // blanco. Casi nunca es el mismo archivo: uno tiene que ser claro y el otro
+  // oscuro. Por eso 'logo_correo_id' manda aqui, y si no esta, se cae al de
+  // la aplicacion, que al menos ensena algo.
+  var id = idDeLogoCorreo() || idLogo();
+  if (!id) return null;
+  try {
+    _blobLogo = DriveApp.getFileById(id).getBlob().setName('logo');
+  } catch (e) {
+    _blobLogo = null;                 // sin logo el correo sale igual, sin imagen
+  }
+  return _blobLogo;
+}
+
+/* ===========================================================================
+   EL CONSECUTIVO DE GIRO
+
+   LR-09-74 se lee asi:
+
+     LR   las iniciales de QUIEN ENVIA, en el momento de enviar. Si Andrea
+          cubre a Yasneidy y es Andrea quien manda, el giro dice AG.
+     09   el mes del PERIODO, no el mes en que se manda. Aqui se trabaja mes
+          vencido: lo que se presenta en diciembre es de noviembre.
+     74   un consecutivo que arranca de nuevo cada mes, por persona.
+
+   Se asigna en el momento del envio, no antes: si se asignara al digitalizar,
+   una obligacion que luego no se manda dejaria un hueco en la numeracion.
+   =========================================================================== */
+
+/** 'Liliana Ramirez' -> 'LR'. Primer nombre y primer apellido. */
+function inicialesDe(nombre) {
+  var partes = String(nombre || '')
+    .normalize ? String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+               : String(nombre || '');
+  var trozos = partes.toUpperCase().split(/[^A-Z]+/).filter(function (x) { return x; });
+  if (!trozos.length) return '';
+  if (trozos.length === 1) return trozos[0].slice(0, 2);
+  return trozos[0].charAt(0) + trozos[1].charAt(0);
+}
+
+/**
+ * El mes al que corresponde el periodo. Es el ULTIMO mes del periodo, que es
+ * el que se declara: el bimestre 5 son septiembre y octubre, y se declara
+ * octubre.
+ *
+ *   2026-09  -> 9      2026-B5 -> 10     2026-T3 -> 9
+ *   2026-C2  -> 8      2026    -> 12
+ */
+function mesDelPeriodo(periodo) {
+  var p = String(periodo || '').trim().toUpperCase();
+  var m = p.match(/^(\d{4})-(\d{1,2})$/);
+  if (m) return Number(m[2]);
+  m = p.match(/^(\d{4})-B(\d)$/);
+  if (m) return Number(m[2]) * 2;
+  m = p.match(/^(\d{4})-T(\d)$/);
+  if (m) return Number(m[2]) * 3;
+  m = p.match(/^(\d{4})-C(\d)$/);
+  if (m) return Number(m[2]) * 4;
+  if (/^\d{4}$/.test(p)) return 12;              // anual: se declara el cierre
+  return 0;
+}
+
+/** LR + mes de dos cifras + consecutivo. */
+function formatoGiro(iniciales, mes, n) {
+  var mm = mes < 10 ? '0' + mes : String(mes);
+  var nn = n < 10 ? '0' + n : String(n);
+  return String(iniciales || '').toUpperCase() + '-' + mm + '-' + nn;
+}
+
+/** La clave del contador: por persona y por mes del periodo. */
+function claveGiro(iniciales, anio, mes) {
+  return 'giro:' + String(iniciales).toUpperCase() + ':' + anio + '-' +
+         (mes < 10 ? '0' + mes : mes);
+}
+
+/**
+ * Toma el siguiente numero de la cuenta y lo guarda. Bajo cerrojo, que dos
+ * envios a la vez no se lleven el mismo.
+ */
+function siguienteConsecutivoGiro(iniciales, anio, mes) {
+  return conCerrojo(function () {
+    var props = PropertiesService.getScriptProperties();
+    var clave = claveGiro(iniciales, anio, mes);
+    var n = Number(props.getProperty(clave) || 0) + 1;
+    props.setProperty(clave, String(n));
+    return n;
+  });
+}
+
+/**
+ * El consecutivo de una obligacion. Si ya tiene uno escrito, ese manda: no se
+ * renumera nada que ya haya salido.
+ */
+function giroPara(o, nombreQuienEnvia) {
+  var ya = String(o.consecutivo_giro || '').trim();
+  if (ya) return ya;
+
+  // LO NORMAL: el numero que ese municipio tiene definido, con el mes de su
+  // periodo. Revisoria busca estos numeros, asi que no se inventan.
+  if (String(config('giro_sigue_al_remitente') || 'NO').toUpperCase() !== 'SI') {
+    var deTabla = consecutivoDe(o.municipio, o.impuesto, o.periodo);
+    if (deTabla) return deTabla;
+  }
+
+  var ini = inicialesDe(nombreQuienEnvia);
+  if (!ini) return '';
+  var mes = mesDelPeriodo(o.periodo);
+  if (!mes) return '';
+  var anio = Number(String(o.periodo || '').slice(0, 4)) ||
+             Number(o.vigencia) || new Date().getFullYear();
+
+  return formatoGiro(ini, mes, siguienteConsecutivoGiro(ini, anio, mes));
+}
+
+
 // ═════ 99_Pruebas.gs ═════
 
 /**
@@ -4613,6 +5663,14 @@ function pruebas() {
   pruebasCarga(esIgual);
   pruebasAusencias(esIgual);
   pruebasCargaMensual(esIgual);
+  pruebasProduccion(esIgual);
+  pruebasVariosSoportes(esIgual);
+  pruebasVariosSellados(esIgual);
+  pruebasCorreoOficina(esIgual);
+  pruebasConcepto25(esIgual);
+  pruebasCorreosOficina(esIgual);
+  pruebasCodigoComoFecha(esIgual);
+  pruebasReemplazo(esIgual);
 
   var resumen = r.lineas.join('\n') + '\n\n' + r.pasa + ' pasan, ' + r.falla + ' fallan';
   if (typeof Logger !== 'undefined') Logger.log(resumen);
@@ -5172,15 +6230,28 @@ function pruebasAusencias(esIgual) {
 
   // REQ-010: en PRUEBA la respuesta llega de uno mismo, y tiene que contar
   var falso = { getFrom: function () { return 'yo@davivienda.com'; } };
-  esIgual('en PRUEBA el primer mensaje es el que mandamos',
-          cuentaComoRespuesta(falso, 0, 'yo@davivienda.com', 'PRUEBA'), false);
-  esIgual('en PRUEBA lo que viene después sí cuenta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRUEBA'), true);
-  esIgual('en producción lo mío nunca cuenta como respuesta',
-          cuentaComoRespuesta(falso, 1, 'yo@davivienda.com', 'PRODUCCION'), false);
-  esIgual('en producción lo de la oficina sí',
-          cuentaComoRespuesta({ getFrom: function () { return 'oficina@muni.gov.co'; } },
-                              1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  // el unico que se descarta siempre es el primero: el que mando SINAV
+  var adjunto = function (kb) {
+    return { getFrom: function () { return 'yo@davivienda.com'; },
+             getAttachments: function () {
+               return kb ? [{ getSize: function () { return kb * 1024; } }] : [];
+             } };
+  };
+  var oficina = { getFrom: function () { return 'hacienda@cali.gov.co'; },
+                  getAttachments: function () { return []; } };
+
+  esIgual('el primero del hilo nunca cuenta',
+          cuentaComoRespuesta(adjunto(0), 0, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('la oficina cuenta, traiga o no adjunto',
+          cuentaComoRespuesta(oficina, 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('lo mio sin adjunto no cuenta: es un recordatorio',
+          cuentaComoRespuesta(adjunto(0), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('lo mio CON adjunto si cuenta: es el sellado reenviado',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRODUCCION'), true);
+  esIgual('una firma incrustada no es un adjunto',
+          cuentaComoRespuesta(adjunto(0.2), 1, 'yo@davivienda.com', 'PRODUCCION'), false);
+  esIgual('y en PRUEBA vale lo mismo, sin reglas aparte',
+          cuentaComoRespuesta(adjunto(80), 1, 'yo@davivienda.com', 'PRUEBA'), true);
 }
 
 /**
@@ -5219,4 +6290,364 @@ function pruebasCargaMensual(esIgual) {
 
   esIgual('hay doce nombres de mes', NOMBRE_MES.length, 12);
   esIgual('noviembre es el 11', NOMBRE_MES[10], 'noviembre');
+}
+
+/**
+ * El paso a produccion se niega si hay algo de prueba a punto de salir. Estas
+ * dos funciones son las que lo deciden, asi que se prueban.
+ */
+function pruebasProduccion(esIgual) {
+  // correos inventados por instalar() y por el generador de ejemplo
+  esIgual('oficina.chapinero es inventado',
+          correoInventado('oficina.chapinero@davivienda.com'), true);
+  esIgual('tambien el segundo de una lista',
+          correoInventado('alcaldia@cali.gov.co,oficina.granada@davivienda.com'), true);
+  esIgual('un correo de alcaldia de verdad no',
+          correoInventado('hacienda@barranquilla.gov.co'), false);
+  esIgual('una cuenta del banco que no es oficina.* tampoco',
+          correoInventado('elizabeth@davivienda.com'), false);
+  esIgual('vacio no es inventado', correoInventado(''), false);
+  esIgual('nulo no revienta', correoInventado(null), false);
+
+  // soportes
+  esIgual('el txt de prueba no es real',
+          soporteNoReal('Chapinero RETEICA 2026-09 (prueba).txt'), true);
+  esIgual('cualquier txt tampoco',
+          soporteNoReal('declaracion.txt'), true);
+  esIgual('un PDF si es real',
+          soporteNoReal('05001_ICA_2026-10.pdf'), false);
+  esIgual('un PDF en mayusculas tambien',
+          soporteNoReal('05001_ICA_2026-10.PDF'), false);
+  esIgual('un PDF que se llama prueba, no',
+          soporteNoReal('prueba.pdf'), true);
+  esIgual('sin nombre no es real', soporteNoReal(''), true);
+}
+
+/**
+ * Una obligacion puede llevar varios archivos: la declaracion y sus anexos,
+ * todos en la misma celda separados por coma. El visto bueno es POR ARCHIVO,
+ * asi que anadir un anexo despues vuelve a frenar el envio.
+ */
+function pruebasVariosSoportes(esIgual) {
+  esIgual('un solo archivo', listaSoportes('abc'), ['abc']);
+  esIgual('dos separados por coma', listaSoportes('abc,def'), ['abc', 'def']);
+  esIgual('con espacios de sobra', listaSoportes(' abc , def '), ['abc', 'def']);
+  esIgual('con punto y coma tambien', listaSoportes('abc;def'), ['abc', 'def']);
+  esIgual('no repite el mismo archivo', listaSoportes('abc,abc'), ['abc']);
+  esIgual('vacio es ninguno', listaSoportes(''), []);
+  esIgual('nulo no revienta', listaSoportes(null), []);
+  esIgual('tambien acepta la fila entera',
+          listaSoportes({ soporte_id: 'abc,def' }), ['abc', 'def']);
+
+  // el visto bueno tiene que cubrirlos TODOS
+  esIgual('los dos revisados, pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a,b' }), true);
+  esIgual('en otro orden, igual pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'b,a' }), true);
+  esIgual('falta revisar el anexo, no pasa',
+          soporteRevisado({ soporte_id: 'a,b', soporte_revisado: 'a' }), false);
+  esIgual('se anadio un anexo despues del visto bueno, no pasa',
+          soporteRevisado({ soporte_id: 'a,b,c', soporte_revisado: 'a,b' }), false);
+  esIgual('un visto bueno de un archivo que ya no esta no cuenta',
+          soporteRevisado({ soporte_id: 'b', soporte_revisado: 'a' }), false);
+  esIgual('sin archivos no hay nada revisado',
+          soporteRevisado({ soporte_id: '', soporte_revisado: 'a' }), false);
+
+  // y el envio sigue abierto a la seleccion con varios archivos
+  esIgual('con dos archivos la fila se puede seleccionar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'a,b',
+                        requiere_envio: 'SI',
+                        correo_oficina: 'x@muni.gov.co' }).ok, true);
+}
+
+/**
+ * La oficina puede mandar primero una queja sin nada, despues el sellado, y
+ * mas tarde el recibo en otro correo del mismo hilo. Cada adjunto es
+ * evidencia y se SUMA: ninguno pisa al anterior.
+ */
+function pruebasVariosSellados(esIgual) {
+  esIgual('un sellado', listaIds('abc'), ['abc']);
+  esIgual('dos sellados', listaIds('abc,def'), ['abc', 'def']);
+  esIgual('sin sellado todavia', listaIds(''), []);
+  esIgual('nulo no revienta', listaIds(null), []);
+  esIgual('no cuenta dos veces el mismo archivo',
+          listaIds('abc,abc,def').length, 2);
+
+  // RESPONDIDA sigue en la lista de estados que miran el hilo: por eso una
+  // respuesta sin adjunto no cierra la puerta al sellado que venga despues
+  esIgual('ENVIADA mira el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.ENVIADA) >= 0, true);
+  esIgual('RESPONDIDA SIGUE mirando el hilo',
+          estadosEsperanRespuesta().indexOf(ESTADO.RESPONDIDA) >= 0, true);
+  esIgual('SIN_EVIDENCIA tambien, por si contestan tarde',
+          estadosEsperanRespuesta().indexOf(ESTADO.SIN_EVIDENCIA) >= 0, true);
+  esIgual('APROBADA ya no',
+          estadosEsperanRespuesta().indexOf(ESTADO.APROBADA) >= 0, false);
+}
+
+/**
+ * El correo a la oficina. Lo que se prueba aqui no es la redaccion sino los
+ * datos que la oficina necesita para girar la plata: a quien va, cuanto es y
+ * con que consecutivo.
+ */
+function pruebasCorreoOficina(esIgual) {
+  var base = {
+    id: '25488|AUTORRETEICA|GENERAL|2026-11',
+    municipio: 'Nilo', cod_dane: '25488', cod_oficina: '1689',
+    impuesto: 'AUTORRETEICA', periodicidad: 'MENSUAL', periodo: '2026-11',
+    valor: 1773000, nit_municipio: '8999997078', consecutivo_giro: 'LR-09-74',
+    paga_quien: 'OFICINA', tipo_presentacion: 'OFICINA',
+    adhesivo: '55622944', correo_oficina: '', vigencia: '2026'
+  };
+  var con = function (extra) {
+    var o = {};
+    Object.keys(base).forEach(function (k) { o[k] = base[k]; });
+    Object.keys(extra || {}).forEach(function (k) { o[k] = extra[k]; });
+    return o;
+  };
+
+  // la dependencia pierde el cero de relleno: director851@, no director0851@
+  esIgual('dependencia sin cero', dependenciaDe({ cod_oficina: '0851' }), '851');
+  esIgual('dependencia de cuatro cifras', dependenciaDe({ cod_oficina: '1689' }), '1689');
+  esIgual('sin oficina, nada', dependenciaDe({ cod_oficina: '' }), '');
+
+  // los pesos del asunto: sin decimales y con punto de mil
+  esIgual('el valor se escribe como lo escriben ellos',
+          pesosCortos(1773000), '$1.773.000');
+  esIgual('un valor chico', pesosCortos(5000), '$5.000');
+  esIgual('sin valor no revienta', pesosCortos(''), '$0');
+
+  esIgual('la fecha en letras', fechaLarga(new Date(2026, 10, 24)),
+          '24 de noviembre de 2026');
+  esIgual('sin fecha lo dice', fechaLarga(''), 'sin fecha');
+
+  // el asunto, con el formato del equipo
+  var asunto = asuntoOficina(con({}));
+  esIgual('el asunto empieza por la dependencia', asunto.indexOf('1689 -') === 0, true);
+  esIgual('nombra el impuesto largo',
+          asunto.indexOf('Declaración Autorretención de ICA NILO') > 0, true);
+  esIgual('lleva la periodicidad', asunto.indexOf('MENSUAL') > 0, true);
+  esIgual('lleva el valor', asunto.indexOf('$1.773.000') > 0, true);
+  esIgual('lleva el consecutivo de giro', asunto.indexOf('LR-09-74') > 0, true);
+  esIgual('y la marca, que es como se encuentra el hilo',
+          asunto.indexOf('[SINAV-') > 0, true);
+
+  // lo que falta para que el correo tenga sentido
+  esIgual('completa no falta nada', faltaParaElCorreo(con({})).length, 0);
+  esIgual('sin valor falta el valor',
+          faltaParaElCorreo(con({ valor: '' })).length, 1);
+  esIgual('un valor en cero tampoco sirve',
+          faltaParaElCorreo(con({ valor: 0 })).length, 1);
+  // el sobre viaja con ese numero: sin el, la oficina no sabe que recibe
+  esIgual('sin adhesivo no sale el correo',
+          faltaParaElCorreo(con({ adhesivo: '' }))[0], 'Sticker de correspondencia');
+  // el consecutivo de giro NO se pide: lo asigna el envio
+  esIgual('sin giro no se bloquea: se asigna al enviar',
+          faltaParaElCorreo(con({ consecutivo_giro: '' })).length, 0);
+
+  // LR-09-74: iniciales de quien envia, mes del PERIODO, consecutivo del mes
+  esIgual('iniciales de nombre y apellido', inicialesDe('Liliana Ramirez'), 'LR');
+  esIgual('con tilde tambien', inicialesDe('Andrea Galvis Díaz'), 'AG');
+  esIgual('en minusculas', inicialesDe('jesus jaimes'), 'JJ');
+  esIgual('un solo nombre', inicialesDe('Elizabeth'), 'EL');
+  esIgual('vacio no revienta', inicialesDe(''), '');
+  esIgual('nulo no revienta', inicialesDe(null), '');
+
+  // aqui se trabaja MES VENCIDO: el mes es el del periodo, no el del envio,
+  // y en los periodos largos es el ultimo mes, que es el que se declara
+  esIgual('mensual', mesDelPeriodo('2026-09'), 9);
+  esIgual('mensual de un digito', mesDelPeriodo('2026-9'), 9);
+  esIgual('bimestre 5 son sept-oct: se declara octubre',
+          mesDelPeriodo('2026-B5'), 10);
+  esIgual('bimestre 1', mesDelPeriodo('2026-B1'), 2);
+  esIgual('trimestre 3', mesDelPeriodo('2026-T3'), 9);
+  esIgual('cuatrimestre 2', mesDelPeriodo('2026-C2'), 8);
+  esIgual('anual cierra en diciembre', mesDelPeriodo('2026'), 12);
+  esIgual('basura no inventa un mes', mesDelPeriodo('xyz'), 0);
+  esIgual('vacio tampoco', mesDelPeriodo(''), 0);
+
+  esIgual('el formato del ejemplo', formatoGiro('LR', 9, 74), 'LR-09-74');
+  esIgual('mes de dos cifras', formatoGiro('AG', 11, 3), 'AG-11-03');
+  esIgual('consecutivo largo', formatoGiro('HC', 12, 140), 'HC-12-140');
+
+  // la cuenta es por persona y por mes del periodo
+  esIgual('la clave separa personas',
+          claveGiro('LR', 2026, 9) === claveGiro('AG', 2026, 9), false);
+  esIgual('y separa meses',
+          claveGiro('LR', 2026, 9) === claveGiro('LR', 2026, 10), false);
+
+  // la dependencia vale como destinatario: es lo que desbloquea los
+  // municipios que nunca tuvieron correo escrito
+  esIgual('con dependencia se puede enviar',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '1689' }).ok, true);
+  esIgual('sin correo NI dependencia, no',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).ok, false);
+  esIgual('y lo dice',
+          puedeEnviar({ estado: ESTADO.LISTA, soporte_id: 'x', requiere_envio: 'SI',
+                        correo_oficina: '', cod_oficina: '' }).motivo,
+          'sin correo ni dependencia');
+
+  // los adhesivos del archivo de correspondencia
+  esIgual('ADHESIVO Sept es septiembre', mesDeEncabezado('ADHESIVO Sept'), 9);
+  esIgual('con espacio al final tambien', mesDeEncabezado('ADHESIVO Agosto '), 8);
+  esIgual('Label Febrero tambien cuenta', mesDeEncabezado('Label Febrero '), 2);
+  esIgual('una columna que no es de adhesivos, no',
+          mesDeEncabezado('DESCRIPCION CARTERO'), 0);
+  esIgual('un numero de adhesivo', adhesivoValido('55285303.0'), '55285303');
+  esIgual('REGISTRADO EN CARTERO no es un adhesivo',
+          adhesivoValido('REGISTRADO EN CARTERO'), '');
+  esIgual('#N/A tampoco', adhesivoValido('#N/A'), '');
+  esIgual('vacio tampoco', adhesivoValido(''), '');
+}
+
+/**
+ * Los consecutivos no se inventan: cada municipio tiene el suyo y lo unico
+ * que cambia de un periodo a otro es el mes. Revisoria busca esos numeros.
+ */
+function pruebasConcepto25(esIgual) {
+  esIgual('solo cambia el mes', giroDesdePlantilla('LR-09-74', 10), 'LR-10-74');
+  esIgual('el mes se rellena a dos cifras',
+          giroDesdePlantilla('LR-09-74', 3), 'LR-03-74');
+  esIgual('un prefijo con año tambien funciona',
+          giroDesdePlantilla('HC26-10-141', 11), 'HC26-11-141');
+  esIgual('el numero del municipio no se toca',
+          giroDesdePlantilla('AG-10-116', 12), 'AG-12-116');
+  esIgual('sin mes se devuelve igual',
+          giroDesdePlantilla('LR-09-74', 0), 'LR-09-74');
+  esIgual('algo que no es una plantilla no revienta',
+          giroDesdePlantilla('XYZ', 10), 'XYZ');
+  esIgual('vacio tampoco', giroDesdePlantilla('', 10), '');
+
+  // las claves se escriben sin tildes y sin dobles espacios
+  esIgual('clave normal', claveConcepto('NILO', 'ICA'), 'NILO|ICA');
+  esIgual('con tilde', claveConcepto('Medellín', 'ICA'), 'MEDELLIN|ICA');
+  esIgual('con enie', claveConcepto('Muña', 'ICA'), 'MUNA|ICA');
+  esIgual('con espacios de sobra', claveConcepto('  SAN  GIL ', 'ICA'), 'SAN GIL|ICA');
+  esIgual('sin impuesto, solo el municipio', claveConcepto('NILO', ''), 'NILO');
+
+  // las tablas de verdad, que son las que se van a usar
+  esIgual('NILO tiene consecutivo de ICA',
+          !!CONSECUTIVOS['NILO|ICA'], true);
+  esIgual('y su numero es el 74',
+          CONSECUTIVOS['NILO|ICA'].split('-').pop(), '74');
+  esIgual('ABEJORRAL tiene el de RETEICA',
+          CONSECUTIVOS['ABEJORRAL|RETEICA'].split('-').pop(), '141');
+  esIgual('hay mas de 300 consecutivos',
+          Object.keys(CONSECUTIVOS).length > 300, true);
+
+  esIgual('TOCANCIPA paga por PSE', formaPagoDe('TOCANCIPA'), 'PSE');
+  esIgual('FILANDIA por transferencia', formaPagoDe('FILANDIA'), 'TRANSFERENCIA');
+  esIgual('PALESTINA en oficina', formaPagoDe('PALESTINA'), 'OFICINA');
+  esIgual('un municipio que no esta, vacio', formaPagoDe('NARNIA'), '');
+
+  // el consecutivo de una obligacion lleva el mes de SU periodo
+  esIgual('bimestre 5 se declara en octubre',
+          consecutivoDe('NILO', 'ICA', '2026-B5').split('-')[1], '10');
+  esIgual('mensual de noviembre',
+          consecutivoDe('NILO', 'ICA', '2026-11').split('-')[1], '11');
+  esIgual('un municipio sin tabla no inventa nada',
+          consecutivoDe('NARNIA', 'ICA', '2026-11'), '');
+}
+
+/** El directorio de oficinas: 317 municipios con sus correos. */
+function pruebasCorreosOficina(esIgual) {
+  // el DANE se escribe con cinco cifras: 5002 es 05002, no 5002
+  esIgual('cinco cifras con cero delante', dane5('5002'), '05002');
+  esIgual('el que ya viene bien no cambia', dane5('19698'), '19698');
+  esIgual('acepta numero', dane5(5002), '05002');
+  esIgual('el .0 que deja Sheets se cae', dane5('05002.0'), '05002');
+  esIgual('vacio no revienta', dane5(''), '');
+  esIgual('nulo tampoco', dane5(null), '');
+
+  esIgual('Santander de Quilichao tiene correos',
+          !!correosDeOficina('19698'), true);
+  esIgual('y el director va primero',
+          correosDeOficina('19698').split(',')[0], 'director0118@davivienda.com');
+  esIgual('el subdirector va segundo',
+          correosDeOficina('19698').split(',')[1], 'subdirector0118@davivienda.com');
+  esIgual('un municipio que no esta, vacio', correosDeOficina('99999'), '');
+
+  esIgual('hay mas de 300 municipios con correo',
+          Object.keys(CORREOS_OFICINA).length > 300, true);
+  esIgual('todos los correos son del banco o de una alcaldia',
+          Object.keys(CORREOS_OFICINA).every(function (k) {
+            return CORREOS_OFICINA[k].indexOf('@') > 0;
+          }), true);
+  esIgual('ningun municipio quedo con la lista vacia',
+          Object.keys(CORREOS_OFICINA).every(function (k) {
+            return CORREOS_OFICINA[k].length > 5;
+          }), true);
+
+  esIgual('Quilichao paga en oficina', pagoDeOficina('19698'), 'OFICINA');
+}
+
+/**
+ * El DANE leido como fecha.
+ *
+ * Si la columna del codigo en CALENDARIO quedo con formato de fecha, la hoja
+ * guarda 5659 pero devuelve «29 de junio de 1915», y entonces el municipio de
+ * una obligacion es una fecha y su id tambien. Se deshace la conversion: el
+ * numero de serie de la hoja ES el codigo.
+ */
+function pruebasCodigoComoFecha(esIgual) {
+  esIgual('el origen de la hoja es el 30/12/1899',
+          diasDesdeElOrigen(new Date(1899, 11, 30)), 0);
+  esIgual('el 31/12/1899 es el dia 1',
+          diasDesdeElOrigen(new Date(1899, 11, 31)), 1);
+
+  esIgual('29/06/1915 era el DANE 05659',
+          normCodigo(new Date(1915, 5, 29), 5), '05659');
+  esIgual('01/11/1942 era el 15646',
+          normCodigo(new Date(1942, 10, 1), 5), '15646');
+  esIgual('05/04/2049 era el 54518',
+          normCodigo(new Date(2049, 3, 5), 5), '54518');
+  esIgual('y dane5 tambien lo deshace',
+          dane5(new Date(1915, 5, 29)), '05659');
+
+  esIgual('una fecha invalida no inventa un codigo',
+          normCodigo(new Date('x'), 5), '');
+  esIgual('una fecha anterior al origen tampoco',
+          normCodigo(new Date(1800, 0, 1), 5), '');
+
+  // lo de siempre sigue igual
+  esIgual('un codigo normal no se toca', normCodigo('05001', 5), '05001');
+  esIgual('y se rellena con ceros', normCodigo('851', 4), '0851');
+
+  // los ids mal formados se reconocen
+  esIgual('un id bueno', idEsValido('05001|ICA|GENERAL|2026-11'), true);
+  esIgual('uno con fecha por DANE',
+          idEsValido('Mon Apr 05 2049 00:00:00 GMT-0500|RETEICA|GENERAL|2026-11'), false);
+  esIgual('vacio no es valido', idEsValido(''), false);
+}
+
+/**
+ * Cuando alguien sale, sus iniciales siguen en el consecutivo durante meses
+ * si nadie las cambia. El NUMERO no se toca: es del municipio.
+ */
+function pruebasReemplazo(esIgual) {
+  esIgual('AG pasa a LR y el resto queda igual',
+          cambiarPrefijo('AG-10-74', 'AG', 'LR'), 'LR-10-74');
+  esIgual('el numero no se toca, por largo que sea',
+          cambiarPrefijo('AG-10-148', 'AG', 'LR'), 'LR-10-148');
+  esIgual('el mes tampoco', cambiarPrefijo('AG-03-01', 'AG', 'LR'), 'LR-03-01');
+  esIgual('un prefijo con año',
+          cambiarPrefijo('HC26-10-141', 'HC26', 'LR'), 'LR-10-141');
+  esIgual('se puede poner un prefijo con año',
+          cambiarPrefijo('AG-10-74', 'AG', 'LR26'), 'LR26-10-74');
+
+  // lo que NO es suyo no se toca
+  esIgual('el de otra persona se queda',
+          cambiarPrefijo('HC26-10-141', 'AG', 'LR'), 'HC26-10-141');
+  esIgual('sin prefijos no cambia nada',
+          cambiarPrefijo('AG-10-74', '', ''), 'AG-10-74');
+  esIgual('algo que no es un consecutivo tampoco',
+          cambiarPrefijo('PENDIENTE', 'AG', 'LR'), 'PENDIENTE');
+  esIgual('vacio no revienta', cambiarPrefijo('', 'AG', 'LR'), '');
+  esIgual('nulo tampoco', cambiarPrefijo(null, 'AG', 'LR'), '');
+
+  // el prefijo se compara entero: AG no es A
+  esIgual('no cambia por un prefijo que solo empieza igual',
+          cambiarPrefijo('AG-10-74', 'A', 'LR'), 'AG-10-74');
 }

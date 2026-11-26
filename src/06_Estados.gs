@@ -24,10 +24,37 @@ function puedeEnviar(fila) {
   if (String(f.estado || '').toUpperCase() !== ESTADO.LISTA) {
     return { ok: false, motivo: 'el estado es ' + (f.estado || 'vacio') + ', no LISTA' };
   }
-  if (!normCorreos(f.correo_oficina)) {
-    return { ok: false, motivo: 'sin correo de oficina' };
+  // vale el correo escrito a mano, o la dependencia: de ella se arman
+  // director<dep>@ y subdirector<dep>@, que es el patron del banco
+  if (!normCorreos(f.correo_oficina) &&
+      !String(f.cod_oficina || '').trim().replace(/^0+/, '')) {
+    return { ok: false, motivo: 'sin correo ni dependencia' };
   }
   return { ok: true, motivo: '' };
+}
+
+/**
+ * Los soportes de una obligacion, en orden. El primero es la declaracion; los
+ * demas son anexos (el comprobante de pago, el formulario, lo que haga falta).
+ *
+ * Van todos en la MISMA celda separados por coma, no en columnas nuevas: el
+ * numero de anexos no se sabe de antemano, y una columna por anexo seria
+ * adivinar cuantos caben.
+ */
+function listaSoportes(v) {
+  return listaIds(v && typeof v === 'object' ? v.soporte_id : v);
+}
+
+/** Varios ids de Drive en una celda, separados por coma. Sin repetidos. */
+function listaIds(v) {
+  var salida = [], vistos = {};
+  String(v || '').split(/[,;\s]+/).forEach(function (x) {
+    var s = x.trim();
+    if (!s || vistos[s]) return;
+    vistos[s] = true;
+    salida.push(s);
+  });
+  return salida;
 }
 
 /**
@@ -40,8 +67,18 @@ function puedeEnviar(fila) {
  */
 function soporteRevisado(fila) {
   var f = fila || {};
-  var sid = String(f.soporte_id || '').trim();
-  return !!sid && String(f.soporte_revisado || '').trim() === sid;
+  var tiene = listaSoportes(f.soporte_id);
+  if (!tiene.length) return false;
+
+  var vistos = {};
+  listaSoportes(f.soporte_revisado).forEach(function (x) { vistos[x] = true; });
+
+  // TODOS los archivos que se van a adjuntar tienen que estar revisados: si se
+  // anade un anexo despues del visto bueno, ese anexo tambien hay que verlo
+  for (var i = 0; i < tiene.length; i++) {
+    if (!vistos[tiene[i]]) return false;
+  }
+  return true;
 }
 
 /**
