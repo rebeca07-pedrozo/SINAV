@@ -166,14 +166,22 @@ function App({ inicio }) {
   const [datos, setDatos] = useState(inicio);
   const [vista, setVista] = useState('enviar');
 
-  if (datos.error) {
-    return html`<main><div class="error">${datos.error}</div></main>`;
-  }
-
+  // OJO: los hooks van SIEMPRE antes de cualquier return. React cuenta
+  // cuantos se llaman en cada pintada, y si un return condicional se salta
+  // uno, la siguiente vez revienta y la pagina queda en blanco.
   const recargar = useCallback(async () => {
     const d = await llamar('apiLista');
     setDatos((v) => Object.assign({}, v, d));
   }, []);
+
+  if (datos.error) {
+    return html`<main><div class="error">${datos.error}</div></main>`;
+  }
+  if (!datos.filas) {
+    return html`<main><div class="error">
+      El servidor no devolvió la lista de obligaciones. Mira el registro de
+      Ejecuciones en el editor.</div></main>`;
+  }
 
   const porVista = {
     enviar: datos.filas.filter((o) => o.estado !== 'APROBADA'),
@@ -839,14 +847,49 @@ function Alertas() {
 
 /* ---------- arranque ------------------------------------------------------ */
 
-llamar('apiInicio').then((inicio) => {
-  ReactDOM.createRoot(document.getElementById('raiz'))
-    .render(html`<${App} inicio=${inicio} />`);
-}).catch((e) => {
+/**
+ * Pintar el error en la pagina, en vez de dejarla en blanco.
+ *
+ * Una pantalla en blanco no dice nada a nadie: el error queda en la consola
+ * del navegador, donde no lo ve quien esta trabajando. Esto lo saca a la
+ * vista, con lo que hay que mirar.
+ */
+function mostrarFallo(donde, e) {
+  var msg = e && e.message ? e.message : String(e);
+  var pila = e && e.stack ? String(e.stack).split('\n').slice(0, 4).join('\n') : '';
   document.getElementById('raiz').innerHTML =
-    '<main><div class="error">No se pudo abrir SINAV: ' +
-    String(e && e.message ? e.message : e) + '</div></main>';
+    '<main><div class="error"><b>SINAV no pudo abrir.</b><br>' +
+    '<br><b>Dónde:</b> ' + donde +
+    '<br><b>Qué pasó:</b> ' + msg +
+    (pila ? '<br><br><pre style="white-space:pre-wrap;font-size:12px">' +
+            pila + '</pre>' : '') +
+    '<br>Si esto no se entiende, cópialo tal cual y mándalo.</div></main>';
+}
+
+// cualquier error que se escape, de donde sea
+window.addEventListener('error', function (ev) {
+  mostrarFallo('al cargar la página', ev.error || ev.message);
 });
+window.addEventListener('unhandledrejection', function (ev) {
+  mostrarFallo('en una llamada al servidor', ev.reason);
+});
+
+if (typeof React === 'undefined' || typeof htm === 'undefined') {
+  mostrarFallo('al cargar React',
+    new Error('No se pudieron descargar React y htm desde unpkg.com. ' +
+              'Puede que la red del banco los esté bloqueando.'));
+} else {
+  llamar('apiInicio').then(function (inicio) {
+    try {
+      ReactDOM.createRoot(document.getElementById('raiz'))
+        .render(html`<${App} inicio=${inicio} />`);
+    } catch (e) {
+      mostrarFallo('al pintar la pantalla', e);
+    }
+  }).catch(function (e) {
+    mostrarFallo('en apiInicio, en el servidor', e);
+  });
+}
 </script>
 </body>
 </html>
