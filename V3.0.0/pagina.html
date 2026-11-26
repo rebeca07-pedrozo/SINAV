@@ -157,7 +157,9 @@ const diasTexto = (d) => d === null ? ''
 
 const VISTAS = [
   { id: 'enviar', et: 'Enviar' },
-  { id: 'respuestas', et: 'Respuestas' }
+  { id: 'carga', et: 'Carga masiva' },
+  { id: 'respuestas', et: 'Respuestas' },
+  { id: 'alertas', et: 'Alertas' }
 ];
 
 function App({ inicio }) {
@@ -175,7 +177,10 @@ function App({ inicio }) {
 
   const porVista = {
     enviar: datos.filas.filter((o) => o.estado !== 'APROBADA'),
-    respuestas: datos.filas.filter((o) => o.tiene_envio)
+    carga: datos.filas.filter((o) => !o.soportes && o.estado !== 'APROBADA'),
+    respuestas: datos.filas.filter((o) => o.tiene_envio),
+    alertas: datos.filas.filter((o) =>
+      o.estado !== 'APROBADA' && o.dias !== null && o.dias <= 7)
   };
 
   return html`<div class="marco">
@@ -204,6 +209,10 @@ function App({ inicio }) {
 
       ${vista === 'enviar'
         ? html`<${Enviar} datos=${datos} filas=${porVista.enviar} alRecargar=${recargar} />`
+        : vista === 'carga'
+        ? html`<${CargaMasiva} alRecargar=${recargar} />`
+        : vista === 'alertas'
+        ? html`<${Alertas} />`
         : html`<${Respuestas} filas=${porVista.respuestas} alRecargar=${recargar} />`}
     </main>
   </div>`;
@@ -614,6 +623,217 @@ function Respuestas({ filas, alRecargar }) {
       </table>
       ${!filas.length ? html`<p class="vacio">Todavía no has enviado nada.</p>` : null}
     </div>
+  <//>`;
+}
+
+/* ---------- CARGA MASIVA -------------------------------------------------- */
+
+/**
+ * Veinte PDF de golpe. El servidor dice a que obligacion se parece cada uno
+ * por lo que diga el NOMBRE; lo que no quede claro, se elige a mano.
+ *
+ * Los archivos NO se suben hasta que la persona lo confirma: primero se ve el
+ * plan entero, y solo entonces se manda. Subir y despues descubrir que fue a
+ * la obligacion equivocada no tiene arreglo.
+ */
+function CargaMasiva({ alRecargar }) {
+  const [plan, setPlan] = useState(null);
+  const [asignado, setAsignado] = useState({});
+  const [subiendo, setSubiendo] = useState(false);
+  const [progreso, setProgreso] = useState({ hechos: 0, total: 0, actual: '' });
+  const [resultados, setResultados] = useState({});
+  const [fallo, setFallo] = useState('');
+  const archivos = useRef(null);
+  const guardados = useRef({});
+
+  async function elegirArchivos(ev) {
+    const lista = Array.from(ev.target.files || []);
+    if (!lista.length) return;
+    guardados.current = {};
+    lista.forEach((f) => { guardados.current[f.name] = f; });
+    setFallo('');
+    setResultados({});
+    try {
+      const p = await llamar('apiPlanCarga', lista.map((f) => f.name));
+      setPlan(p);
+      const a = {};
+      p.plan.forEach((it) => { if (it.id) a[it.archivo] = it.id; });
+      setAsignado(a);
+    } catch (e) { setFallo(String(e.message || e)); }
+  }
+
+  const aCargar = plan
+    ? plan.plan.filter((it) => asignado[it.archivo] && guardados.current[it.archivo])
+    : [];
+
+  // dos archivos a la misma obligacion no es un error: una declaracion puede
+  // ir con sus anexos. El primero reemplaza y los demas se anaden.
+  const agrega = (() => {
+    const vistos = {}, mapa = {};
+    aCargar.forEach((it) => {
+      const id = asignado[it.archivo];
+      mapa[it.archivo] = !!vistos[id];
+      vistos[id] = true;
+    });
+    return mapa;
+  })();
+
+  async function subirTodo() {
+    setSubiendo(true);
+    setFallo('');
+    const salida = {};
+    for (let i = 0; i < aCargar.length; i++) {
+      const it = aCargar[i];
+      const f = guardados.current[it.archivo];
+      setProgreso({ hechos: i, total: aCargar.length, actual: it.archivo });
+      try {
+        const datosBase64 = await new Promise((ok, mal) => {
+          const lector = new FileReader();
+          lector.onload = () => ok(String(lector.result).split(',')[1]);
+          lector.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+          lector.readAsDataURL(f);
+        });
+        await llamar('apiSubirSoporte', asignado[it.archivo], f.name, f.type,
+                     datosBase64, agrega[it.archivo]);
+        salida[it.archivo] = { ok: true, motivo: '' };
+      } catch (e) {
+        salida[it.archivo] = { ok: false, motivo: String(e.message || e) };
+      }
+      setResultados(Object.assign({}, salida));
+    }
+    setProgreso({ hechos: aCargar.length, total: aCargar.length, actual: '' });
+    setSubiendo(false);
+    await alRecargar();
+  }
+
+  return html`<${Fragment}>
+    <div class="cab"><h1>Carga masiva</h1>
+      <span class="der">El nombre del archivo tiene que traer el código DANE
+        de 5 cifras. Ejemplo: <b>05001 ICA 2026-11.pdf</b></span></div>
+
+    ${fallo ? html`<div class="error">${fallo}</div>` : null}
+
+    <div class="panel">
+      <div class="panel-cab">
+        <h2>1 · Elige los archivos</h2>
+        <span class="der">
+          <button class="btn" disabled=${subiendo}
+            onClick=${() => archivos.current.click()}>Elegir los PDF</button>
+        </span>
+      </div>
+
+      ${plan ? html`<${Fragment}>
+        <table>
+          <thead><tr>
+            <th>Archivo</th><th>Lo que leí</th><th>Obligación</th><th class="der">Carga</th>
+          </tr></thead>
+          <tbody>
+            ${plan.plan.map((it) => html`<tr key=${it.archivo}>
+              <td><span class="ident">${it.archivo}</span>
+                <span class=${'sub ' + (it.estado === 'emparejado' ? 'aldia'
+                  : it.estado === 'elegir' ? 'porvencer' : 'vencido')}>
+                  ${it.estado}${it.motivo ? ' · ' + it.motivo : ''}</span></td>
+              <td><span class="sub">${
+                (it.leido.dane || 'sin DANE') + ' · ' +
+                (it.leido.impuesto || 'sin impuesto') + ' · ' +
+                (it.leido.periodo || 'sin periodo')}</span></td>
+              <td>
+                ${it.opciones.length
+                  ? html`<select value=${asignado[it.archivo] || ''}
+                      onChange=${(e) => setAsignado((v) =>
+                        Object.assign({}, v, { [it.archivo]: e.target.value }))}>
+                      <option value="">— no cargar —</option>
+                      ${it.opciones.map((c) => html`<option key=${c.id} value=${c.id}>
+                        ${c.et}${c.soportes ? ' (ya tiene ' + c.soportes + ')' : ''}
+                      </option>`)}
+                    </select>`
+                  : html`<span class="sub">—</span>`}
+              </td>
+              <td class="der">${
+                resultados[it.archivo]
+                  ? (resultados[it.archivo].ok
+                      ? html`<span class="sub aldia">cargado</span>`
+                      : html`<span class="sub vencido">${resultados[it.archivo].motivo}</span>`)
+                  : html`<span class="sub">—</span>`}</td>
+            </tr>`)}
+          </tbody>
+        </table>
+
+        <div class="panel-cab" style=${{ borderTop: '1px solid var(--borde)', borderBottom: 0 }}>
+          <h2>2 · Cargar</h2>
+          <span class="der">
+            <button class="btn btn-principal" disabled=${!aCargar.length || subiendo}
+              onClick=${subirTodo}>
+              ${subiendo
+                ? 'Cargando ' + (progreso.hechos + 1) + ' de ' + progreso.total + '…'
+                : 'Cargar ' + aCargar.length +
+                  (aCargar.length === 1 ? ' soporte' : ' soportes')}
+            </button>
+          </span>
+          <span class="sub">${plan.plan.length - aCargar.length > 0
+            ? (plan.plan.length - aCargar.length) + ' archivos quedan fuera.'
+            : 'Todos los archivos tienen destino.'}</span>
+        </div>
+      <//>` : html`<p class="vacio">Elige los PDF y te digo a qué obligación
+        va cada uno antes de subir nada.</p>`}
+    </div>
+
+    <input type="file" multiple ref=${archivos} style=${{ display: 'none' }}
+      onChange=${elegirArchivos} />
+  <//>`;
+}
+
+/* ---------- ALERTAS ------------------------------------------------------- */
+
+/** Qué se vence y cuándo. Lo vencido alerta siempre, esté donde esté. */
+function Alertas() {
+  const [datos, setDatos] = useState(null);
+  const [fallo, setFallo] = useState('');
+
+  useEffect(() => {
+    llamar('apiAlertas').then(setDatos).catch((e) => setFallo(String(e.message || e)));
+  }, []);
+
+  if (fallo) return html`<div class="error">${fallo}</div>`;
+  if (!datos) return html`<p class="vacio">Cargando…</p>`;
+
+  return html`<${Fragment}>
+    <div class="cab"><h1>Alertas</h1>
+      <span class="der">${datos.total} obligaciones abiertas ·
+        cortes a los ${datos.cortes.join(', ')} días</span></div>
+
+    ${!datos.tramos.length
+      ? html`<div class="ok">No hay nada pendiente. Todo cerrado.</div>`
+      : datos.tramos.map((t) => html`<div class="panel" key=${t.id}
+          style=${{ marginBottom: '16px' }}>
+        <div class="panel-cab">
+          <h2 class=${t.nivel === 'vencido' ? 'sub vencido' : ''}>${t.et}</h2>
+          <span class="der">${t.filas.length}</span>
+        </div>
+        ${t.detalle ? html`<p class="sub" style=${{ padding: '0 20px 8px' }}>
+          ${t.detalle}</p>` : null}
+        <table>
+          <thead><tr>
+            <th>Municipio</th><th>Impuesto</th><th class="num">Periodo</th>
+            <th class="num der">Vence</th><th>Estado</th><th>Qué falta</th>
+          </tr></thead>
+          <tbody>
+            ${t.filas.map((o) => html`<tr key=${o.id}>
+              <td><span class="ident">${o.municipio}</span>
+                <span class="sub">DANE ${o.cod_dane}</span></td>
+              <td>${o.impuesto}</td>
+              <td class="num">${o.periodo}</td>
+              <td class="num der">${o.vencimiento}
+                <span class=${'sub ' + t.nivel}>${diasTexto(o.dias)}</span></td>
+              <td><span class=${'pildora p-' + o.estado}>${o.estado}</span></td>
+              <td><span class="sub">${
+                !o.soportes ? 'cargar el soporte'
+                : o.falta.length ? o.falta.join(', ')
+                : !o.enviable ? o.motivo : 'lista para enviar'}</span></td>
+            </tr>`)}
+          </tbody>
+        </table>
+      </div>`)}
   <//>`;
 }
 

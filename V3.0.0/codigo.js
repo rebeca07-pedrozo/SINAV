@@ -1612,3 +1612,154 @@ function aviso(titulo, texto) {
       'Ejecuciones, en el editor.' : t,
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
+
+/* ===========================================================================
+   16. CARGA MASIVA
+
+   Veinte PDF de golpe en vez de uno por uno. El emparejamiento se hace por lo
+   que dice el NOMBRE del archivo, y la regla de oro es: cuando duda, NO
+   elige. Un soporte en la obligacion equivocada se descubre cuando la
+   alcaldia recibe la declaracion de otro municipio, meses despues.
+   =========================================================================== */
+
+/** Lo que se puede leer del nombre de un archivo. */
+function leerNombre(nombre) {
+  var s = limpiar(nombre).replace(/\.[A-Z0-9]+$/, '');
+
+  // el DANE: cinco cifras seguidas, que es lo que de verdad identifica
+  var dane = '';
+  var m = s.match(/(?:^|[^\d])(\d{5})(?:[^\d]|$)/);
+  if (m) dane = m[1];
+
+  // el impuesto, por como lo escriban
+  var impuesto = '';
+  if (/AUTORRET/.test(s)) impuesto = 'AUTORRETEICA';
+  else if (/RETE?ICA|RETENCION/.test(s)) impuesto = 'RETEICA';
+  else if (/EXOGENA|MAGNETICO/.test(s)) impuesto = 'EXOGENA';
+  else if (/\bICA\b|INDUSTRIA/.test(s)) impuesto = 'ICA';
+
+  // El periodo: 2026-11, 2026-B5, 2026.
+  //
+  // El año tiene que empezar por 20 y llevar separador, o el propio DANE se
+  // lee como periodo: 05001 se partia en «0500» y «1», y daba 0500-01.
+  var periodo = '';
+  var resto = dane ? s.replace(dane, ' ') : s;
+  m = resto.match(/(20\d{2})[-_ ]\s*([BTCS]\d{1,2}|\d{1,2})\b/);
+  if (m) {
+    periodo = /^[BTCS]/.test(m[2])
+      ? m[1] + '-' + m[2]
+      : m[1] + '-' + (m[2].length === 1 ? '0' + m[2] : m[2]);
+  } else {
+    m = resto.match(/\b(20\d{2})\b/);
+    if (m) periodo = m[1];
+  }
+
+  return { dane: dane, impuesto: impuesto, periodo: periodo };
+}
+
+/**
+ * Para cada archivo, a que obligacion se parece.
+ *
+ * Solo mira las que todavia admiten soporte: una ya enviada no se toca.
+ */
+function apiPlanCarga(nombres) {
+  var candidatas = [];
+  misHojas().forEach(function (nombre) {
+    var h = libro().getSheetByName(nombre);
+    if (!h || h.getLastRow() < 2) return;
+    registros(nombre).forEach(function (o) {
+      if (!String(o.id || '').trim()) return;
+      if (ESTADOS_ADMITEN_SOPORTE.indexOf(String(o.estado).toUpperCase()) < 0) return;
+      candidatas.push({
+        id: String(o.id), cod_dane: normCodigo(o.cod_dane, 5),
+        municipio: String(o.municipio || ''), impuesto: String(o.impuesto || ''),
+        periodo: String(o.periodo || ''), soportes: listaIds(o.soporte_id).length,
+        et: o.municipio + ' · ' + o.impuesto + ' · ' + o.periodo
+      });
+    });
+  });
+
+  var plan = (nombres || []).map(function (nombre) {
+    var leido = leerNombre(nombre);
+    var pegan = candidatas.filter(function (c) {
+      if (leido.dane && c.cod_dane !== leido.dane) return false;
+      if (leido.impuesto && c.impuesto !== leido.impuesto) return false;
+      if (leido.periodo && c.periodo !== leido.periodo) return false;
+      return !!(leido.dane || leido.impuesto);
+    });
+
+    var motivo = '';
+    if (!leido.dane) motivo = 'el nombre no trae el código DANE de 5 cifras';
+    else if (!pegan.length) motivo = 'ningún municipio tuyo coincide';
+    else if (pegan.length > 1) motivo = 'coincide con ' + pegan.length + ': elige cuál';
+
+    return {
+      archivo: nombre,
+      leido: leido,
+      id: pegan.length === 1 ? pegan[0].id : '',
+      estado: pegan.length === 1 ? 'emparejado'
+            : (pegan.length ? 'elegir' : 'sin pareja'),
+      motivo: motivo,
+      opciones: pegan.slice(0, 12)
+    };
+  });
+
+  return { plan: plan, candidatas: candidatas.length };
+}
+
+/* ===========================================================================
+   17. ALERTAS
+
+   La pregunta de esta pantalla es «qué se me vence y cuándo». Los cortes
+   salen de CONFIG.dias_aviso. Una vencida alerta siempre, este donde este:
+   el vencimiento no se reinicia nunca.
+   =========================================================================== */
+
+function diasDeAviso() {
+  var crudo = String(config('dias_aviso') || '7,4,2,0');
+  var ds = crudo.split(/[,;\s]+/).map(function (x) { return parseInt(x, 10); })
+                .filter(function (n) { return !isNaN(n) && n >= 0; });
+  if (!ds.length) ds = [7, 4, 2, 0];
+  return ds.sort(function (a, b) { return b - a; });
+}
+
+/** Las obligaciones agrupadas por lo que les queda. */
+function apiAlertas() {
+  var lista = listarMias().filter(function (o) { return o.estado !== ESTADO.APROBADA; });
+  var cortes = diasDeAviso();
+
+  var tramos = [
+    { id: 'vencidas', et: 'Vencidas y sin cerrar', nivel: 'vencido',
+      detalle: 'El vencimiento no se reinicia nunca.',
+      filas: lista.filter(function (o) { return o.dias !== null && o.dias < 0; }) },
+    { id: 'hoy', et: 'Vencen hoy', nivel: 'vencido',
+      detalle: 'Último día para presentar.',
+      filas: lista.filter(function (o) { return o.dias === 0; }) }
+  ];
+
+  var mayor = cortes.filter(function (d) { return d > 0; });
+  mayor.sort(function (a, b) { return a - b; });
+  var antes = 0;
+  mayor.forEach(function (d) {
+    tramos.push({
+      id: 'en' + d, et: 'En ' + d + (d === 1 ? ' día' : ' días') + ' o menos',
+      nivel: d <= 2 ? 'vencido' : 'porvencer', detalle: '',
+      filas: lista.filter(function (o) {
+        return o.dias !== null && o.dias > antes && o.dias <= d;
+      })
+    });
+    antes = d;
+  });
+
+  tramos.push({
+    id: 'despues', et: 'Más adelante', nivel: 'neutro', detalle: '',
+    filas: lista.filter(function (o) { return o.dias !== null && o.dias > antes; })
+  });
+
+  return {
+    tramos: tramos.filter(function (t) { return t.filas.length; }),
+    total: lista.length,
+    cortes: cortes,
+    generado: fechaHoraTexto(new Date())
+  };
+}

@@ -52,6 +52,7 @@ diez.
 | Función | Archivo | Para qué |
 |---|---|---|
 | `verEntorno` | **ENTORNO.js** | En qué modo está y qué hay en CONFIG |
+| `diagnosticarCalendario` | **cargaMes.js** | Cuántas filas tiene cada uno y cuántas con fecha en cada mes |
 | `aProduccion` / `aPruebas` | **ENTORNO.js** | El interruptor |
 | `cargarYasneidy` | **yasneidy.js** | Solo lo de ella |
 | `cargarJesus` | **jesus.js** | Solo lo de él |
@@ -61,6 +62,15 @@ diez.
 
 **Lo que nadie corre a mano:** `onOpen` (la llama Google), `doGet` (la llama
 la aplicación web) y todo lo que empieza por `api…` (lo llama la pantalla).
+
+## Las pantallas
+
+| Pestaña | Para qué |
+|---|---|
+| **Enviar** | La lista. El valor se escribe aquí, el correo que falte también |
+| **Carga masiva** | Muchos PDF de golpe, emparejados por el nombre |
+| **Respuestas** | Lo enviado y sus sellados |
+| **Alertas** | Qué se vence y cuándo |
 
 ## El orden en que se lee
 

@@ -70,7 +70,24 @@ const RESPUESTAS = {
   apiMarcarSoporte: { id: 'x', revisado: true },
   apiEnviar: { enviadas: [{ id: 'x' }], rechazadas: [], pendientes: [],
                modo: 'PRUEBA', cuota: { usada: 13, tope: 1400 } },
-  apiRevisarRespuestas: { con_respuesta: 1, con_sellado: 1, pendientes: 0, errores: [] }
+  apiRevisarRespuestas: { con_respuesta: 1, con_sellado: 1, pendientes: 0, errores: [] },
+  apiPlanCarga: { candidatas: 4, plan: [
+    { archivo: '05001 ICA 2026-11.pdf',
+      leido: { dane: '05001', impuesto: 'ICA', periodo: '2026-11' },
+      id: '05001|ICA|2026-11', estado: 'emparejado', motivo: '',
+      opciones: [{ id: '05001|ICA|2026-11', et: 'Medellín · ICA · 2026-11', soportes: 0 }] },
+    { archivo: 'documento.pdf', leido: { dane: '', impuesto: '', periodo: '' },
+      id: '', estado: 'sin pareja',
+      motivo: 'el nombre no trae el código DANE de 5 cifras', opciones: [] }
+  ] },
+  apiAlertas: { total: 4, cortes: [7, 4, 2, 0],
+    generado: '2026-11-26 15:00',
+    tramos: [
+      { id: 'vencidas', et: 'Vencidas y sin cerrar', nivel: 'vencido',
+        detalle: 'El vencimiento no se reinicia nunca.', filas: [] },
+      { id: 'en4', et: 'En 4 días o menos', nivel: 'porvencer', detalle: '',
+        filas: [] }
+    ] }
 };
 
 const stub = `<script>
@@ -149,6 +166,32 @@ es('al autorizar, se envía', (await pg.textContent('main')).indexOf('comunicaci
 await pg.locator('.nav button', { hasText: 'Respuestas' }).click();
 await pg.waitForTimeout(400);
 es('la pestaña de respuestas pinta', await pg.locator('table tbody tr').count(), 1);
+
+/* --- carga masiva --- */
+await pg.locator('.nav button', { hasText: 'Carga masiva' }).click();
+await pg.waitForTimeout(400);
+es('carga masiva pinta',
+   (await pg.textContent('main')).indexOf('Elige los PDF') > 0, true);
+await pg.setInputFiles('input[type=file][multiple]', [
+  { name: '05001 ICA 2026-11.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 x') },
+  { name: 'documento.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 y') }
+]);
+await pg.waitForTimeout(600);
+es('el plan muestra los dos archivos', await pg.locator('table tbody tr').count(), 2);
+es('uno emparejado y otro no',
+   (await pg.textContent('table')).indexOf('sin pareja') > 0, true);
+es('solo se carga el que tiene destino',
+   (await pg.textContent('main')).indexOf('Cargar 1 soporte') > 0, true);
+await pg.screenshot({ path: SALIDA + '/v3-carga.png' });
+
+/* --- alertas --- */
+await pg.locator('.nav button', { hasText: 'Alertas' }).click();
+await pg.waitForTimeout(500);
+es('alertas pinta', (await pg.textContent('main')).indexOf('Alertas') >= 0, true);
+es('dice los cortes', (await pg.textContent('main')).indexOf('7, 4, 2, 0') > 0, true);
+
+await pg.locator('.nav button', { hasText: 'Enviar' }).first().click();
+await pg.waitForTimeout(400);
 await pg.screenshot({ path: SALIDA + '/v3-lista.png', fullPage: false });
 
 console.log('\n' + pasa + ' pasan, ' + falla + ' fallan');
